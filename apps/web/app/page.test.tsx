@@ -3,10 +3,17 @@ import { describe, expect, it } from 'vitest';
 import Home from './page';
 
 describe('Home', () => {
-  it('identifies the project', () => {
+  it('renders the public homepage and calls to action', () => {
     render(<Home />);
     expect(
-      screen.getByRole('heading', { name: 'Grace Abounds NZ' }),
+      screen.getByRole('heading', { name: /Grace Abounds/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: "I'm New Here" })).toHaveAttribute(
+      'href',
+      '/next-steps',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Events & Announcements' }),
     ).toBeInTheDocument();
   });
 });

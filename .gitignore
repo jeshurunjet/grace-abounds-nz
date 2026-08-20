@@ -30,3 +30,6 @@ uploads/
 *.srt
 *.vtt
 packages/database/prisma/dev.db*
+
+# Local design references
+design-reference/

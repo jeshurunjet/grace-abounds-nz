@@ -26,6 +26,85 @@ function label(key: string) {
     key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
   );
 }
+// Records stored as fixed-position tuples. Each position is a named field:
+// whole records can be added, removed and reordered, but never their fields.
+const tupleFields: Record<string, string[]> = {
+  groups: ['Group name', 'Leader', 'Schedule', 'Area'],
+  studies: ['Study name', 'Description', 'Schedule', 'Location'],
+  values: ['Number', 'Value', 'Description'],
+  givingImpact: ['Percentage', 'Area', 'Description'],
+};
+// Collections the public site cannot render without at least one entry.
+const requiredCollections = new Set([
+  'heroImages',
+  'gallery',
+  'locations',
+  'steps',
+]);
+const hints: Record<string, string> = {
+  memberOpportunities:
+    'Shown only in the member area “Get involved” list. These are separate from the public Next steps journeys below.',
+  steps: 'Public Next steps journeys shown on the website.',
+};
+// A new record starts blank and unpublished rather than copying another record.
+function blankFrom(template: unknown): unknown {
+  if (typeof template === 'string') return '';
+  if (typeof template === 'number') return 0;
+  if (Array.isArray(template)) return [];
+  if (template && typeof template === 'object')
+    return Object.fromEntries(
+      Object.entries(template).map(([key, entry]) => [
+        key,
+        key === 'id'
+          ? crypto.randomUUID()
+          : key === 'status'
+            ? 'draft'
+            : blankFrom(entry),
+      ]),
+    );
+  return '';
+}
+function TextField({
+  name,
+  value,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const multiline =
+    value.length > 100 ||
+    /story|copy|body|bio|summary|verses|opportunities|description/i.test(name);
+  return (
+    <label>
+      {label(name)}
+      {(/^\/images\/[^\s]+$/.test(value) ||
+        /^https:\/\/images\.unsplash\.com\/[^\s]+$/.test(value)) && (
+        <Image
+          className="cms-image-preview"
+          unoptimized
+          src={value}
+          alt="Content image preview"
+          width={320}
+          height={180}
+        />
+      )}
+      {multiline ? (
+        <textarea
+          rows={4}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+    </label>
+  );
+}
 // The editor uses the same typed content tree as the public pages.
 function Fields({
   value,
@@ -53,21 +132,24 @@ function Fields({
         ),
       );
     return (
-      <Fields
-        name={
-          name === 'memberOpportunities'
-            ? 'Member opportunities'
-            : 'Login verses'
-        }
-        value={items}
-        onChange={(next) =>
-          onChange(
-            (next as Record<string, string>[])
-              .map((item) => keys.map((key) => item[key] ?? '').join('|'))
-              .join('\n'),
-          )
-        }
-      />
+      <>
+        {hints[name] && <p className="form-note">{hints[name]}</p>}
+        <Fields
+          name={
+            name === 'memberOpportunities'
+              ? 'Member opportunities'
+              : 'Login verses'
+          }
+          value={items}
+          onChange={(next) =>
+            onChange(
+              (next as Record<string, string>[])
+                .map((item) => keys.map((key) => item[key] ?? '').join('|'))
+                .join('\n'),
+            )
+          }
+        />
+      </>
     );
   }
   if (typeof value === 'number')
@@ -85,67 +167,77 @@ function Fields({
     if (name === 'status')
       return (
         <label>
-          Status
+          Visibility after approval
           <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
           >
-            {['draft', 'published', 'archived'].map((status) => (
-              <option key={status}>{status}</option>
-            ))}
+            <option value="draft">Keep as draft</option>
+            <option value="published">Include on public website</option>
+            <option value="archived">Archive</option>
           </select>
         </label>
       );
-    const multiline =
-      value.length > 100 ||
-      /story|copy|body|bio|summary|verses|opportunities/i.test(name);
-    return (
-      <label>
-        {label(name)}
-        {(/^\/images\/[^\s]+$/.test(value) ||
-          /^https:\/\/images\.unsplash\.com\/[^\s]+$/.test(value)) && (
-          <Image
-            className="cms-image-preview"
-            unoptimized
-            src={value}
-            alt="Content image preview"
-            width={320}
-            height={180}
-          />
-        )}
-        {multiline ? (
-          <textarea
-            rows={4}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          />
-        ) : (
-          <input
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          />
-        )}
-      </label>
-    );
+    return <TextField name={name} value={value} onChange={onChange} />;
   }
-  if (Array.isArray(value))
+  if (Array.isArray(value)) {
+    const shape = tupleFields[name];
+    const canRemove = !requiredCollections.has(name) || value.length > 1;
     return (
       <fieldset className="cms-collection">
         <legend>{label(name)}</legend>
+        {hints[name] && <p className="form-note">{hints[name]}</p>}
+        {!value.length && (
+          <p className="form-note">
+            No items yet. Add one, or leave this section empty.
+          </p>
+        )}
         {value.map((item, index) => (
           <details key={index}>
             <summary>
-              {typeof item === 'object' && !Array.isArray(item)
-                ? (item.title ?? item.name ?? `Item ${index + 1}`)
-                : `${label(name)} ${index + 1}`}
+              {(shape
+                ? (item as string[])[
+                    ['Number', 'Percentage'].includes(shape[0]!) ? 1 : 0
+                  ]
+                : typeof item === 'object'
+                  ? (item.title ?? item.name)
+                  : typeof item === 'string' && item.length < 60
+                    ? item
+                    : '') || `${label(name)} ${index + 1}`}
             </summary>
-            <Fields
-              value={item}
-              name={`Item ${index + 1}`}
-              onChange={(next) =>
-                onChange(value.map((entry, i) => (i === index ? next : entry)))
-              }
-            />
+            {shape ? (
+              shape.map((field, position) => (
+                <div key={field} className="cms-field">
+                  <TextField
+                    name={field}
+                    value={String((item as string[])[position] ?? '')}
+                    onChange={(next) =>
+                      onChange(
+                        value.map((entry, i) =>
+                          i === index
+                            ? shape.map((_, p) =>
+                                p === position
+                                  ? next
+                                  : String((entry as string[])[p] ?? ''),
+                              )
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+              ))
+            ) : (
+              <Fields
+                value={item}
+                name={typeof item === 'string' ? name : `Item ${index + 1}`}
+                onChange={(next) =>
+                  onChange(
+                    value.map((entry, i) => (i === index ? next : entry)),
+                  )
+                }
+              />
+            )}
             <div className="form-actions">
               {[-1, 1].map((direction) => (
                 <button
@@ -171,7 +263,8 @@ function Fields({
             <button
               type="button"
               className="text-danger"
-              disabled={value.length <= 1 && name !== 'resources'}
+              disabled={!canRemove}
+              title={canRemove ? undefined : 'At least one item is required.'}
               onClick={() => onChange(value.filter((_, i) => i !== index))}
             >
               Remove item
@@ -184,24 +277,19 @@ function Fields({
           onClick={() =>
             onChange([
               ...value,
-              !value.length && name === 'resources'
-                ? {
-                    id: crypto.randomUUID(),
-                    title: 'New resource',
-                    type: 'PDF',
-                    url: '',
-                    description: '',
-                  }
-                : typeof value[0] === 'string'
-                  ? ''
-                  : Array.isArray(value[0])
-                    ? structuredClone(value[0])
-                    : {
-                        ...structuredClone(value[value.length - 1]),
-                        ...(value[value.length - 1]?.id
-                          ? { id: crypto.randomUUID() }
-                          : {}),
-                      },
+              shape
+                ? shape.map(() => '')
+                : !value.length && name === 'resources'
+                  ? {
+                      id: crypto.randomUUID(),
+                      title: 'New resource',
+                      type: 'PDF',
+                      url: '',
+                      description: '',
+                    }
+                  : value.length
+                    ? blankFrom(value[value.length - 1])
+                    : '',
             ])
           }
         >
@@ -209,6 +297,7 @@ function Fields({
         </button>
       </fieldset>
     );
+  }
   if (value && typeof value === 'object')
     return (
       <>

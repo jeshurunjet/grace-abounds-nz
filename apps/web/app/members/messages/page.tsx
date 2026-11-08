@@ -4,7 +4,8 @@ import { useState, type FormEvent } from 'react';
 import { MemberShell } from '../../components/member-shell';
 import { useContent } from '../../components/content-provider';
 export default function MessagesPage() {
-  const { content, update, ready } = useContent();
+  const { content, update, ready, storageError, retrySave } = useContent();
+  const [error, setError] = useState('');
   const { data } = useSession();
   const [selected, setSelected] = useState('');
   const [body, setBody] = useState('');
@@ -19,8 +20,8 @@ export default function MessagesPage() {
   );
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (!current || !memberId || !body.trim() || !ready) return;
-    await update((state) => ({
+    if (!current || !memberId || !body.trim() || !ready || storageError) return;
+    const saved = await update((state) => ({
       ...state,
       messages: [
         ...state.messages,
@@ -34,6 +35,14 @@ export default function MessagesPage() {
         },
       ],
     }));
+    if (!saved) {
+      // Keep the typed message so it can be retried.
+      setError(
+        'Your message could not be saved in this browser. Please try again.',
+      );
+      return;
+    }
+    setError('');
     setBody('');
   }
   return (
@@ -47,6 +56,14 @@ export default function MessagesPage() {
           to another device.
         </p>
       </header>
+      {storageError && (
+        <div className="publishing-errors" role="alert">
+          <p>{storageError}</p>
+          <button className="button button-outline" onClick={retrySave}>
+            Retry save
+          </button>
+        </div>
+      )}
       <section className="panel cms-form">
         {staff && (
           <label>
@@ -90,9 +107,16 @@ export default function MessagesPage() {
               onChange={(event) => setBody(event.target.value)}
             />
           </label>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
           <button
             className="button"
-            disabled={!ready || !current || !memberId || !body.trim()}
+            disabled={
+              !ready || !!storageError || !current || !memberId || !body.trim()
+            }
           >
             Save message to preview
           </button>

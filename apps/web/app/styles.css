@@ -2344,3 +2344,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 360px) { .site-header .brand img { width: 30px; height: 30px; }.site-header .brand strong { font-size: .75rem; white-space: nowrap; }.site-header .brand small { font-size: .45rem; letter-spacing: .08em; } }
 .site-header .nav:not(:has(> .public-account)) { grid-template-columns: auto minmax(0, 1fr); }
 @media (max-width: 820px) { .site-header .nav:not(:has(> .public-account)) { grid-template-columns: minmax(0, 1fr) auto auto; }.site-header .menu-button[aria-expanded='true'] .line-one { transform: translateY(7px) rotate(45deg); }.site-header .menu-button[aria-expanded='true'] .line-three { transform: translateY(-7px) rotate(-45deg); } }
+
+/* Event selected from an event page's "Respond to this event" link. */
+.member-rsvp-list article.active { outline: 2px solid var(--maple); outline-offset: 2px; border-radius: .75rem; }
+.item-list input[type='search'] { width: 100%; margin-bottom: .75rem; }

@@ -34,6 +34,12 @@ export function EditorialBar() {
           Browser preview only. No server publication is connected. Edits stay
           in a draft; public pages keep the last published version.
         </p>
+        {pastor && editorial.status === 'draft' && (
+          <p className="form-note">
+            As pastor you may publish your own edits directly, or wait for a
+            submitted draft and approve it.
+          </p>
+        )}
         {editorial.feedback && (
           <p role="status">Pastor feedback: {editorial.feedback}</p>
         )}
@@ -80,7 +86,9 @@ export function EditorialBar() {
               );
             }}
           >
-            Apply approved preview
+            {editorial.status === 'pending'
+              ? 'Approve and apply'
+              : 'Apply my edits directly'}
           </button>
         )}
       </div>

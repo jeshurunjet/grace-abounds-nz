@@ -17,6 +17,33 @@ export function MemberEngagement() {
   const [prayer, setPrayer] = useState('');
   const [prayerSent, setPrayerSent] = useState(false);
   const [opportunity, setOpportunity] = useState('');
+  const [focusEvent, setFocusEvent] = useState('');
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const [eventQuery, setEventQuery] = useState('');
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('event');
+    if (id) {
+      setFocusEvent(id);
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`attendance-${id}`)
+          ?.scrollIntoView({ block: 'center' }),
+      );
+    }
+  }, []);
+  const publishedEvents = content.events.filter(
+    (event) => event.status === 'published',
+  );
+  const matchingEvents = publishedEvents.filter((event) =>
+    `${event.title} ${event.location} ${event.date}`
+      .toLowerCase()
+      .includes(eventQuery.trim().toLowerCase()),
+  );
+  // The selected event is always listed first, even outside the first four.
+  const visibleEvents = [
+    ...matchingEvents.filter((event) => event.id === focusEvent),
+    ...matchingEvents.filter((event) => event.id !== focusEvent),
+  ].slice(0, showAllEvents || eventQuery ? undefined : 4);
   const currentUser =
     content.users.find((user) => user.email === session?.user?.email) ??
     content.users.find((user) => user.role === 'member');
@@ -63,11 +90,12 @@ export function MemberEngagement() {
       setOpportunity(requested);
   }, [opportunities]);
   const selected = opportunities.find((item) => item.name === opportunity);
-  function requestAppointment(event: FormEvent<HTMLFormElement>) {
+  async function requestAppointment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ready || storageError) return;
-    const data = new FormData(event.currentTarget);
-    update((current) => ({
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const saved = await update((current) => ({
       ...current,
       appointmentRequests: [
         ...current.appointmentRequests,
@@ -82,14 +110,21 @@ export function MemberEngagement() {
         },
       ],
     }));
-    event.currentTarget.reset();
+    if (!saved) {
+      push(
+        'This could not be saved in this browser. Your entry is still here — please try again.',
+        'error',
+      );
+      return;
+    }
+    form.reset();
     setAppointmentOpen(false);
     push(
       'Appointment added to this browser preview only. It has not been delivered.',
       'info',
     );
   }
-  function submitInterest() {
+  async function submitInterest() {
     if (!selected || !ready || storageError) return;
     const existing = content.participationApplications.some(
       (item) =>
@@ -104,7 +139,7 @@ export function MemberEngagement() {
       );
       return;
     }
-    update((current) => ({
+    const saved = await update((current) => ({
       ...current,
       participationApplications: [
         ...current.participationApplications,
@@ -117,14 +152,21 @@ export function MemberEngagement() {
         },
       ],
     }));
+    if (!saved) {
+      push(
+        'Your interest could not be saved in this browser. Please try again.',
+        'error',
+      );
+      return;
+    }
     push(
       `Interest in ${selected.name} added to this browser preview only. No application has been delivered.`,
       'info',
     );
   }
-  function updateAttendance(eventId: string, response: Attendance) {
-    if (!ready || storageError) return;
-    update((current) => {
+  async function updateAttendance(eventId: string, response: Attendance) {
+    if (!ready || storageError) return false;
+    return update((current) => {
       const existing = current.eventRsvps.find(
         (item) => item.userId === userId && item.eventId === eventId,
       );
@@ -149,9 +191,9 @@ export function MemberEngagement() {
       };
     });
   }
-  function submitPrayer() {
+  async function submitPrayer() {
     if (!prayer.trim() || !ready || storageError) return;
-    update((current) => ({
+    const saved = await update((current) => ({
       ...current,
       memberPrayerRequests: [
         ...current.memberPrayerRequests,
@@ -164,6 +206,13 @@ export function MemberEngagement() {
         },
       ],
     }));
+    if (!saved) {
+      push(
+        'This could not be saved in this browser. Your entry is still here — please try again.',
+        'error',
+      );
+      return;
+    }
     setPrayer('');
     setPrayerSent(true);
     push(
@@ -319,48 +368,71 @@ export function MemberEngagement() {
             <h2>Events &amp; attendance</h2>
           </div>
         </div>
+        {publishedEvents.length > 4 && (
+          <label>
+            <span className="sr-only">Search events</span>
+            <input
+              type="search"
+              placeholder="Search events"
+              value={eventQuery}
+              onChange={(change) => setEventQuery(change.target.value)}
+            />
+          </label>
+        )}
         <div className="member-rsvp-list">
-          {content.events
-            .filter((event) => event.status === 'published')
-            .slice(0, 4)
-            .map((event) => {
-              const response =
-                content.eventRsvps.find(
-                  (item) => item.userId === userId && item.eventId === event.id,
-                )?.response ?? 'undecided';
-              return (
-                <article key={event.id}>
-                  <div>
-                    <b>{event.title}</b>
-                    <small>
-                      {event.date} · {event.time} · {event.location}
-                    </small>
-                  </div>
-                  <label>
-                    <span className="sr-only">
-                      Attendance for {event.title}
-                    </span>
-                    <select
-                      disabled={!ready || !!storageError}
-                      value={response}
-                      onChange={(change) => {
-                        const value = change.target.value as Attendance;
-                        updateAttendance(event.id, value);
-                        push(
-                          `Attendance for ${event.title} updated in this browser preview only.`,
-                          'info',
-                        );
-                      }}
-                    >
-                      <option value="undecided">Let us know</option>
-                      <option value="attending">I’ll attend</option>
-                      <option value="not-attending">Can’t attend</option>
-                    </select>
-                  </label>
-                </article>
-              );
-            })}
+          {!visibleEvents.length && <p>No matching events.</p>}
+          {visibleEvents.map((event) => {
+            const response =
+              content.eventRsvps.find(
+                (item) => item.userId === userId && item.eventId === event.id,
+              )?.response ?? 'undecided';
+            return (
+              <article
+                key={event.id}
+                id={`attendance-${event.id}`}
+                className={event.id === focusEvent ? 'active' : undefined}
+                aria-current={event.id === focusEvent ? 'true' : undefined}
+              >
+                <div>
+                  <b>{event.title}</b>
+                  <small>
+                    {event.date} · {event.time} · {event.location}
+                  </small>
+                </div>
+                <label>
+                  <span className="sr-only">Attendance for {event.title}</span>
+                  <select
+                    disabled={!ready || !!storageError}
+                    value={response}
+                    onChange={async (change) => {
+                      const value = change.target.value as Attendance;
+                      const saved = await updateAttendance(event.id, value);
+                      push(
+                        saved
+                          ? `Attendance for ${event.title} updated in this browser preview only.`
+                          : 'Your response could not be saved in this browser. Please try again.',
+                        saved ? 'info' : 'error',
+                      );
+                    }}
+                  >
+                    <option value="undecided">Let us know</option>
+                    <option value="attending">I’ll attend</option>
+                    <option value="not-attending">Can’t attend</option>
+                  </select>
+                </label>
+              </article>
+            );
+          })}
         </div>
+        {!showAllEvents && !eventQuery && matchingEvents.length > 4 && (
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => setShowAllEvents(true)}
+          >
+            Show all {matchingEvents.length} events
+          </button>
+        )}
         <p className="form-note">
           Responses are saved in the frontend CMS store and appear on your admin
           user record.

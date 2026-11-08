@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useMemo, useState } from 'react';
 import { useContent } from './content-provider';
+import { parseCalendarDate } from '../lib/calendar';
 
 const months = [
   'January',
@@ -42,13 +43,10 @@ export function MemberCalendar() {
     [month, year],
   );
   const assignmentsForDay = (day: number) =>
-    assignments.filter(
-      (item) =>
-        Number(item.date.match(/\d+/)?.[0]) === day &&
-        item.date
-          .toLowerCase()
-          .includes(months[month]!.slice(0, 3).toLowerCase()),
-    );
+    assignments.filter((item) => {
+      const date = parseCalendarDate(item.date);
+      return date?.year === year && date.month === month && date.day === day;
+    });
   const eventsForDay = (day: number) =>
     content.events.filter((item) => {
       const date = new Date(item.date);

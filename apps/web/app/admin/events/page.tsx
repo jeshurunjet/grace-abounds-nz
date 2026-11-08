@@ -6,8 +6,14 @@ import type { EventItem } from '../../lib/content';
 export default function EventsAdmin() {
   const { content, update } = useContent();
   const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
   const current =
     content.events.find((item) => item.id === selected) ?? content.events[0];
+  const visible = content.events.filter((item) =>
+    `${item.title} ${item.date} ${item.status}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
   function change(patch: Partial<EventItem>) {
     if (current)
       update((state) => ({
@@ -56,7 +62,22 @@ export default function EventsAdmin() {
       </header>
       <div className="editor-layout">
         <aside className="panel item-list">
-          {content.events.map((item) => (
+          <input
+            type="search"
+            aria-label="Search events"
+            placeholder="Search by title, date or status"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {!content.events.length && (
+            <p className="form-note">
+              No events yet. Use “New event” to create the first one.
+            </p>
+          )}
+          {content.events.length > 0 && !visible.length && (
+            <p className="form-note">No events match your search.</p>
+          )}
+          {visible.map((item) => (
             <button
               className={current?.id === item.id ? 'active' : ''}
               key={item.id}

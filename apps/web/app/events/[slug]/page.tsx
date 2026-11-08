@@ -37,7 +37,10 @@ export default function EventDetailPage() {
               {item.location}
             </p>
             <p>{item.summary}</p>
-            <Link className="button" href="/members#attendance">
+            <Link
+              className="button"
+              href={`/members?event=${encodeURIComponent(item.id)}#attendance`}
+            >
               Respond to this event
             </Link>
           </div>

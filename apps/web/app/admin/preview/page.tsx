@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AdminShell } from '../../components/admin-shell';
+import { PreviewFrame } from '../../components/preview-frame';
 import Home from '../../page';
 import About from '../../about/page';
 import Location from '../../location/page';
@@ -29,8 +30,8 @@ export default async function DraftPreview({
         <p className="eyebrow">Unpublished preview</p>
         <h1>Review website draft</h1>
         <p>
-          Only staff can access this preview. Review all pages before approving
-          publication.
+          Only staff can access this preview. Links between public pages and to
+          event or sermon details stay in the draft; forms are disabled.
         </p>
       </header>
       <nav className="cms-tabs">
@@ -45,9 +46,9 @@ export default async function DraftPreview({
           </Link>
         ))}
       </nav>
-      <div className="draft-preview">
+      <PreviewFrame>
         <Page />
-      </div>
+      </PreviewFrame>
     </AdminShell>
   );
 }

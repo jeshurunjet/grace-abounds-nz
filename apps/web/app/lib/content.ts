@@ -1,5 +1,10 @@
 import { publicPages } from './page-content';
-export type PublishStatus = 'draft' | 'scheduled' | 'published' | 'archived';
+export type PublishStatus = 'draft' | 'published' | 'archived';
+export const publishStatuses: PublishStatus[] = [
+  'draft',
+  'published',
+  'archived',
+];
 export type EventItem = {
   id: string;
   slug: string;
@@ -222,7 +227,7 @@ export const seedContent: ContentState = {
       summary:
         'A creative Christmas gathering for friends, whānau, and neighbours.',
       image: image('1482517967863-00e15c9b44be'),
-      status: 'scheduled',
+      status: 'draft',
     },
     {
       id: 'e6',
@@ -352,7 +357,7 @@ export const seedContent: ContentState = {
       duration: '44 min',
       image: image('1438032005730-c779502df39b', '1200x675'),
       summary: 'Learning to slow down, listen, and respond to God in prayer.',
-      status: 'scheduled',
+      status: 'draft',
       progress: 100,
     },
     {
@@ -434,7 +439,7 @@ export const seedContent: ContentState = {
       id: 'assignment-1',
       userId: 'u1',
       title: 'Welcome Team',
-      date: 'Sun 11 Oct',
+      date: '2026-10-11',
       time: '9:15am',
       location: 'Grace Centre',
       status: 'assigned',
@@ -443,7 +448,7 @@ export const seedContent: ContentState = {
       id: 'assignment-2',
       userId: 'u1',
       title: 'Connect Night',
-      date: 'Wed 14 Oct',
+      date: '2026-10-14',
       time: '7:00pm',
       location: 'Community Room',
       status: 'confirmed',
@@ -452,7 +457,7 @@ export const seedContent: ContentState = {
       id: 'assignment-3',
       userId: 'u1',
       title: 'Worship Rehearsal',
-      date: 'Sun 18 Oct',
+      date: '2026-10-18',
       time: '9:30am',
       location: 'Main Auditorium',
       status: 'assigned',

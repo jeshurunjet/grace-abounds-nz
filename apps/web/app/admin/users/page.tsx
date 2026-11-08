@@ -12,6 +12,7 @@ import { AdminShell } from '../../components/admin-shell';
 import { Modal } from '../../components/modal';
 import { useContent } from '../../components/content-provider';
 import { useToast } from '../../components/toast';
+import { formatCalendarDate } from '../../lib/calendar';
 import type {
   AppointmentRequest,
   MemberPrayerRequest,
@@ -23,7 +24,7 @@ import type {
 export default function UsersAdmin() {
   const { data: session } = useSession();
   const pastor = session?.user?.role === 'pastor';
-  const { content, update } = useContent();
+  const { content, update, ready, storageError, retrySave } = useContent();
   const { push } = useToast();
   const [action, setAction] = useState<{
     user: UserRecord;
@@ -67,59 +68,94 @@ export default function UsersAdmin() {
     (item) => item.userId === selectedId,
   );
 
+  async function save(recipe: Parameters<typeof update>[0], success: string) {
+    if (!pastor || !ready || storageError) {
+      push(
+        'Changes are unavailable until browser storage is working.',
+        'error',
+      );
+      return false;
+    }
+    const saved = await update(recipe);
+    push(
+      saved
+        ? success
+        : 'This change could not be saved in this browser. Please try again.',
+      saved ? 'info' : 'error',
+    );
+    return saved;
+  }
   function patchAppointment(id: string, status: AppointmentRequest['status']) {
-    if (!pastor) return;
-    update((state) => ({
-      ...state,
-      appointmentRequests: state.appointmentRequests.map((item) =>
-        item.id === id ? { ...item, status } : item,
-      ),
-    }));
+    void save(
+      (state) => ({
+        ...state,
+        appointmentRequests: state.appointmentRequests.map((item) =>
+          item.id === id ? { ...item, status } : item,
+        ),
+      }),
+      `Appointment status set to ${status} in this browser preview.`,
+    );
   }
   function patchApplication(
     id: string,
     status: ParticipationApplication['status'],
   ) {
-    if (!pastor) return;
-    update((state) => ({
-      ...state,
-      participationApplications: state.participationApplications.map((item) =>
-        item.id === id ? { ...item, status } : item,
-      ),
-    }));
+    void save(
+      (state) => ({
+        ...state,
+        participationApplications: state.participationApplications.map(
+          (item) => (item.id === id ? { ...item, status } : item),
+        ),
+      }),
+      `Application status set to ${status} in this browser preview.`,
+    );
   }
   function patchPrayer(id: string, status: MemberPrayerRequest['status']) {
-    if (!pastor) return;
-    update((state) => ({
-      ...state,
-      memberPrayerRequests: state.memberPrayerRequests.map((item) =>
-        item.id === id ? { ...item, status } : item,
-      ),
-    }));
+    void save(
+      (state) => ({
+        ...state,
+        memberPrayerRequests: state.memberPrayerRequests.map((item) =>
+          item.id === id ? { ...item, status } : item,
+        ),
+      }),
+      `Prayer status set to ${status} in this browser preview.`,
+    );
   }
-  function addAssignment(event: FormEvent<HTMLFormElement>) {
+  async function addAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const assignment: ServiceAssignment = {
       id: crypto.randomUUID(),
       userId: selectedId,
-      title: String(data.get('title')),
+      title: String(data.get('title')).trim(),
+      // ISO calendar date in church local time (Pacific/Auckland).
       date: String(data.get('date')),
       time: String(data.get('time')),
-      location: String(data.get('location')),
+      location: String(data.get('location')).trim(),
       status: 'assigned',
     };
-    if (!pastor) return;
-    update((state) => ({
-      ...state,
-      serviceAssignments: [...state.serviceAssignments, assignment],
-    }));
-    event.currentTarget.reset();
-    push('Service assignment added to the member planner.');
+    const saved = await save(
+      (state) => ({
+        ...state,
+        serviceAssignments: [...state.serviceAssignments, assignment],
+      }),
+      'Service assignment added to the member planner in this browser preview.',
+    );
+    // Keep the entered details on failure so nothing has to be retyped.
+    if (saved) form.reset();
   }
 
   return (
     <AdminShell>
+      {storageError && (
+        <div className="publishing-errors" role="alert">
+          <p>{storageError}</p>
+          <button className="button button-outline" onClick={retrySave}>
+            Retry save
+          </button>
+        </div>
+      )}
       <header className="workspace-header">
         <p className="eyebrow">Access &amp; member activity</p>
         <h1>Member management</h1>
@@ -415,7 +451,8 @@ export default function UsersAdmin() {
                     <span>
                       <b>{item.title}</b>
                       <small>
-                        {item.date} · {item.time} · {item.location}
+                        {formatCalendarDate(item.date)} · {item.time} ·{' '}
+                        {item.location}
                       </small>
                     </span>
                     <em className={`status ${item.status}`}>{item.status}</em>
@@ -423,8 +460,13 @@ export default function UsersAdmin() {
                 ))}
                 <fieldset disabled={!pastor} className="cms-fields">
                   <form className="assignment-form" onSubmit={addAssignment}>
-                    <input name="title" required placeholder="Assignment" />
-                    <input name="date" required placeholder="Sun 25 Oct" />
+                    <input
+                      name="title"
+                      required
+                      placeholder="Assignment"
+                      aria-label="Assignment"
+                    />
+                    <input name="date" required type="date" aria-label="Date" />
                     <input name="time" required type="time" />
                     <input name="location" required placeholder="Location" />
                     <button className="button">Add assignment</button>

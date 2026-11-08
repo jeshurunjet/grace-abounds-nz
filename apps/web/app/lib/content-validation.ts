@@ -46,6 +46,39 @@ export function validatePublicContent(
         );
     });
   }
+  // Fixed-shape records: each entry must keep exactly its named fields.
+  const shapes = {
+    groups: ['name', 'leader', 'schedule', 'area'],
+    studies: ['name', 'description', 'schedule', 'location'],
+    values: ['number', 'title', 'description'],
+    givingImpact: ['percentage', 'title', 'description'],
+  } as const;
+  for (const [key, fields] of Object.entries(shapes)) {
+    const entries = content.pages[key as keyof typeof shapes] as unknown[];
+    entries.forEach((entry, index) => {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== fields.length ||
+        entry.some((field) => typeof field !== 'string')
+      )
+        errors.push(
+          `${key} ${index + 1}: must have exactly these fields — ${fields.join(', ')}.`,
+        );
+      else if (!String(entry[0]).trim() && !String(entry[1]).trim())
+        errors.push(
+          `${key} ${index + 1}: fill in or remove this empty record.`,
+        );
+    });
+  }
+  for (const [key, entries] of Object.entries({
+    events: content.events,
+    sermons: content.sermons,
+    leadership: content.team,
+  }))
+    entries.forEach((item) => {
+      if (!['draft', 'published', 'archived'].includes(item.status))
+        errors.push(`${key}: unsupported visibility "${item.status}".`);
+    });
   for (const key of ['locations', 'steps'] as const)
     if (!content.pages[key].length)
       errors.push(`Add at least one ${key} item.`);

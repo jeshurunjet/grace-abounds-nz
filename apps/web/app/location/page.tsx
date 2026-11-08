@@ -109,9 +109,15 @@ export default function Location() {
                   Scripture, and pray together.
                 </p>
               </Reveal>
+              {!groups.length && (
+                <p className="tab-intro">
+                  New connect groups are coming soon. Contact the church office
+                  to find a group near you.
+                </p>
+              )}
               <div className="connect-group-grid">
                 {groups.map(([name, leader, time, area], index) => (
-                  <Reveal delay={index * 55} key={name}>
+                  <Reveal delay={index * 55} key={`${name}-${index}`}>
                     <article>
                       <span>{area}</span>
                       <h3>{name}</h3>
@@ -134,9 +140,15 @@ export default function Location() {
                   from new believers to seasoned students of Scripture.
                 </p>
               </Reveal>
+              {!studies.length && (
+                <p className="tab-intro">
+                  New Bible studies are coming soon. Contact the church office
+                  for details.
+                </p>
+              )}
               <div className="study-grid">
                 {studies.map(([title, description, schedule, venue], index) => (
-                  <Reveal delay={index * 70} key={title}>
+                  <Reveal delay={index * 70} key={`${title}-${index}`}>
                     <article>
                       <h3>{title}</h3>
                       <p>{description}</p>

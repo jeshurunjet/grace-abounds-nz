@@ -6,8 +6,14 @@ import type { Sermon } from '../../lib/content';
 export default function SermonAdmin() {
   const { content, update } = useContent();
   const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
   const current =
     content.sermons.find((item) => item.id === selected) ?? content.sermons[0];
+  const visible = content.sermons.filter((item) =>
+    `${item.title} ${item.date} ${item.status}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
   function change(patch: Partial<Sermon>) {
     if (current)
       update((state) => ({
@@ -58,14 +64,31 @@ export default function SermonAdmin() {
       </header>
       <div className="editor-layout">
         <aside className="panel item-list">
-          {content.sermons.map((item) => (
+          <input
+            type="search"
+            aria-label="Search sermons"
+            placeholder="Search by title, date or status"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {!content.sermons.length && (
+            <p className="form-note">
+              No sermons yet. Use “New sermon” to create the first one.
+            </p>
+          )}
+          {content.sermons.length > 0 && !visible.length && (
+            <p className="form-note">No sermons match your search.</p>
+          )}
+          {visible.map((item) => (
             <button
               className={current?.id === item.id ? 'active' : ''}
               key={item.id}
               onClick={() => setSelected(item.id)}
             >
               <b>{item.title}</b>
-              <small>{item.status}</small>
+              <small>
+                {item.date} · {item.status}
+              </small>
             </button>
           ))}
         </aside>
@@ -82,7 +105,6 @@ export default function SermonAdmin() {
                 'duration',
                 'image',
                 'mediaUrl',
-                'summary',
               ] as const
             ).map((key) => (
               <label key={key}>
@@ -97,6 +119,14 @@ export default function SermonAdmin() {
                 />
               </label>
             ))}
+            <label>
+              Summary
+              <textarea
+                rows={5}
+                value={current.summary}
+                onChange={(event) => change({ summary: event.target.value })}
+              />
+            </label>
             <label>
               Visibility after pastor approval
               <select

@@ -10,7 +10,11 @@ import {
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { validatePublicContent } from '../lib/content-validation';
-import { seedContent, type ContentState } from '../lib/content';
+import {
+  publishStatuses,
+  seedContent,
+  type ContentState,
+} from '../lib/content';
 
 const STORAGE_KEY = 'grace-abounds-content-v3';
 const EDITOR_KEY = 'grace-abounds-editor-v1';
@@ -32,7 +36,8 @@ const publicContent = ({
 }: ContentState): PublicContent => ({ site, pages, events, sermons, team });
 type ContentContextValue = {
   content: ContentState;
-  update: (recipe: (current: ContentState) => ContentState) => Promise<void>;
+  /** Resolves true only when the change was saved to browser storage. */
+  update: (recipe: (current: ContentState) => ContentState) => Promise<boolean>;
   ready: boolean;
   storageError: string;
   retrySave: () => void;
@@ -41,6 +46,24 @@ type ContentContextValue = {
   publish: () => void;
   returnDraft: (feedback: string) => void;
 };
+// Older browser previews stored a 'scheduled' status that has no release
+// workflow. Treat any unsupported status as an unpublished draft.
+function normalizeRecords<T extends Partial<PublicContent>>(value: T): T {
+  const fix = <R extends { status: string }>(items?: R[]) =>
+    items?.map((item) =>
+      publishStatuses.includes(item.status as never)
+        ? item
+        : { ...item, status: 'draft' },
+    );
+  return {
+    ...value,
+    ...(value.events && { events: fix(value.events) }),
+    ...(value.sermons && { sermons: fix(value.sermons) }),
+    ...(value.team && { team: fix(value.team) }),
+  };
+}
+const STORAGE_MESSAGE =
+  'This browser could not save the preview. Your edits remain on screen. Retry before submitting for review.';
 const initialEditorial: EditorialState = {
   draft: publicContent(seedContent),
   status: 'published',
@@ -62,12 +85,12 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
       const merged = saved
-        ? {
+        ? normalizeRecords({
             ...seedContent,
             ...saved,
             site: { ...seedContent.site, ...saved.site },
             pages: { ...seedContent.pages, ...saved.pages },
-          }
+          })
         : seedContent;
       setPublished(merged);
       const editor = JSON.parse(localStorage.getItem(EDITOR_KEY) ?? 'null');
@@ -75,11 +98,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         editor
           ? {
               ...editor,
-              draft: {
+              draft: normalizeRecords({
                 ...publicContent(merged),
                 ...editor.draft,
                 pages: { ...merged.pages, ...editor.draft?.pages },
-              },
+              }),
             }
           : { ...initialEditorial, draft: publicContent(merged) },
       );
@@ -95,9 +118,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(EDITOR_KEY, JSON.stringify(editorial));
       setStorageError('');
     } catch {
-      setStorageError(
-        'This browser could not save the preview. Your edits remain on screen. Retry before submitting for review.',
-      );
+      setStorageError(STORAGE_MESSAGE);
     }
   }, [published, editorial, ready, saveAttempt]);
   const content = useMemo(
@@ -112,30 +133,42 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       retrySave: () => setSaveAttempt((current) => current + 1),
       editorial,
       async update(recipe) {
-        if (!ready) return;
+        if (!ready) return false;
         const current = staff
           ? { ...published, ...editorial.draft }
           : published;
         const next = recipe(current);
+        let nextEditorial = editorial;
         if (staff) {
           const nextPublic = publicContent(next);
           if (
             JSON.stringify(nextPublic) !==
             JSON.stringify(publicContent(current))
           ) {
-            setEditorial({
+            nextEditorial = {
               draft: nextPublic,
               status: 'draft',
               feedback: editorial.feedback,
-            });
+            };
           }
         }
         // Member activity is separate from the public publishing workflow.
-        setPublished({
+        const nextPublished = {
           ...next,
           ...publicContent(published),
           users: role === 'pastor' ? next.users : published.users,
-        });
+        };
+        setEditorial(nextEditorial);
+        setPublished(nextPublished);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPublished));
+          localStorage.setItem(EDITOR_KEY, JSON.stringify(nextEditorial));
+          setStorageError('');
+          return true;
+        } catch {
+          setStorageError(STORAGE_MESSAGE);
+          return false;
+        }
       },
       submit() {
         if (staff && ready && !storageError)
@@ -184,7 +217,7 @@ export function useContent() {
       storageError: '',
       retrySave: () => {},
       editorial: initialEditorial,
-      update: async () => {},
+      update: async () => false,
       submit: () => {},
       publish: () => {},
       returnDraft: () => {},

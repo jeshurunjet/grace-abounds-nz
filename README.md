@@ -93,3 +93,13 @@ None of those thesis features is implemented. Their dedicated service boundary e
 ## Development status
 
 Initial scaffold only. The next work should proceed incrementally from documented requirements rather than inventing application features or schemas in advance.
+
+## Frontend preview accounts
+
+The Auth.js credentials provider currently exposes development-only accounts so the protected interface can be reviewed before the user backend exists:
+
+- `member@example.org`
+- `pastor@example.org`
+- `admin@example.org`
+
+Use `grace-demo` as the password. These accounts and the browser-persisted CMS repository are mock frontend infrastructure and must be replaced by database-backed identity, authorization, and API services before production.

@@ -1,11 +1,10 @@
 'use client';
+import { useContent } from './content-provider';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-const images = Array.from(
-  { length: 6 },
-  (_, index) => `/images/hero-${index + 1}.jpg`,
-);
 export function HeroGallery() {
+  const { content } = useContent();
+  const images = content.pages.heroImages;
   const [current, setCurrent] = useState(0);
   useEffect(() => {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -14,13 +13,13 @@ export function HeroGallery() {
       5000,
     );
     return () => window.clearInterval(timer);
-  }, []);
+  }, [images.length]);
   return (
-    <div className="hero-gallery" aria-hidden="true">
+    <div className="hero-gallery">
       {images.map((src, index) => (
         <Image
           key={src}
-          className={index === current ? 'active' : ''}
+          className={index === current % images.length ? 'active' : ''}
           src={src}
           alt=""
           fill
@@ -38,7 +37,7 @@ export function HeroGallery() {
             key={src}
             type="button"
             aria-label={`Show background image ${index + 1}`}
-            className={index === current ? 'active' : ''}
+            className={index === current % images.length ? 'active' : ''}
             onClick={() => setCurrent(index)}
           />
         ))}

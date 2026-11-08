@@ -1,90 +1,55 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
+import { BookOpen, Headphones, UsersRound } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useContent } from './components/content-provider';
 import { HeroGallery } from './components/hero-gallery';
 import { PrayerForm } from './components/forms';
 import { Reveal } from './components/reveal';
+import { EventGrid, SermonGrid } from './components/content-cards';
+import { ManagedVerse } from './components/managed-content';
 
-const events = [
+const resources: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  tag: string;
+}[] = [
   {
-    date: '17 Aug',
-    title: 'Connect Group Kickoff',
-    location: 'Multiple Locations',
-    time: '7:00pm',
+    icon: BookOpen,
+    title: 'Study Bible',
+    description: 'Weekly reading plans and devotionals for all ages.',
+    tag: 'Scripture',
+  },
+  {
+    icon: Headphones,
+    title: 'Sermon Podcast',
+    description: 'All messages available wherever you listen.',
+    tag: 'Media',
+  },
+  {
+    icon: UsersRound,
+    title: 'Life Group Guides',
+    description: 'Discussion guides aligned with the current series.',
     tag: 'Community',
   },
-  {
-    date: '24 Aug',
-    title: 'Water Baptism Sunday',
-    location: 'Main Gathering',
-    time: '10:00am',
-    tag: 'Milestone',
-  },
-  {
-    date: '31 Aug',
-    title: 'Youth & Young Adults Night',
-    location: 'Grace Centre',
-    time: '6:30pm',
-    tag: 'Youth',
-  },
-  {
-    date: '7 Sep',
-    title: 'Women’s Conference',
-    location: 'Grace Centre',
-    time: '9:00am',
-    tag: 'Women',
-  },
-];
-const sermons = [
-  {
-    title: 'Walking in the Spirit',
-    series: 'Life in the Spirit',
-    date: '4 Aug 2026',
-    duration: '42 min',
-    image: '/images/hero-6.jpg',
-    pastor: 'Pastor Bartolome R. Sanchez',
-  },
-  {
-    title: 'The Grace of Giving',
-    series: 'Generosity',
-    date: '28 Jul 2026',
-    duration: '38 min',
-    image: '/images/hero-2.jpg',
-    pastor: 'Pastor Sarah Keil',
-  },
-  {
-    title: 'Rooted and Built Up',
-    series: 'Foundations',
-    date: '21 Jul 2026',
-    duration: '45 min',
-    image: '/images/hero-3.jpg',
-    pastor: 'Pastor Bartolome R. Sanchez',
-  },
-];
-const gallery = [
-  '/images/hero-1.jpg',
-  '/images/hero-6.jpg',
-  '/images/hero-2.jpg',
-  '/images/hero-3.jpg',
-  '/images/hero-4.jpg',
-  '/images/hero-5.jpg',
 ];
 
 export default function Home() {
+  const { content } = useContent();
+  const { gallery } = content.pages;
+  const latest = content.sermons.find((item) => item.status === 'published');
   return (
     <>
       <section className="home-hero">
         <HeroGallery />
         <div className="hero-content">
-          <Reveal direction="fade">
-            <p className="service-pill">
-              <span />
-              Auckland, New Zealand · Sundays 10:00am
-            </p>
-          </Reveal>
+          <p className="eyebrow gold">{content.site.heroEyebrow}</p>
           <Reveal delay={80}>
             <h1>
-              <span>Grace</span>
-              <span className="hero-gold">Abounds.</span>
+              <span>{content.site.heroTitle}</span>
+              <span className="hero-gold">{content.site.heroAccent}</span>
             </h1>
           </Reveal>
           <Reveal direction="fade" delay={220}>
@@ -95,10 +60,7 @@ export default function Home() {
             </div>
           </Reveal>
           <Reveal delay={280}>
-            <p className="hero-tagline">
-              A community of faith rooted in love, growing in grace,
-              <br /> and reaching the world with the hope of Jesus Christ.
-            </p>
+            <p className="hero-tagline">{content.site.heroCopy}</p>
           </Reveal>
           <Reveal delay={360}>
             <div className="actions">
@@ -114,7 +76,6 @@ export default function Home() {
             </div>
           </Reveal>
           <div className="scroll-cue">
-            <span>Scroll</span>
             <i />
           </div>
         </div>
@@ -131,23 +92,11 @@ export default function Home() {
                 </h2>
               </div>
             </Reveal>
-            <Link className="calendar-link" href="/location">
+            <Link className="calendar-link" href="/events">
               Full Calendar →
             </Link>
           </div>
-          <div className="event-grid">
-            {events.map((event, index) => (
-              <Reveal key={event.title} delay={index * 80}>
-                <article className="event-card">
-                  <strong>{event.date}</strong>
-                  <h3>{event.title}</h3>
-                  <p>{event.location}</p>
-                  <p>{event.time}</p>
-                  <span>{event.tag}</span>
-                </article>
-              </Reveal>
-            ))}
-          </div>
+          <EventGrid limit={4} />
         </div>
       </section>
       <section className="home-section sermons-section">
@@ -158,60 +107,38 @@ export default function Home() {
             Messages
           </h2>
           <Reveal delay={60}>
-            <article className="featured-sermon">
-              <div className="sermon-image">
-                <Image
-                  src="/images/hero-6.jpg"
-                  alt="Latest sermon"
-                  fill
-                  sizes="(max-width: 768px) 100vw, 60vw"
-                />
-                <span className="latest">Latest</span>
-                <button
-                  className="play-large"
-                  type="button"
-                  aria-label="Play Walking in the Spirit"
-                >
-                  ▶
-                </button>
-              </div>
-              <div className="featured-copy">
-                <p className="eyebrow gold">Life in the Spirit</p>
-                <h3>Walking in the Spirit</h3>
-                <p>Pastor Bartolome R. Sanchez · 4 Aug 2026 · 42 min</p>
-                <button className="button" type="button">
-                  Watch Now
-                </button>
-              </div>
-            </article>
+            {latest && (
+              <article className="featured-sermon">
+                <div className="sermon-image">
+                  <Image
+                    src={latest.image}
+                    alt="Latest sermon"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 60vw"
+                  />
+                  <span className="latest">Latest</span>
+                  <Link
+                    className="play-large"
+                    href={`/sermons/${latest.slug}`}
+                    aria-label={`View ${latest.title}`}
+                  >
+                    ▶
+                  </Link>
+                </div>
+                <div className="featured-copy">
+                  <p className="eyebrow gold">{latest.series}</p>
+                  <h3>{latest.title}</h3>
+                  <p>
+                    {latest.speaker} · {latest.date} · {latest.duration}
+                  </p>
+                  <Link className="button" href={`/sermons/${latest.slug}`}>
+                    Watch Now
+                  </Link>
+                </div>
+              </article>
+            )}
           </Reveal>
-          <div className="sermon-grid">
-            {sermons.map((sermon, index) => (
-              <Reveal key={sermon.title} delay={index * 90}>
-                <article className="sermon-card">
-                  <div className="sermon-thumb">
-                    <Image
-                      src={sermon.image}
-                      alt=""
-                      fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                    />
-                    <button type="button" aria-label={`Play ${sermon.title}`}>
-                      ▶
-                    </button>
-                    <span>{sermon.duration}</span>
-                  </div>
-                  <div>
-                    <p>{sermon.series}</p>
-                    <h3>{sermon.title}</h3>
-                    <small>
-                      {sermon.pastor} · {sermon.date}
-                    </small>
-                  </div>
-                </article>
-              </Reveal>
-            ))}
-          </div>
+          <SermonGrid limit={3} />
         </div>
       </section>
       <section className="home-section gallery-section">
@@ -262,38 +189,30 @@ export default function Home() {
           <p className="eyebrow olive">Grow Deeper</p>
           <h2>Resources</h2>
           <div className="resource-grid">
-            {[
-              [
-                '📖',
-                'Study Bible',
-                'Weekly reading plans and devotionals for all ages.',
-                'Scripture',
-              ],
-              [
-                '🎧',
-                'Sermon Podcast',
-                'All messages available wherever you listen.',
-                'Media',
-              ],
-              [
-                '📋',
-                'Life Group Guides',
-                'Discussion guides aligned with the current series.',
-                'Community',
-              ],
-            ].map(([icon, title, desc, tag]) => (
-              <article className="resource-card" key={title}>
-                <span>{icon}</span>
+            {resources.map(({ icon: Icon, title, description, tag }) => (
+              <Link
+                href="/members/gallery"
+                className="resource-card"
+                key={title}
+              >
+                <span>
+                  <Icon aria-hidden="true" />
+                </span>
                 <div>
                   <small>{tag}</small>
                   <h3>{title}</h3>
-                  <p>{desc}</p>
+                  <p>{description}</p>
                 </div>
                 <b>→</b>
-              </article>
+              </Link>
             ))}
           </div>
         </div>
+      </section>
+      <section className="scripture home-scripture">
+        <Reveal direction="scale">
+          <ManagedVerse placement="home" />
+        </Reveal>
       </section>
       <section className="home-cta">
         <div className="container">

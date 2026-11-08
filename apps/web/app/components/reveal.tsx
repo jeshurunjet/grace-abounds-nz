@@ -4,11 +4,15 @@ export function Reveal({
   children,
   direction = 'up',
   delay = 0,
+  duration = 600,
+  threshold = 0.12,
   className = '',
 }: {
   children: ReactNode;
-  direction?: 'up' | 'left' | 'right' | 'fade' | 'scale';
+  direction?: 'up' | 'down' | 'left' | 'right' | 'fade' | 'scale';
   delay?: number;
+  duration?: number;
+  threshold?: number;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -27,16 +31,16 @@ export function Reveal({
           observer.disconnect();
         }
       },
-      { threshold: 0.12 },
+      { threshold },
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [threshold]);
   return (
     <div
       ref={ref}
       className={`reveal reveal-${direction} ${visible ? 'is-visible' : ''} ${className}`}
-      style={{ '--reveal-delay': `${delay}ms` } as CSSProperties}
+      style={{ '--reveal-delay': `${delay}ms`, '--reveal-duration': `${duration}ms` } as CSSProperties}
     >
       {children}
     </div>

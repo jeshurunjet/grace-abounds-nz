@@ -1,99 +1,123 @@
+'use client';
+import { useContent } from '../components/content-provider';
 import Image from 'next/image';
-import { PageHero } from '../components/page-hero';
-const values = [
-  [
-    '01',
-    'Scripture',
-    'The Bible is our foundation—authoritative for faith and life.',
-  ],
-  [
-    '02',
-    'Community',
-    'We pursue authentic relationships marked by love and commitment.',
-  ],
-  [
-    '03',
-    'Mission',
-    'We share the hope of Jesus with our neighbours and our world.',
-  ],
-  ['04', 'Generosity', 'We give freely of our time, resources, and gifts.'],
-];
+import {
+  ContactForm,
+  ManagedContact,
+  ManagedStory,
+  ManagedTeam,
+} from '../components/managed-content';
+import { Reveal } from '../components/reveal';
+
 export default function About() {
+  const { content } = useContent();
+  const { values } = content.pages;
   return (
-    <>
-      <PageHero eyebrow="Who we are" title="About" accent="Us">
-        A diverse church family discovering the depth of God’s grace together.
-      </PageHero>
-      <section className="section">
-        <div className="container two-col">
-          <Image
-            className="rounded-image"
-            src="/images/hero-1.jpg"
-            alt="Members of the Grace Abounds community"
-            width={900}
-            height={896}
-          />
-          <div>
-            <p className="eyebrow">Our story</p>
-            <h2>Grace for every season.</h2>
-            <p>
-              Grace Abounds began with a simple conviction: everyone deserves a
-              place to encounter Jesus, belong in community, and grow in
-              purpose.
-            </p>
-            <p>
-              Today we are a multi-generational, multicultural church family
-              serving Auckland and looking beyond ourselves to New Zealand and
-              the Pacific.
-            </p>
-          </div>
+    <div className="reference-public-page">
+      <section className="reference-page-hero about-reference-hero">
+        <Image
+          src={content.pages.aboutHeroImage}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+        />
+        <div className="container">
+          <Reveal>
+            <p className="eyebrow gold">Our Story</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h1>
+              About
+              <br />
+              <span>Us</span>
+            </h1>
+          </Reveal>
+          <Reveal delay={160}>
+            <p>{content.pages.aboutIntro}</p>
+          </Reveal>
         </div>
       </section>
-      <section className="section linen">
+
+      <section className="reference-section raised">
+        <div className="container about-story-grid">
+          <Reveal direction="right">
+            <div>
+              <h2>Our Story</h2>
+              <ManagedStory />
+            </div>
+          </Reveal>
+          <Reveal direction="left" delay={100}>
+            <div className="about-story-image">
+              <Image
+                src={content.pages.aboutImage}
+                alt="Grace Abounds International congregation"
+                width={700}
+                height={500}
+              />
+              <div>
+                <strong>{content.pages.ministryYears}</strong>
+                <span>Years of Ministry</span>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="reference-section">
         <div className="container">
-          <p className="eyebrow">What shapes us</p>
-          <h2>Our Values</h2>
-          <div className="cards values">
-            {values.map(([n, t, d]) => (
-              <article className="card" key={t}>
-                <b>{n}</b>
-                <h3>{t}</h3>
-                <p>{d}</p>
-              </article>
+          <Reveal>
+            <div className="reference-section-heading">
+              <p className="eyebrow">What We Believe</p>
+              <h2>Our Values</h2>
+            </div>
+          </Reveal>
+          <div className="about-values-grid">
+            {values.map(([number, title, description], index) => (
+              <Reveal delay={index * 80} key={number}>
+                <article>
+                  <small>{number}</small>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                </article>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
-      <section className="section">
+
+      <section className="reference-section raised">
         <div className="container">
-          <p className="eyebrow">Leadership</p>
-          <h2>Meet the Team</h2>
-          <div className="cards">
-            <article className="card">
-              <h3>Pastor Bartolome R. Sanchez</h3>
-              <p>Lead Pastor</p>
-            </article>
-            <article className="card">
-              <h3>Ministry Team</h3>
-              <p>Pastoral care and community leadership</p>
-            </article>
-            <article className="card">
-              <h3>Volunteer Leaders</h3>
-              <p>Serving every generation</p>
-            </article>
-          </div>
+          <Reveal>
+            <div className="reference-section-heading">
+              <p className="eyebrow olive">Leadership</p>
+              <h2>Meet the Team</h2>
+            </div>
+          </Reveal>
+          <Reveal delay={80}>
+            <ManagedTeam />
+          </Reveal>
         </div>
       </section>
-      <section className="section contact" id="contact">
-        <div className="container">
-          <p className="eyebrow">Contact</p>
-          <h2>We would love to hear from you.</h2>
-          <p>
-            Official contact details will be added once approved. Until then,
-            please connect with the team in person at a Sunday gathering.
-          </p>
+
+      <section className="reference-section about-contact" id="contact">
+        <div className="container about-contact-grid">
+          <Reveal direction="right">
+            <div>
+              <p className="eyebrow">Get in Touch</p>
+              <h2>Contact Us</h2>
+              <ManagedContact />
+              <div className="contact-office-hours">
+                <b>Office Hours</b>
+                <span>{content.pages.officeHours}</span>
+              </div>
+            </div>
+          </Reveal>
+          <Reveal direction="left" delay={100}>
+            <ContactForm />
+          </Reveal>
         </div>
       </section>
-    </>
+    </div>
   );
 }

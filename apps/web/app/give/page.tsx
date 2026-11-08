@@ -1,87 +1,63 @@
+'use client';
+import { useContent } from '../components/content-provider';
 import { PageHero } from '../components/page-hero';
+import {
+  GiveOptions,
+  ManagedGiving,
+  ManagedVerse,
+} from '../components/managed-content';
+import { Reveal } from '../components/reveal';
 export default function Give() {
+  const { content } = useContent();
   return (
     <>
       <PageHero eyebrow="Generosity" title="Give" accent="Generously.">
-        Giving is an act of worship that supports ministry, community care, and
-        mission.
+        We believe giving is an act of worship and an expression of trust in
+        God. Every gift supports our mission to reach New Zealand and the
+        Pacific with the hope of Jesus.
       </PageHero>
       <section className="section linen give-impact">
         <div className="container">
-          <p className="eyebrow">Impact</p>
-          <h2>Where Your Giving Goes</h2>
+          <Reveal>
+            <p className="eyebrow">Impact</p>
+            <h2>Where Your Giving Goes</h2>
+          </Reveal>
           <div className="impact-grid">
-            {[
-              [
-                '40%',
-                'Local Ministry',
-                'Sunday gatherings, groups, youth, and pastoral care.',
-              ],
-              [
-                '30%',
-                'Missions & Outreach',
-                'Community outreach and mission partnerships.',
-              ],
-              [
-                '30%',
-                'Facilities & Operations',
-                'Creating welcoming spaces and reaching more people.',
-              ],
-            ].map(([amount, title, copy]) => (
-              <article className="impact-card" key={title}>
-                <strong>{amount}</strong>
-                <h3>{title}</h3>
-                <p>{copy}</p>
-              </article>
+            {content.pages.givingImpact.map(([amount, title, copy], index) => (
+              <Reveal delay={index * 70} key={title}>
+                <article className="impact-card">
+                  <strong>{amount}</strong>
+                  <h3>{title}</h3>
+                  <p>{copy}</p>
+                </article>
+              </Reveal>
             ))}
           </div>
           <div className="two-col give-grid">
-            <article className="card">
-              <h3>Bank Transfer (NZ)</h3>
-              <p>
-                Direct bank transfer is the supported giving method. No payment
-                gateway is connected.
-              </p>
-              <dl>
-                <div>
-                  <dt>Account name</dt>
-                  <dd>To be confirmed</dd>
-                </div>
-                <div>
-                  <dt>Bank</dt>
-                  <dd>To be confirmed</dd>
-                </div>
-                <div>
-                  <dt>Account number</dt>
-                  <dd>To be confirmed</dd>
-                </div>
-                <div>
-                  <dt>Reference</dt>
-                  <dd>Your full name</dd>
-                </div>
-              </dl>
-              <p className="form-note">
-                Placeholder details only—please do not attempt a transfer until
-                official details are published.
-              </p>
-            </article>
-            <div className="giving-note">
-              <p className="eyebrow">A secure first step</p>
-              <h3>Why We Give</h3>
-              <p>
-                Your generosity helps sustain local ministry, care for people,
-                equip the next generation, and participate in mission.
-              </p>
-              <p>
-                We do not accept cards or online payments through this website.
-              </p>
-            </div>
+            <Reveal direction="right">
+              <article className="card">
+                <h3>Donations &amp; Offerings</h3>
+                <p>
+                  Give your donation or offering by direct bank transfer. No
+                  platform fees.
+                </p>
+                <ManagedGiving />
+                <p className="form-note">
+                  Placeholder details only—please do not attempt a transfer
+                  until official details are published.
+                </p>
+              </article>
+            </Reveal>
+            <Reveal direction="left" delay={100}>
+              <GiveOptions />
+            </Reveal>
           </div>
         </div>
       </section>
       <section className="scripture">
-        <blockquote>“God loves a cheerful giver.”</blockquote>
-        <p>2 Corinthians 9:7</p>
+        <Reveal direction="scale">
+          <ManagedVerse placement="giving" />
+        </Reveal>
       </section>
     </>
   );

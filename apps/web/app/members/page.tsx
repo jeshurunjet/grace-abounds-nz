@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { MemberShell } from '../components/member-shell';
 import { MemberEngagement } from '../components/member-engagement';
 import { MemberCalendar } from '../components/member-calendar';
+import { SundayStatus } from '../components/activity-ui';
 import { Reveal } from '../components/reveal';
 import { useContent } from '../components/content-provider';
 import { profileById, profileByRole } from '../lib/profiles';
@@ -47,6 +48,7 @@ export default function MembersPage() {
       </Reveal>
       <div className="member-overview-grid">
         <Reveal direction="right">
+          <SundayStatus />
           <MemberCalendar />
         </Reveal>
         <div className="member-overview-side">

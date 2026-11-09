@@ -1,6 +1,6 @@
 import type { ContentState } from './content';
 export function validatePublicContent(
-  content: Pick<ContentState, 'site' | 'pages' | 'events' | 'sermons' | 'team'>,
+  content: Pick<ContentState, 'site' | 'pages' | 'sermons' | 'team'>,
 ): string[] {
   const errors: string[] = [];
   const safeLink = (value: string) =>
@@ -28,14 +28,6 @@ export function validatePublicContent(
       });
   };
   scan(content, 'Website');
-  content.site.memberOpportunities
-    .split('\n')
-    .filter(Boolean)
-    .forEach((line) => {
-      const href = line.split('|')[2]?.trim();
-      if (href && !safeLink(href))
-        errors.push('Member opportunities: use an HTTPS URL or a local path.');
-    });
   for (const key of ['heroImages', 'gallery'] as const) {
     if (!content.pages[key].length)
       errors.push(`Add at least one ${key} image.`);
@@ -48,8 +40,6 @@ export function validatePublicContent(
   }
   // Fixed-shape records: each entry must keep exactly its named fields.
   const shapes = {
-    groups: ['name', 'leader', 'schedule', 'area'],
-    studies: ['name', 'description', 'schedule', 'location'],
     values: ['number', 'title', 'description'],
     givingImpact: ['percentage', 'title', 'description'],
   } as const;
@@ -71,7 +61,6 @@ export function validatePublicContent(
     });
   }
   for (const [key, entries] of Object.entries({
-    events: content.events,
     sermons: content.sermons,
     leadership: content.team,
   }))
@@ -83,7 +72,6 @@ export function validatePublicContent(
     if (!content.pages[key].length)
       errors.push(`Add at least one ${key} item.`);
   for (const [key, entries] of Object.entries({
-    events: content.events,
     sermons: content.sermons,
   })) {
     const slugs = new Set<string>();

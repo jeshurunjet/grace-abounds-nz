@@ -29,8 +29,6 @@ function label(key: string) {
 // Records stored as fixed-position tuples. Each position is a named field:
 // whole records can be added, removed and reordered, but never their fields.
 const tupleFields: Record<string, string[]> = {
-  groups: ['Group name', 'Leader', 'Schedule', 'Area'],
-  studies: ['Study name', 'Description', 'Schedule', 'Location'],
   values: ['Number', 'Value', 'Description'],
   givingImpact: ['Percentage', 'Area', 'Description'],
 };
@@ -42,9 +40,9 @@ const requiredCollections = new Set([
   'steps',
 ]);
 const hints: Record<string, string> = {
-  memberOpportunities:
-    'Shown only in the member area “Get involved” list. These are separate from the public Next steps journeys below.',
-  steps: 'Public Next steps journeys shown on the website.',
+  steps:
+    'Public Next steps journeys. Members can also request these from the member area.',
+  locations: 'Campus details. Service times come from Activities & calendar.',
 };
 // A new record starts blank and unpublished rather than copying another record.
 function blankFrom(template: unknown): unknown {
@@ -341,7 +339,7 @@ export default function CmsPage() {
     ],
     About: ['story'],
     Locations: [],
-    'Next steps': ['memberOpportunities'],
+    'Next steps': [],
     Giving: [
       'givingVerseText',
       'givingVerseReference',
@@ -372,7 +370,7 @@ export default function CmsPage() {
       'values',
       'officeHours',
     ],
-    Locations: ['locations', 'groups', 'studies'],
+    Locations: ['locations'],
     'Next steps': ['steps'],
     Giving: ['givingImpact'],
     Events: [],
@@ -479,9 +477,9 @@ export default function CmsPage() {
               />
             )}
           </fieldset>
-          {tab === 'Events' && (
+          {(tab === 'Events' || tab === 'Locations') && (
             <Link className="button" href="/admin/events">
-              Manage events and calendar entries
+              Manage services, groups, studies and events
             </Link>
           )}
           {tab === 'Sermons' && (

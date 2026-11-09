@@ -1,0 +1,383 @@
+import type {
+  Activity,
+  ActivityException,
+  ActivitySchedule,
+} from './activities';
+
+const image = (id: string) =>
+  `https://images.unsplash.com/photo-${id}?w=900&h=600&fit=crop&auto=format`;
+const weekly = (
+  days: number[],
+  startTime: string,
+  endTime: string,
+  repeat: 'weekly' | 'fortnightly' = 'weekly',
+): ActivitySchedule => ({
+  repeat,
+  date: '2026-01-04',
+  until: '',
+  days,
+  monthWeek: 1,
+  monthDay: 0,
+  startTime,
+  endTime,
+});
+const monthly = (
+  monthWeek: number,
+  monthDay: number,
+  startTime: string,
+  endTime: string,
+): ActivitySchedule => ({
+  ...weekly([], startTime, endTime),
+  repeat: 'monthly',
+  monthWeek,
+  monthDay,
+});
+const once = (
+  date: string,
+  startTime: string,
+  endTime: string,
+): ActivitySchedule => ({
+  ...weekly([], startTime, endTime),
+  repeat: 'once',
+  date,
+});
+const base = {
+  leader: '',
+  venue: '',
+  image: '/images/gathering.png',
+  capacity: null,
+  status: 'published' as const,
+  publishAt: '',
+};
+
+const services: Activity[] = [
+  ['manukau', 'Manukau', 'Sunday Service', [0], '10:00', '11:30'],
+  ['manukau', 'Manukau', 'Life Night', [3], '19:00', '20:30'],
+  ['botany', 'Botany', 'Sunday Service', [0], '10:00', '11:30'],
+  ['botany', 'Botany', 'Connect Night', [4], '19:00', '20:30'],
+  ['henderson', 'Henderson', 'Sunday Service', [0], '10:00', '11:30'],
+].map(([locationId, place, title, days, start, end]) => ({
+  ...base,
+  id: `service-${locationId}-${String(title).toLowerCase().replace(/\s+/g, '-')}`,
+  slug: `${String(title).toLowerCase().replace(/\s+/g, '-')}-${String(place).toLowerCase()}`,
+  kind: 'service' as const,
+  title: `${title} — ${place}`,
+  summary:
+    'Worship, teaching from the Bible and time to connect. Everyone welcome.',
+  tag: 'Service',
+  locationId: locationId as string,
+  schedule: weekly(days as number[], start as string, end as string),
+  joinMode: 'booking' as const,
+}));
+
+const groups: Activity[] = (
+  [
+    ['South Auckland Young Adults', 'Mike & Aroha Tane', 2, '19:00', 'Manukau'],
+    ['Botany Families Group', 'Daniel & Claire Puru', 3, '19:30', 'Botany'],
+    ["Henderson Women's Group", 'Lisa Ngata', 4, '10:00', 'Henderson'],
+    [
+      'Pacific Island Fellowship',
+      'Sione & Mele Taufa',
+      5,
+      '19:00',
+      'Papatoetoe',
+    ],
+    ['Online Connect Group', 'Sarah Keil', 3, '20:00', 'Online'],
+    [
+      'Central Auckland Young Professionals',
+      'Joshua Kim',
+      2,
+      '18:30',
+      'City Centre',
+    ],
+  ] as const
+).map(([title, leader, day, start, venue], index) => ({
+  ...base,
+  id: `group-${index + 1}`,
+  slug: title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-$/, ''),
+  kind: 'group' as const,
+  title,
+  leader,
+  venue,
+  summary:
+    'A small community that meets weekly to study the Bible, pray together and do life.',
+  tag: 'Connect group',
+  locationId: '',
+  schedule: weekly(
+    [day],
+    start,
+    `${String(Number(start.slice(0, 2)) + 2).padStart(2, '0')}${start.slice(2)}`,
+  ),
+  joinMode: 'membership' as const,
+  capacity: 16,
+}));
+
+const studies: Activity[] = [
+  {
+    ...base,
+    id: 'study-foundations',
+    slug: 'foundations-class',
+    kind: 'study',
+    title: 'Foundations Class',
+    summary:
+      'A 6-week introduction to core Christian beliefs. Perfect for those new to faith or wanting a solid theological grounding.',
+    tag: 'Bible study',
+    locationId: 'manukau',
+    schedule: monthly(1, 6, '09:00', '12:00'),
+    joinMode: 'membership',
+    capacity: 30,
+  },
+  {
+    ...base,
+    id: 'study-mens',
+    slug: 'mens-bible-study',
+    kind: 'study',
+    title: "Men's Bible Study",
+    summary:
+      'A deep-dive study through books of the Bible with a focus on applying Scripture to daily life as men of faith.',
+    tag: 'Bible study',
+    locationId: '',
+    venue: 'Various cafés',
+    schedule: weekly([6], '07:00', '08:30', 'fortnightly'),
+    joinMode: 'membership',
+  },
+  {
+    ...base,
+    id: 'study-womens',
+    slug: 'womens-word-and-worship',
+    kind: 'study',
+    title: "Women's Word & Worship",
+    summary:
+      'A rich time of study, prayer, and fellowship for women at all stages of life and faith.',
+    tag: 'Bible study',
+    locationId: 'manukau',
+    schedule: monthly(1, 5, '19:00', '21:00'),
+    joinMode: 'membership',
+  },
+];
+
+const ministries: Activity[] = [
+  {
+    ...base,
+    id: 'ministry-worship',
+    slug: 'worship-and-music-ministry',
+    kind: 'ministry',
+    title: 'Worship & Music Ministry',
+    summary:
+      'Musicians, vocalists, sound, lighting, livestream and presentation volunteers who serve our gatherings.',
+    tag: 'Ministry team',
+    locationId: 'manukau',
+    image: '/images/worship.png',
+    schedule: { ...weekly([], '', ''), repeat: 'ongoing' },
+    joinMode: 'membership',
+  },
+  {
+    ...base,
+    id: 'ministry-welcome',
+    slug: 'welcome-team',
+    kind: 'ministry',
+    title: 'Welcome Team',
+    summary: 'Greet guests, help newcomers find their way and serve coffee.',
+    tag: 'Ministry team',
+    locationId: '',
+    venue: 'All campuses',
+    schedule: { ...weekly([], '', ''), repeat: 'ongoing' },
+    joinMode: 'membership',
+  },
+];
+
+const events: Activity[] = (
+  [
+    [
+      'e1',
+      'connect-group-kickoff',
+      'Connect Group Kickoff',
+      '2026-11-17',
+      '19:00',
+      '',
+      'Multiple locations',
+      'Community',
+      'Meet people near you and discover a group where you can belong.',
+      '1529156069898-49953e39b3ac',
+      'published',
+      null,
+    ],
+    [
+      'e2',
+      'water-baptism-sunday',
+      'Water Baptism Sunday',
+      '2026-11-22',
+      '10:00',
+      'manukau',
+      'Main gathering',
+      'Milestone',
+      'Celebrate stories of new life and faith with our church family.',
+      '1438032005730-c779502df39b',
+      'published',
+      null,
+    ],
+    [
+      'e3',
+      'young-adults-night',
+      'Youth & Young Adults Night',
+      '2026-11-28',
+      '18:30',
+      'manukau',
+      '',
+      'Youth',
+      'An evening of worship, community, and conversation.',
+      '1492551557933-34265f7af79e',
+      'published',
+      120,
+    ],
+    [
+      'e4',
+      'community-lunch',
+      'Community Lunch',
+      '2026-12-06',
+      '12:00',
+      'manukau',
+      '',
+      'Community',
+      'Stay after the gathering for a shared lunch and time together.',
+      '1517457373958-b7bdd4587205',
+      'published',
+      80,
+    ],
+    [
+      'e5',
+      'christmas-production',
+      'A Thrill of Hope',
+      '2026-12-13',
+      '18:00',
+      'manukau',
+      'Main Auditorium',
+      'Christmas',
+      'A creative Christmas gathering for friends, whānau, and neighbours.',
+      '1482517967863-00e15c9b44be',
+      'scheduled',
+      400,
+    ],
+    [
+      'e6',
+      'serve-day',
+      'Auckland Serve Day',
+      '2027-01-30',
+      '09:00',
+      '',
+      'Across Auckland',
+      'Outreach',
+      'Practical projects that help us love and serve our city together.',
+      '1559027615-cd4628902d4a',
+      'published',
+      null,
+    ],
+    [
+      'e7',
+      'marriage-night',
+      'Marriage Night',
+      '2027-02-12',
+      '19:00',
+      'manukau',
+      '',
+      'Families',
+      'An encouraging evening for couples at every stage.',
+      '1519741497674-611481863552',
+      'draft',
+      40,
+    ],
+    [
+      'e8',
+      'worship-team-night',
+      'Worship & Creative Night',
+      '2027-02-19',
+      '19:00',
+      'manukau',
+      'Main Auditorium',
+      'Worship',
+      'A night to worship, learn, and build the creative community.',
+      '1501386761578-eac5c94b800a',
+      'archived',
+      null,
+    ],
+  ] as const
+).map(
+  ([
+    id,
+    slug,
+    title,
+    date,
+    start,
+    locationId,
+    venue,
+    tag,
+    summary,
+    photo,
+    status,
+    capacity,
+  ]) => ({
+    ...base,
+    id,
+    slug,
+    kind: 'event' as const,
+    title,
+    summary,
+    tag,
+    locationId,
+    venue,
+    image: image(photo),
+    schedule: once(
+      date,
+      start,
+      `${String(Number(start.slice(0, 2)) + 2).padStart(2, '0')}${start.slice(2)}`,
+    ),
+    joinMode: 'booking' as const,
+    capacity,
+    status,
+    publishAt: status === 'scheduled' ? '2026-12-01T09:00' : '',
+  }),
+);
+
+export const seedActivities: Activity[] = [
+  ...services,
+  ...groups,
+  ...studies,
+  ...ministries,
+  ...events,
+];
+
+export const seedActivityExceptions: ActivityException[] = [
+  {
+    id: 'exception-henderson-christmas',
+    activityId: 'service-henderson-sunday-service',
+    date: '2026-12-27',
+    kind: 'cancelled',
+    note: 'No service at Henderson — join the combined service at Manukau.',
+    startTime: '',
+    endTime: '',
+    venue: '',
+  },
+  {
+    id: 'exception-botany-christmas',
+    activityId: 'service-botany-sunday-service',
+    date: '2026-12-27',
+    kind: 'cancelled',
+    note: 'No service at Botany — join the combined service at Manukau.',
+    startTime: '',
+    endTime: '',
+    venue: '',
+  },
+  {
+    id: 'exception-manukau-christmas',
+    activityId: 'service-manukau-sunday-service',
+    date: '2026-12-27',
+    kind: 'changed',
+    note: 'Combined service for all campuses.',
+    startTime: '10:30',
+    endTime: '12:00',
+    venue: 'Main Auditorium',
+  },
+];

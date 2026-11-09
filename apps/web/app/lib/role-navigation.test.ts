@@ -7,7 +7,10 @@ describe('role navigation', () => {
     ['pastor', '/pastor', 'Pastor Workspace'],
     ['admin', '/admin', 'Admin Dashboard'],
   ] as const)('maps %s to its workspace', (role, href, label) => {
-    expect(getRoleNavigation(role)).toMatchObject({ workspaceHref: href, workspaceLabel: label });
+    expect(getRoleNavigation(role)).toMatchObject({
+      workspaceHref: href,
+      workspaceLabel: label,
+    });
   });
 
   it('uses the member workspace only when the role is unavailable', () => {

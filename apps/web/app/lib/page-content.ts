@@ -1,78 +1,29 @@
 export const locations = [
   {
+    id: 'manukau',
     name: 'Grace Centre — Manukau',
     address: '45 Great South Road, Manukau, Auckland 2104',
-    times: ['Sunday 10:00am', 'Wednesday 7:00pm (Life Night)'],
     type: 'Main Campus',
     image:
       'https://images.unsplash.com/photo-1519741497674-611481863552?w=700&h=400&fit=crop&auto=format',
   },
   {
+    id: 'botany',
     name: 'Grace East — Botany',
     address: '12 Chapel Road, Botany, Auckland 2013',
-    times: ['Sunday 10:00am', 'Thursday 7:00pm (Connect Night)'],
     type: 'Campus',
     image:
       'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=700&h=400&fit=crop&auto=format',
   },
   {
+    id: 'henderson',
     name: 'Grace West — Henderson',
     address: '8 Lincoln Road, Henderson, Auckland 0612',
-    times: ['Sunday 10:00am'],
     type: 'Campus',
     image:
       'https://images.unsplash.com/photo-1438032005730-c779502df39b?w=700&h=400&fit=crop&auto=format',
   },
 ];
-export const groups: [string, string, string, string][] = [
-  [
-    'South Auckland Young Adults',
-    'Mike & Aroha Tane',
-    'Tuesday · 7:00pm',
-    'Manukau',
-  ],
-  [
-    'Botany Families Group',
-    'Daniel & Claire Puru',
-    'Wednesday · 7:30pm',
-    'Botany',
-  ],
-  ["Henderson Women's Group", 'Lisa Ngata', 'Thursday · 10:00am', 'Henderson'],
-  [
-    'Pacific Island Fellowship',
-    'Sione & Mele Taufa',
-    'Friday · 7:00pm',
-    'Papatoetoe',
-  ],
-  ['Online Connect Group', 'Sarah Keil', 'Wednesday · 8:00pm', 'Online'],
-  [
-    'Central Auckland Young Professionals',
-    'Joshua Kim',
-    'Tuesday · 6:30pm',
-    'City Centre',
-  ],
-];
-export const studies: [string, string, string, string][] = [
-  [
-    'Foundations Class',
-    'A 6-week introduction to core Christian beliefs. Perfect for those new to faith or wanting a solid theological grounding.',
-    'Monthly · Saturdays 9am–12pm',
-    'Grace Centre',
-  ],
-  [
-    "Men's Bible Study",
-    'A deep-dive study through books of the Bible with a focus on applying Scripture to daily life as men of faith.',
-    'Fortnightly · Saturdays 7am',
-    'Various Cafés',
-  ],
-  [
-    "Women's Word & Worship",
-    'A rich time of study, prayer, and fellowship for women at all stages of life and faith.',
-    'Monthly · Friday evenings',
-    'Grace Centre',
-  ],
-];
-
 export const steps = [
   {
     icon: '✦',
@@ -225,8 +176,6 @@ export const publicPages = {
     description: string;
   }[],
   locations,
-  groups,
-  studies,
   steps,
   values,
   gallery,

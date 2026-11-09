@@ -13,6 +13,8 @@ describe('Footer', () => {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     }
-    expect(screen.getByText('45 Great South Road, Manukau, Auckland 2104')).toBeInTheDocument();
+    expect(
+      screen.getByText('45 Great South Road, Manukau, Auckland 2104'),
+    ).toBeInTheDocument();
   });
 });

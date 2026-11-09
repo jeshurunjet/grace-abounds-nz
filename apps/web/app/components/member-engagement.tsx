@@ -6,8 +6,7 @@ import { Clock, HandHeart, Users } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
-
-type Attendance = 'attending' | 'not-attending' | 'undecided';
+import { MemberActivities } from './member-activities';
 
 export function MemberEngagement() {
   const { content, update, ready, storageError } = useContent();
@@ -17,72 +16,25 @@ export function MemberEngagement() {
   const [prayer, setPrayer] = useState('');
   const [prayerSent, setPrayerSent] = useState(false);
   const [opportunity, setOpportunity] = useState('');
-  const [focusEvent, setFocusEvent] = useState('');
-  const [showAllEvents, setShowAllEvents] = useState(false);
-  const [eventQuery, setEventQuery] = useState('');
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('event');
-    if (id) {
-      setFocusEvent(id);
-      requestAnimationFrame(() =>
-        document
-          .getElementById(`attendance-${id}`)
-          ?.scrollIntoView({ block: 'center' }),
-      );
-    }
-  }, []);
-  const publishedEvents = content.events.filter(
-    (event) => event.status === 'published',
-  );
-  const matchingEvents = publishedEvents.filter((event) =>
-    `${event.title} ${event.location} ${event.date}`
-      .toLowerCase()
-      .includes(eventQuery.trim().toLowerCase()),
-  );
-  // The selected event is always listed first, even outside the first four.
-  const visibleEvents = [
-    ...matchingEvents.filter((event) => event.id === focusEvent),
-    ...matchingEvents.filter((event) => event.id !== focusEvent),
-  ].slice(0, showAllEvents || eventQuery ? undefined : 4);
   const currentUser =
     content.users.find((user) => user.email === session?.user?.email) ??
     content.users.find((user) => user.role === 'member');
   const userId = currentUser?.id ?? session?.user?.id ?? 'anonymous-member';
   const opportunities = useMemo(
     () =>
-      content.site.memberOpportunities
-        .split('\n')
-        .map((line) => {
-          const [name = '', description = '', href = '/next-steps'] = line
-            .split('|')
-            .map((value) => value.trim());
-          return { name, description, href };
-        })
-        .filter((item) => item.name)
-        .concat(
-          content.pages.groups.map((group) => ({
-            name: group[0]!,
-            description: `${group[2]} · ${group[3]}`,
-            href: '/location',
-          })),
-          content.pages.studies.map((study) => ({
-            name: study[0]!,
-            description: study[1]!,
-            href: '/location',
-          })),
-          content.pages.steps.map((step) => ({
-            name: decodeURIComponent(
-              step.memberHref.split('join=')[1] ?? step.title,
-            ),
-            description: step.subtitle,
-            href: '/next-steps',
-          })),
-        )
+      content.pages.steps
+        .map((step) => ({
+          name: decodeURIComponent(
+            step.memberHref.split('join=')[1] ?? step.title,
+          ),
+          description: step.subtitle,
+          href: '/next-steps',
+        }))
         .filter(
           (item, index, items) =>
             items.findIndex((entry) => entry.name === item.name) === index,
         ),
-    [content.site.memberOpportunities, content.pages],
+    [content.pages],
   );
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('join');
@@ -163,33 +115,6 @@ export function MemberEngagement() {
       `Interest in ${selected.name} added to this browser preview only. No application has been delivered.`,
       'info',
     );
-  }
-  async function updateAttendance(eventId: string, response: Attendance) {
-    if (!ready || storageError) return false;
-    return update((current) => {
-      const existing = current.eventRsvps.find(
-        (item) => item.userId === userId && item.eventId === eventId,
-      );
-      return {
-        ...current,
-        eventRsvps: existing
-          ? current.eventRsvps.map((item) =>
-              item.id === existing.id
-                ? { ...item, response, updatedAt: new Date().toISOString() }
-                : item,
-            )
-          : [
-              ...current.eventRsvps,
-              {
-                id: crypto.randomUUID(),
-                userId,
-                eventId,
-                response,
-                updatedAt: new Date().toISOString(),
-              },
-            ],
-      };
-    });
   }
   async function submitPrayer() {
     if (!prayer.trim() || !ready || storageError) return;
@@ -316,8 +241,8 @@ export function MemberEngagement() {
             <HandHeart aria-hidden="true" />
           </span>
           <div>
-            <p className="eyebrow">Get involved</p>
-            <h2>Join a group or ministry</h2>
+            <p className="eyebrow">Next steps</p>
+            <h2>Take a next step</h2>
           </div>
         </div>
         <div className="member-join-controls">
@@ -327,7 +252,7 @@ export function MemberEngagement() {
               value={opportunity}
               onChange={(event) => setOpportunity(event.target.value)}
             >
-              <option value="">Select a group or ministry</option>
+              <option value="">Select a next step</option>
               {opportunities.map((item) => (
                 <option key={item.name}>{item.name}</option>
               ))}
@@ -358,86 +283,7 @@ export function MemberEngagement() {
         </small>
       </section>
 
-      <section className="panel member-rsvp" id="attendance">
-        <div className="member-section-heading">
-          <span>
-            <Users aria-hidden="true" />
-          </span>
-          <div>
-            <p className="eyebrow">Plan ahead</p>
-            <h2>Events &amp; attendance</h2>
-          </div>
-        </div>
-        {publishedEvents.length > 4 && (
-          <label>
-            <span className="sr-only">Search events</span>
-            <input
-              type="search"
-              placeholder="Search events"
-              value={eventQuery}
-              onChange={(change) => setEventQuery(change.target.value)}
-            />
-          </label>
-        )}
-        <div className="member-rsvp-list">
-          {!visibleEvents.length && <p>No matching events.</p>}
-          {visibleEvents.map((event) => {
-            const response =
-              content.eventRsvps.find(
-                (item) => item.userId === userId && item.eventId === event.id,
-              )?.response ?? 'undecided';
-            return (
-              <article
-                key={event.id}
-                id={`attendance-${event.id}`}
-                className={event.id === focusEvent ? 'active' : undefined}
-                aria-current={event.id === focusEvent ? 'true' : undefined}
-              >
-                <div>
-                  <b>{event.title}</b>
-                  <small>
-                    {event.date} · {event.time} · {event.location}
-                  </small>
-                </div>
-                <label>
-                  <span className="sr-only">Attendance for {event.title}</span>
-                  <select
-                    disabled={!ready || !!storageError}
-                    value={response}
-                    onChange={async (change) => {
-                      const value = change.target.value as Attendance;
-                      const saved = await updateAttendance(event.id, value);
-                      push(
-                        saved
-                          ? `Attendance for ${event.title} updated in this browser preview only.`
-                          : 'Your response could not be saved in this browser. Please try again.',
-                        saved ? 'info' : 'error',
-                      );
-                    }}
-                  >
-                    <option value="undecided">Let us know</option>
-                    <option value="attending">I’ll attend</option>
-                    <option value="not-attending">Can’t attend</option>
-                  </select>
-                </label>
-              </article>
-            );
-          })}
-        </div>
-        {!showAllEvents && !eventQuery && matchingEvents.length > 4 && (
-          <button
-            type="button"
-            className="button button-outline"
-            onClick={() => setShowAllEvents(true)}
-          >
-            Show all {matchingEvents.length} events
-          </button>
-        )}
-        <p className="form-note">
-          Responses are saved in the frontend CMS store and appear on your admin
-          user record.
-        </p>
-      </section>
+      <MemberActivities />
     </div>
   );
 }

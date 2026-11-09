@@ -8,8 +8,11 @@ export default function DraftEventPreview() {
     <AdminShell>
       <header className="workspace-header">
         <p className="eyebrow">Unpublished preview</p>
-        <h1>Draft event details</h1>
-        <p>Shows this event as it will appear once the draft is approved.</p>
+        <h1>Activity details</h1>
+        <p>
+          Activities are not part of the website draft, so this is the live
+          version.
+        </p>
       </header>
       <nav className="cms-tabs">
         <Link

@@ -40,7 +40,12 @@ export function Reveal({
     <div
       ref={ref}
       className={`reveal reveal-${direction} ${visible ? 'is-visible' : ''} ${className}`}
-      style={{ '--reveal-delay': `${delay}ms`, '--reveal-duration': `${duration}ms` } as CSSProperties}
+      style={
+        {
+          '--reveal-delay': `${delay}ms`,
+          '--reveal-duration': `${duration}ms`,
+        } as CSSProperties
+      }
     >
       {children}
     </div>

@@ -15,7 +15,7 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
   if (role === 'pastor' || role === 'admin')
     links.push(
       { href: '/admin/cms', label: 'Website content', icon: '✎' },
-      { href: '/admin/events', label: 'Manage events', icon: '◫' },
+      { href: '/admin/events', label: 'Activities & calendar', icon: '◫' },
       { href: '/admin/sermons', label: 'Manage sermons', icon: '▷' },
       {
         href: '/admin/users',
@@ -34,12 +34,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const role = data?.user?.role ?? 'member';
   const pathname = usePathname();
   // Website publishing controls belong only to public-content screens.
-  const publishing = [
-    '/admin/cms',
-    '/admin/events',
-    '/admin/sermons',
-    '/admin/preview',
-  ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const publishing = ['/admin/cms', '/admin/sermons', '/admin/preview'].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
   if (status === 'loading')
     return <p className="container">Loading your workspace…</p>;
   return (

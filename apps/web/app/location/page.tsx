@@ -5,14 +5,42 @@ import { useState } from 'react';
 import { PageHero } from '../components/page-hero';
 import { Reveal } from '../components/reveal';
 import { useContent } from '../components/content-provider';
+import { SundayStatus, useActivities } from '../components/activity-ui';
+import { describeSchedule, spotsLeft, type Activity } from '../lib/activities';
 export default function Location() {
   const { content } = useContent();
-  const { locations, groups, studies } = content.pages;
+  const { locations } = content.pages;
+  const { live, participations, place } = useActivities();
+  const groups = live.filter((item) => item.kind === 'group');
+  const studies = live.filter((item) => item.kind === 'study');
   const [tab, setTab] = useState<'locations' | 'groups' | 'studies'>(
     'locations',
   );
   const [selected, setSelected] = useState(0);
   const active = locations[selected] ?? locations[0]!;
+  const services = live.filter(
+    (item) => item.kind === 'service' && item.locationId === active.id,
+  );
+  const join = (item: Activity) => {
+    const spots = spotsLeft(item, participations);
+    return (
+      <>
+        {spots != null && (
+          <small>{spots ? `${spots} places left` : 'Currently full'}</small>
+        )}
+        <Link
+          href={`/members?activity=${encodeURIComponent(item.id)}#activities`}
+        >
+          {spots === 0
+            ? 'View details'
+            : item.kind === 'group'
+              ? 'Join Group'
+              : 'Join Study'}
+        </Link>
+        <Link href={`/events/${item.slug}`}>See dates</Link>
+      </>
+    );
+  };
   return (
     <>
       <PageHero
@@ -64,12 +92,20 @@ export default function Location() {
                     <h2>{active.name}</h2>
                     <p>{active.address}</p>
                     <h3>Service Times</h3>
-                    {active.times.map((time) => (
-                      <p className="service-time" key={time}>
+                    {!services.length && (
+                      <p className="service-time">
                         <i />
-                        {time}
+                        Service times coming soon
+                      </p>
+                    )}
+                    {services.map((item) => (
+                      <p className="service-time" key={item.id}>
+                        <i />
+                        {describeSchedule(item.schedule)} ·{' '}
+                        {item.title.split(' — ')[0]}
                       </p>
                     ))}
+                    <SundayStatus locationId={active.id} />
                     <div className="location-actions">
                       <a
                         className="button"
@@ -116,16 +152,14 @@ export default function Location() {
                 </p>
               )}
               <div className="connect-group-grid">
-                {groups.map(([name, leader, time, area], index) => (
-                  <Reveal delay={index * 55} key={`${name}-${index}`}>
+                {groups.map((item, index) => (
+                  <Reveal delay={index * 55} key={item.id}>
                     <article>
-                      <span>{area}</span>
-                      <h3>{name}</h3>
-                      <p>Led by {leader}</p>
-                      <b>{time}</b>
-                      <Link href={`/members?join=${encodeURIComponent(name)}`}>
-                        Join Group
-                      </Link>
+                      <span>{item.venue || place(item)}</span>
+                      <h3>{item.title}</h3>
+                      {item.leader && <p>Led by {item.leader}</p>}
+                      <b>{describeSchedule(item.schedule)}</b>
+                      {join(item)}
                     </article>
                   </Reveal>
                 ))}
@@ -147,16 +181,14 @@ export default function Location() {
                 </p>
               )}
               <div className="study-grid">
-                {studies.map(([title, description, schedule, venue], index) => (
-                  <Reveal delay={index * 70} key={`${title}-${index}`}>
+                {studies.map((item, index) => (
+                  <Reveal delay={index * 70} key={item.id}>
                     <article>
-                      <h3>{title}</h3>
-                      <p>{description}</p>
-                      <b>{schedule}</b>
-                      <small>{venue}</small>
-                      <Link href={`/members?join=${encodeURIComponent(title)}`}>
-                        Register Interest
-                      </Link>
+                      <h3>{item.title}</h3>
+                      <p>{item.summary}</p>
+                      <b>{describeSchedule(item.schedule)}</b>
+                      <small>{place(item)}</small>
+                      {join(item)}
                     </article>
                   </Reveal>
                 ))}

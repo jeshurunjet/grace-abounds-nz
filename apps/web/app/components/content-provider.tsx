@@ -16,11 +16,12 @@ import {
   type ContentState,
 } from '../lib/content';
 
-const STORAGE_KEY = 'grace-abounds-content-v3';
-const EDITOR_KEY = 'grace-abounds-editor-v1';
+// v4: activities replace events, groups, studies and RSVPs.
+const STORAGE_KEY = 'grace-abounds-content-v4';
+const EDITOR_KEY = 'grace-abounds-editor-v2';
 export type PublicContent = Pick<
   ContentState,
-  'site' | 'pages' | 'events' | 'sermons' | 'team'
+  'site' | 'pages' | 'sermons' | 'team'
 >;
 type EditorialState = {
   draft: PublicContent;
@@ -30,10 +31,9 @@ type EditorialState = {
 const publicContent = ({
   site,
   pages,
-  events,
   sermons,
   team,
-}: ContentState): PublicContent => ({ site, pages, events, sermons, team });
+}: ContentState): PublicContent => ({ site, pages, sermons, team });
 type ContentContextValue = {
   content: ContentState;
   /** Resolves true only when the change was saved to browser storage. */
@@ -57,7 +57,6 @@ function normalizeRecords<T extends Partial<PublicContent>>(value: T): T {
     );
   return {
     ...value,
-    ...(value.events && { events: fix(value.events) }),
     ...(value.sermons && { sermons: fix(value.sermons) }),
     ...(value.team && { team: fix(value.team) }),
   };

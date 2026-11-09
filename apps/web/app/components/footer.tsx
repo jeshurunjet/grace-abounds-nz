@@ -26,7 +26,10 @@ const socialIconPaths: Record<SocialPlatform, ReactNode> = {
   ),
 };
 
-function SocialIcon({ platform, ...props }: SVGProps<SVGSVGElement> & { platform: SocialPlatform }) {
+function SocialIcon({
+  platform,
+  ...props
+}: SVGProps<SVGSVGElement> & { platform: SocialPlatform }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...props}>
       {socialIconPaths[platform]}
@@ -37,9 +40,21 @@ function SocialIcon({ platform, ...props }: SVGProps<SVGSVGElement> & { platform
 export function Footer() {
   const { content } = useContent();
   const socialLinks = [
-    { platform: 'facebook' as const, label: 'Facebook', href: content.site.facebookUrl },
-    { platform: 'instagram' as const, label: 'Instagram', href: content.site.instagramUrl },
-    { platform: 'youtube' as const, label: 'YouTube', href: content.site.youtubeUrl },
+    {
+      platform: 'facebook' as const,
+      label: 'Facebook',
+      href: content.site.facebookUrl,
+    },
+    {
+      platform: 'instagram' as const,
+      label: 'Instagram',
+      href: content.site.instagramUrl,
+    },
+    {
+      platform: 'youtube' as const,
+      label: 'YouTube',
+      href: content.site.youtubeUrl,
+    },
   ].filter((item) => item.href);
   return (
     <footer className="footer">
@@ -52,7 +67,10 @@ export function Footer() {
           </p>
           <b>Sundays · 10:00am · Auckland</b>
           <address>{content.site.footerAddress}</address>
-          <div className="footer-socials" aria-label="Follow us on social media">
+          <div
+            className="footer-socials"
+            aria-label="Follow us on social media"
+          >
             {socialLinks.map(({ platform, label, href }) => (
               <a
                 key={platform}

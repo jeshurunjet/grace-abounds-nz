@@ -2348,3 +2348,30 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 /* Event selected from an event page's "Respond to this event" link. */
 .member-rsvp-list article.active { outline: 2px solid var(--maple); outline-offset: 2px; border-radius: .75rem; }
 .item-list input[type='search'] { width: 100%; margin-bottom: .75rem; }
+
+/* ---------- Activities & calendar ---------- */
+.sunday-status { margin: 1rem 0; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+.sunday-status ul { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .6rem; }
+.sunday-status li { display: grid; gap: .15rem; padding-left: .9rem; border-left: 3px solid #2f7d4f; }
+.sunday-status li.off { border-left-color: #b42318; }
+.sunday-status small { color: var(--ink-mid); }
+.calendar-filters { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0 1rem; }
+.calendar-filters button { border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 999px; padding: .35rem .8rem; font-size: .8rem; min-height: 2.25rem; }
+.calendar-filters button.active { background: var(--maple); border-color: var(--maple); color: #fff; }
+.pastor-calendar-grid button.today { font-weight: 700; text-decoration: underline; }
+.pastor-day-detail .cancelled a, .activity-dates .cancelled b, .member-activity-list .cancelled b { text-decoration: line-through; }
+.member-activities h3 { margin: 1.25rem 0 .5rem; }
+.member-activity-list, .attendee-list, .activity-dates, .scheduled-releases ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.member-activity-list li, .attendee-list li, .scheduled-releases li { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.member-activity-list li > div:first-child, .attendee-list li { min-width: 0; }
+.member-activity-list small, .attendee-list small, .scheduled-releases small { display: block; color: var(--ink-mid); }
+.member-rsvp-list article small { display: block; }
+.activity-dates li { padding: .5rem 0; border-bottom: 1px solid var(--line); }
+.editor-dates li { display: grid; gap: .5rem; }
+.detail-subheading { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+.weekday-picker { display: flex; flex-wrap: wrap; gap: .5rem 1rem; border: 0; padding: 0; margin: 0; }
+.weekday-picker label { display: inline-flex !important; align-items: center; gap: .35rem; }
+.scheduled-releases { margin-bottom: 1.5rem; }
+.link-button { border: 0; background: none; padding: 0; color: var(--maple); cursor: pointer; text-align: left; }
+.item-list select { width: 100%; margin-bottom: .75rem; }
+.connect-group-grid article small, .study-grid article small { display: block; }

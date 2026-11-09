@@ -1,16 +1,21 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentProvider, useContent } from './content-provider';
-const state = vi.hoisted(() => ({ role: 'admin', path: '/admin/cms' }));
+const state = vi.hoisted(() => ({ role: 'admin' }));
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { role: state.role } } }),
 }));
-vi.mock('next/navigation', () => ({ usePathname: () => state.path }));
 let context: ReturnType<typeof useContent>;
 function Probe() {
   context = useContent();
   return <span>{context.content.site.heroTitle}</span>;
 }
+const renderProvider = () =>
+  render(
+    <ContentProvider>
+      <Probe />
+    </ContentProvider>,
+  );
 beforeEach(() => {
   const saved = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -19,103 +24,67 @@ beforeEach(() => {
     removeItem: (key: string) => saved.delete(key),
   });
   state.role = 'admin';
-  state.path = '/admin/cms';
 });
-describe('public content approval', () => {
-  it('keeps admin edits off the live website and prevents admin publication', async () => {
-    const view = render(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
+describe('live website content', () => {
+  it('applies staff edits to the live site immediately', async () => {
+    renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
-    await act(() =>
-      context.update((current) => ({
+    let saved = false;
+    await act(async () => {
+      saved = await context.update((current) => ({
         ...current,
-        site: { ...current.site, heroTitle: 'Draft title' },
-      })),
-    );
-    expect(screen.getByText('Draft title')).toBeInTheDocument();
-    act(() => context.submit());
-    expect(context.editorial.status).toBe('pending');
-    act(() => context.publish());
-    expect(context.editorial.status).toBe('pending');
-    state.path = '/';
-    view.rerender(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
-    expect(screen.getByText('Grace')).toBeInTheDocument();
+        site: { ...current.site, heroTitle: 'Live title' },
+      }));
+    });
+    expect(saved).toBe(true);
+    expect(screen.getByText('Live title')).toBeInTheDocument();
   });
-  it('publishes only through the pastor approval action and preserves live content while revising', async () => {
+  it('keeps edits after reloading the provider', async () => {
     state.role = 'pastor';
-    const view = render(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
+    const view = renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
     await act(() =>
       context.update((current) => ({
         ...current,
-        site: { ...current.site, heroTitle: 'Approved title' },
+        site: { ...current.site, heroTitle: 'Saved title' },
       })),
     );
-    act(() => context.publish());
-    expect(context.editorial.status).toBe('published');
-    await act(() =>
-      context.update((current) => ({
-        ...current,
-        site: { ...current.site, heroTitle: 'Next revision' },
-      })),
+    view.unmount();
+    renderProvider();
+    await waitFor(() =>
+      expect(screen.getByText('Saved title')).toBeInTheDocument(),
     );
-    state.path = '/';
-    view.rerender(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
-    expect(screen.getByText('Approved title')).toBeInTheDocument();
   });
-  it('ignores member attempts to alter public content', async () => {
+  it('ignores member attempts to alter public content or activities', async () => {
     state.role = 'member';
-    state.path = '/members';
-    render(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
+    renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
     await act(() =>
       context.update((current) => ({
         ...current,
         site: { ...current.site, heroTitle: 'Unauthorized' },
+        activities: [],
       })),
     );
     expect(context.content.site.heroTitle).toBe('Grace');
-    act(() => context.submit());
-    expect(context.editorial.status).toBe('published');
+    expect(context.content.activities.length).toBeGreaterThan(0);
   });
-  it('blocks submission after a storage failure and supports retry', async () => {
+  it('reports a storage failure and supports retry', async () => {
     const setter = vi.fn(() => {
       throw new Error('quota');
     });
     vi.stubGlobal('localStorage', { getItem: () => null, setItem: setter });
-    render(
-      <ContentProvider>
-        <Probe />
-      </ContentProvider>,
-    );
+    renderProvider();
     await waitFor(() =>
       expect(context.storageError).toContain('could not save'),
     );
-    act(() => context.submit());
-    expect(context.editorial.status).toBe('published');
+    let saved = true;
+    await act(async () => {
+      saved = await context.update((current) => current);
+    });
+    expect(saved).toBe(false);
     setter.mockImplementation(() => undefined as never);
     act(() => context.retrySave());
     await waitFor(() => expect(context.storageError).toBe(''));
-    act(() => context.submit());
-    expect(context.editorial.status).toBe('pending');
   });
 });

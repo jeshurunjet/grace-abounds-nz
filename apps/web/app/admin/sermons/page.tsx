@@ -4,7 +4,7 @@ import { AdminShell } from '../../components/admin-shell';
 import { useContent } from '../../components/content-provider';
 import type { Sermon } from '../../lib/content';
 export default function SermonAdmin() {
-  const { content, update } = useContent();
+  const { content, update, storageError, retrySave } = useContent();
   const [selected, setSelected] = useState('');
   const [query, setQuery] = useState('');
   const current =
@@ -25,6 +25,14 @@ export default function SermonAdmin() {
   }
   return (
     <AdminShell>
+      {storageError && (
+        <div className="publishing-errors" role="alert">
+          <p>{storageError}</p>
+          <button className="button button-outline" onClick={retrySave}>
+            Retry save
+          </button>
+        </div>
+      )}
       <header className="workspace-header">
         <p className="eyebrow">Sermon library</p>
         <h1>Manage sermons</h1>
@@ -128,7 +136,7 @@ export default function SermonAdmin() {
               />
             </label>
             <label>
-              Visibility after pastor approval
+              Visibility
               <select
                 value={current.status}
                 onChange={(event) =>
@@ -140,9 +148,9 @@ export default function SermonAdmin() {
                 <option value="archived">Archive</option>
               </select>
             </label>
-            <p>
-              Changes save to the website draft. Use the approval controls above
-              to publish.
+            <p className="form-note">
+              Changes go live immediately. Automated publishing from OBS will
+              add its own approval step when the video backend is built.
             </p>
           </section>
         )}

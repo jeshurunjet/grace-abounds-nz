@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AdminShell } from '../../components/admin-shell';
 import { useContent } from '../../components/content-provider';
 import type { ContentState } from '../../lib/content';
+import { validatePublicContent } from '../../lib/content-validation';
 
 const labels: Record<string, string> = {
   '/location': 'Locations',
@@ -165,7 +166,7 @@ function Fields({
     if (name === 'status')
       return (
         <label>
-          Visibility after approval
+          Visibility
           <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
@@ -326,7 +327,8 @@ const tabs = [
 ] as const;
 type Tab = (typeof tabs)[number];
 export default function CmsPage() {
-  const { content, update, ready } = useContent();
+  const { content, update, ready, storageError, retrySave } = useContent();
+  const warnings = validatePublicContent(content);
   const [tab, setTab] = useState<Tab>('Home');
   const siteKeys: Record<Tab, (keyof ContentState['site'])[]> = {
     Home: [
@@ -392,10 +394,28 @@ export default function CmsPage() {
         <p className="eyebrow">Public website</p>
         <h1>Website content</h1>
         <p>
-          Manage all seven public pages. Changes save automatically to the
-          draft. Submit the complete draft for pastor approval above.
+          Manage all seven public pages. Changes go live on the website as you
+          type. <Link href="/">View the live site</Link>
         </p>
       </header>
+      {storageError && (
+        <div className="publishing-errors" role="alert">
+          <p>{storageError}</p>
+          <button className="button button-outline" onClick={retrySave}>
+            Retry save
+          </button>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="publishing-errors" role="status">
+          <strong>Check these before visitors see them</strong>
+          <ul>
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="cms-workbench">
         <aside className="cms-page-list" aria-label="Public pages">
           <p className="eyebrow">Public pages</p>
@@ -410,8 +430,7 @@ export default function CmsPage() {
             </button>
           ))}
           <p className="form-note">
-            Changes to every page are included in one website draft. Private
-            member activity stays separate.
+            Every change saves immediately. Member activity stays private.
           </p>
         </aside>
         <section className="panel cms-form">

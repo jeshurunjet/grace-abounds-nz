@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useEffect, useRef, useState } from 'react';
 import { useContent } from './content-provider';
 export function NotificationMenu() {
-  const { content, editorial } = useContent();
+  const { content } = useContent();
   const { data } = useSession();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -17,12 +17,6 @@ export function NotificationMenu() {
       detail: item.preferredDate,
       href: '/members',
     }));
-  if (pastor && editorial.status === 'pending')
-    notices.unshift({
-      title: 'Website changes awaiting approval',
-      detail: 'Review the website draft.',
-      href: '/admin/cms',
-    });
   if (
     pastor &&
     content.memberPrayerRequests.some((item) => item.status === 'new')

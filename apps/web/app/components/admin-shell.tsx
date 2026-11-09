@@ -1,9 +1,7 @@
 'use client';
 import { useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { WorkspaceShell, type WorkspaceLink } from './workspace-shell';
-import { EditorialBar } from './editorial-bar';
 export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
   const links: WorkspaceLink[] = [
     { href: '/', label: 'Main website', icon: '⌂' },
@@ -32,11 +30,6 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
 export function AdminShell({ children }: { children: ReactNode }) {
   const { data, status } = useSession();
   const role = data?.user?.role ?? 'member';
-  const pathname = usePathname();
-  // Website publishing controls belong only to public-content screens.
-  const publishing = ['/admin/cms', '/admin/sermons', '/admin/preview'].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
   if (status === 'loading')
     return <p className="container">Loading your workspace…</p>;
   return (
@@ -44,7 +37,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
       kind={role === 'pastor' ? 'Pastor' : 'Admin'}
       links={workspaceLinks(role)}
     >
-      {publishing && <EditorialBar />}
       {children}
     </WorkspaceShell>
   );

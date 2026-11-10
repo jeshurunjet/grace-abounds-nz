@@ -1,6 +1,6 @@
 # Grace Abounds — Claude ↔ Codex handover
 
-Updated: 10 November 2026 by Codex. **This is the only project handover and backend plan.** Update this file in place; do not create backup handovers, separate progress files or dated reviews. Git preserves history. README files may describe components and link here, but must not duplicate the plan. Earlier handovers have been consolidated and removed.
+Updated: 10 November 2026 by Claude (Phase 0). **This is the only project handover and backend plan.** Update this file in place; do not create backup handovers, separate progress files or dated reviews. Git preserves history. README files may describe components and link here, but must not duplicate the plan. Earlier handovers have been consolidated and removed.
 
 ## How we work
 
@@ -55,9 +55,9 @@ Inspect these before changing contracts: `apps/web/auth.ts`, `app/lib/content.ts
 - Giving uses bank details only; no payment gateway. Google Calendar public one-way sync is planned; personal sync and two-way sync are not launch dependencies.
 - The AUT thesis covers sermon media processing only. OBS ingest, generated subtitles and automated-video approval are future enhancements unless separately requested; ordinary CMS publishing stays immediate.
 
-### Recommended defaults to confirm at the start of Phase 1
+### Phase 1 defaults — confirmed by owner, 10 November 2026
 
-These refine earlier open questions; they are recommendations, not previously approved owner decisions. Ask once for these together, while continuing source review and planning:
+The owner confirmed all three on 10 November 2026:
 
 1. Email/password signup requires a password and email verification; Google/email-code signup needs no password and can add one later in Settings.
 2. Password reset uses a six-digit emailed code, single-use and purpose-bound. Reset revokes all existing sessions and requires fresh sign-in.
@@ -288,18 +288,50 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 | Phase | Status | Evidence / blocker |
 | --- | --- | --- |
-| 0 | Handover consolidated; draft reconciliation pending | Codex source/document inspection only, 10 November 2026. Defaults await owner confirmation. |
-| 1 | Draft exists; unverified and needs revision | `backend-phase-1`; password/recovery removed; no install/migration/runtime evidence. |
+| 0 | Review complete; awaiting Codex checkpoint | Claude source inspection, 10 Nov 2026. Defaults confirmed. Findings and chosen session design below. Nothing installed, migrated or run. |
+| 1 | Draft exists; unverified and needs revision | `backend-phase-1` @ `544af29`. Revision plan below. No install/migration/runtime evidence. |
 | 2–6 | Not implemented | Main remains a frontend prototype. |
 
-**Latest change:** Codex added credit-conscious working rules, incremental frontend action checks and explicit toast acceptance requirements. Codex consolidated the backend contracts, decisions, review gates and owner setup into this file. Removed obsolete handovers and the duplicate API plan; README links updated. Application code unchanged. No packages installed, migrations applied, services started or provider accounts created.
+### Phase 0 reconciliation — Claude, 10 November 2026
 
-**Checks:** Documentation link/whitespace checks only; see current session report. Historical test counts above are not a new test run.
+**Git:** Working branch `backend-phase-1`. Lineage: `590f1bd` (frontend snapshot) → `1d5a147` (draft Phase 1 code) → `5c22fad` (docs; same content as main's `580b20a`) → `544af29` (this consolidated handover and README links, carried from uncommitted work on main). Local `main` is clean at `580b20a`. Local `main` is 6 commits ahead of `origin/main`. Nothing pushed. A safety copy of the carried docs remains in `git stash` (`phase0: consolidated handover from main`) until Codex confirms it can be dropped.
+
+**Installed versions (from the Mac's `node_modules`; draft dependencies are not installed):** next 15.5.23, next-auth 5.0.0-beta.32 with @auth/core 0.41.3, fastify 5.11.3, prisma/@prisma/client 6.19.3. Not installed: `@auth/prisma-adapter`, `@simplewebauthn/browser@9.0.1`, `@simplewebauthn/server@9.0.3`, `jose`, `zod`, `dotenv-cli`. The draft commit did not update `pnpm-lock.yaml`. `.env` exists with the `.env.example` keys (values not read). No Prisma migrations directory exists yet.
+
+**Auth.js compatibility, from the installed @auth/core 0.41.3 source (`lib/utils/assert.js`, `lib/actions/callback/index.js`):**
+- Passkeys (WebAuthn provider) require `experimental.enableWebAuthn` and an adapter with authenticator methods. They do not require database sessions, because the WebAuthn callback issues a JWT cookie when the JWT strategy is in use. Peer requirement: `@simplewebauthn/server ^9.0.2` / `browser ^9.0.1`, which matches the draft's pins. The provider is still experimental upstream, so it stays a launch-verification item.
+- The Credentials (password) provider never creates database sessions. The draft's `strategy: 'database'` therefore cannot support password sign-in, which is a concrete reason to switch to JWT.
+
+**Chosen session design (implementation, unverified):** Auth.js `session.strategy: 'jwt'`, keeping PrismaAdapter for users, accounts, verification tokens and authenticators. Add `User.sessionVersion`, `User.passwordHash` (Argon2id via `@node-rs/argon2`, which ships prebuilt binaries and needs no node-gyp), and a durable `UserSession` record (id, user, created/last-seen, coarse device label, expiry, `revokedAt`). The JWT carries `sid` and `sv`. The Auth.js `jwt` callback runs in the Node runtime on every `auth()` call (server-rendered pages and the `/api/v1` gateway). There it reloads status, `sessionVersion` and `UserSession.revokedAt` and ends the session when any check fails. The gateway assertion carries `sub`, `sid` and `sv`, and Fastify repeats the same checks. Suspension, password reset and sign-out-everywhere increment `sessionVersion` and/or revoke rows, so effect is immediate on the next request. Settings session list/revoke reads `UserSession`. Edge middleware, if any, only checks cookie presence.
+
+**Draft fixes required in Phase 1:**
+1. Restore password signup (password plus emailed six-digit verification), password sign-in (Credentials), and forgot/reset (six-digit code, revokes all sessions). The draft redirects `/forgot-password` and `/reset-password` to `/login` and deleted `recovery-form.tsx`. Use a purpose-bound `AuthChallenge` table (purpose, normalized email, code hash, expiry, attempts, consumedAt) for verify-email and reset. Auth.js `VerificationToken` stays for email-code sign-in.
+2. Switch to JWT plus revocation as above. Session list/revoke and sign-out-everywhere must use real records.
+3. Remove `allowDangerousEmailAccountLinking`. **Proposed linking policy:** Google sign-in creates a Member only for a new verified email. If an account already exists for that email without Google linked, refuse and say "sign in your usual way, then link Google in Settings". Linking happens only while signed in, with recent authentication. Staff created by `staff:add` sign in first with an email code. Unlink requires another usable sign-in method.
+4. Remove the `legacyProfileIds` demo mapping and the dev `AUTH_SECRET` fallback (require it in every environment). Make `trustHost` configuration-driven.
+5. Make rate limits atomic. `consumeAttempt` currently reads and then writes inside a read-committed transaction, so concurrent requests can both pass and a concurrent first insert can throw. Replace it with one `INSERT … ON CONFLICT … RETURNING` statement. Add per-IP limits with a `TRUSTED_PROXY_HOPS` setting, and tune the thresholds for shared church networks.
+6. Final-Pastor protection: both the suspend route and `staff:add` count Pastors without a lock, so concurrent demote/suspend of two Pastors can both succeed. Serialize with `pg_advisory_xact_lock` (or `SELECT … FOR UPDATE` on active Pastor rows) in one transaction. Add the missing Pastor-only `PATCH /v1/pastor/members/:id/role` route.
+7. Gateway: compare `Origin` against configured `AUTH_URL`/site origin rather than the request host, handle `Origin: null` without a 500, and cap the forwarded body size.
+8. Passkey registration and removal: wrap the Auth.js passkey register POST with a recent-authentication check. Block removal of the final usable sign-in method. Add after core auth works, before full launch.
+9. Toasts and async results for all auth/Settings actions (reuse `toast.tsx`; success only after server confirmation; preserve input on failure).
+10. Generate the first migration and add focused tests: forged or expired assertion, guessed IDs, suspended or revoked session, final-Pastor concurrency, atomic limits, code single-use and expiry, reset revokes sessions, non-enumerating responses.
+
+**Environment loading:** web loads the repo-root `.env` in `next.config.ts` via `process.loadEnvFile`, which needs Node ≥ 20.12. API and database scripts use `dotenv -e ../../.env`. Phase 1 will add (names only): `AUTH_URL`, `AUTH_TRUST_HOST`, `TRUSTED_PROXY_HOPS`. The owner adds them to `.env` by hand when asked; agents never overwrite `.env`.
+
+**Owner setup sequence (one command at a time, once the Phase 1 package changes are committed):** check `node -v` / `pnpm -v` / `docker --version` → `docker compose up -d` → `pnpm install` → `pnpm --filter @grace-abounds/database migrate` (creates the first migration) → seed only an empty dev DB → `pnpm dev`. Google and Resend setup come after local email-code sign-in works.
+
+**Latest change:** Claude completed Phase 0: owner confirmed the three defaults; consolidated handover committed on `backend-phase-1` (`544af29`); draft and installed Auth.js reviewed; session design and the fix list recorded above. Application code unchanged.
+
+**Checks:** Source inspection only. Handover byte-identical to the owner's attached copy (md5 `bb05dd4e…`). No typecheck, tests, install, migration or server run. Historical test counts above are not a new run.
 
 **Owner setup:** Google client pending; Resend/domain verification pending; AWS storage pending; hosting pending. No secrets belong here.
 
-**Open decisions:** Confirm the three Phase 1 defaults. Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
+**Open decisions:** Codex/owner to accept the proposed Google linking policy (fix 3). Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
+
+**Next instruction for Codex (paste into Codex):**
+
+> Review the head of `backend-phase-1` (Phase 0 docs commit after `544af29`) and the "Phase 0 reconciliation" section of `docs/handoff/PROJECT-HANDOVER.md` against the installed Auth.js source. Confirm or challenge the JWT plus `sessionVersion`/`UserSession` design, the Google linking policy and the Phase 1 fix list. Record your verdict in this file. No code changes.
 
 **Next instruction for Claude (paste into Claude):**
 
-> Read `docs/handoff/PROJECT-HANDOVER.md` as the single source of truth. We are completing the existing Grace Abounds app, preserving its UI and immediate staff publishing. Start Phase 0: inspect git status, main and the existing backend-phase-1 draft without losing changes; carry this consolidated handover and README links onto the implementation branch. Confirm the three recommended signup/reset/branch defaults with me once. While awaiting that answer, review the draft, installed Auth.js compatibility (including JWT/passkeys), environment loading, and password/recovery gaps. Then implement Phase 1 once the defaults are confirmed. Do not implement later phases, merge or deploy yet. Keep email code, Google and passwords; do not silently remove passkeys. Prepare migrations and focused security/integration tests. I run installs, migrations and servers on my Mac: give me one command at a time with expected results, and guide Google/Resend setup when needed. Never overwrite .env or ask me to paste secrets. Finish by updating this same file with branch/commit, changes, checks actually run, blockers and exact next steps for Codex review. Do not create another handover or backup document.
+> Implement Phase 1 on `backend-phase-1` following the Phase 0 reconciliation section and any Codex notes in `docs/handoff/PROJECT-HANDOVER.md`. Add dependency changes first, then give me one setup command at a time. Do not merge, push or deploy. Update the same file at the end.

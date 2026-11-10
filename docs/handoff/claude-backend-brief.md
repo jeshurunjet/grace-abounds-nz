@@ -1,6 +1,6 @@
 # Claude backend implementation brief — Grace Abounds
 
-Updated 10 November 2026. Read the [backend/API plan](../api/backend-plan.md), [current readiness review](latest-readiness-review.md) and root README before implementing. They supersede older draft/approval instructions in the handover archive.
+Updated 10 November 2026. **Start with the [agreed decisions](backend-implementation-plan.md) and [progress/next steps](backend-progress.md); they override this brief where they differ.** Then read the [backend/API plan](../api/backend-plan.md), [current readiness review](latest-readiness-review.md) and root README before implementing. They supersede older draft/approval instructions in the handover archive.
 
 ## Preserve the current product
 

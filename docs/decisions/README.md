@@ -1,3 +1,3 @@
-# Architecture Decision Records
+# Project decisions
 
-This directory will contain Architecture Decision Records (ADRs) as consequential technical choices are made. Each future ADR should record its context, decision, alternatives, and consequences. No decisions are fabricated at the scaffolding stage.
+Record backend decisions and their rationale in the [single project handover](../handoff/PROJECT-HANDOVER.md). Do not create competing progress or decision plans. Git preserves earlier decisions and reviews.

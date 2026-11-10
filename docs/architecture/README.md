@@ -1,11 +1,5 @@
 # Architecture
 
-Grace Abounds NZ currently has three application boundaries:
+Next.js provides the website and session/API gateway; Fastify owns business operations; Prisma/PostgreSQL stores application data; a separate worker handles asynchronous media work. Shared packages hold contracts, validation and infrastructure boundaries.
 
-- the Next.js web application presents browser interfaces;
-- the Node.js API will own HTTP-facing application operations;
-- the media worker reserves a separate process for future long-running work.
-
-Shared packages reserve boundaries for database access, types, validation, configuration, and UI components. PostgreSQL is available locally through Docker Compose. The data model and communication details have deliberately not been designed yet.
-
-The worker boundary prevents future CPU- and time-intensive media processing from running in a normal web request. Queue technology, storage provider, deployment topology, and operational policies remain future decisions.
+The [single project handover](../handoff/PROJECT-HANDOVER.md) records decisions, planned contracts, provider setup and verified implementation status. These boundaries are partly scaffolds until the corresponding phases pass review.

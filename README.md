@@ -28,7 +28,7 @@ Browser → Next.js (public pages + session/API gateway) → Fastify API → Pos
                                                media worker → object storage
 ```
 
-See the [backend and API plan](docs/api/backend-plan.md) for the proposed contracts, permissions, database entities and implementation order. This architecture is a plan, not an implemented connection.
+See the [project handover](docs/handoff/PROJECT-HANDOVER.md) for the proposed contracts, permissions, database entities and implementation order. This architecture is a plan, not an implemented connection.
 
 ## Repository
 
@@ -41,7 +41,7 @@ See the [backend and API plan](docs/api/backend-plan.md) for the proposed contra
 | `packages/types`, `packages/validation` | Boundaries for shared contracts and validation            |
 | `packages/config`, `packages/ui`        | Shared package scaffolds; current UI lives in the web app |
 | `docs/api`                              | Backend plan and proposed API contracts                   |
-| `docs/handoff`                          | Readiness reviews and implementation instructions         |
+| `docs/handoff`                          | Single Claude/Codex handover and backend plan         |
 | `docs/thesis`, `docs/architecture`      | Thesis scope and architectural background                 |
 | `tests/e2e`                             | Playwright browser tests                                  |
 
@@ -52,7 +52,8 @@ Use Node.js compatible with the installed dependencies, pnpm (pinned in `package
 ```sh
 corepack enable
 pnpm install
-cp .env.example .env
+# Only when .env does not already exist:
+cp -n .env.example .env
 pnpm dev
 ```
 
@@ -100,11 +101,11 @@ pnpm test:e2e
 
 `pnpm lint` includes the repository-wide Prettier check. Playwright's config starts the local web server or reuses an existing one outside CI. Install its Chromium binary once with `pnpm exec playwright install chromium`.
 
-The latest focused frontend review passed TypeScript and 30 unit/component tests. This is not a complete browser acceptance test or production deployment sign-off. See the [readiness review](docs/handoff/latest-readiness-review.md) for scope and outstanding work.
+The latest focused frontend review passed TypeScript and 30 unit/component tests. This is not a complete browser acceptance test or production deployment sign-off. See the [project handover](docs/handoff/PROJECT-HANDOVER.md) for scope and outstanding work.
 
 ## Backend implementation and launch
 
-Start with the [backend/API plan](docs/api/backend-plan.md) and [Claude implementation brief](docs/handoff/claude-backend-brief.md). Preserve the current UI and immediate publishing behavior. Earlier handovers describing pastor-only publishing approval are superseded.
+Start with the [single Claude/Codex project handover](docs/handoff/PROJECT-HANDOVER.md). Preserve the current UI and immediate publishing behavior. Earlier handovers describing pastor-only publishing approval are superseded.
 
 Before launch, implement real identity and server permissions, database persistence, media storage, notifications and recovery/backup processes. Verify all roles and public pages in staging, remove demo access, and replace placeholder church, banking and legal content. Develop and test locally before staging or production.
 

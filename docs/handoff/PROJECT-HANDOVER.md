@@ -285,11 +285,11 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                 | Evidence / blocker                                                                                                                                                                                                                          |
-| ----- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                           | Source review, defaults confirmed, session design below.                                                                                                                                                                                    |
-| 1     | Codex P1 findings fixed; verified locally; provider acceptance pending | `backend-phase-1`. After `1fabe30`: typecheck, ESLint + full Prettier check, build, 40 unit tests, 66 PostgreSQL tests pass; owner browser walkthrough passed earlier. Pending: Codex re-review, real Google callback, real email delivery. |
-| 2–6   | Not implemented                                                        | Main remains a frontend prototype.                                                                                                                                                                                                          |
+| Phase | Status                                                                              | Evidence / blocker                                                                                                                                                                                                                                        |
+| ----- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete — accepted by Codex                                                        | Source review, defaults confirmed, session design below.                                                                                                                                                                                                  |
+| 1     | Codex P1 findings fixed; verified locally incl. real Google; email delivery pending | `backend-phase-1`. After `1fabe30`: typecheck, ESLint + full Prettier check, build, 40 unit tests, 66 PostgreSQL tests pass; owner browser walkthrough passed; real Google OAuth passed (11 Nov). Pending: Codex re-review, real email delivery (Resend). |
+| 2–6   | Not implemented                                                                     | Main remains a frontend prototype.                                                                                                                                                                                                                        |
 
 ### Phase 0 reconciliation — Claude, 10 November 2026
 
@@ -410,7 +410,7 @@ Route deviations from the planned table: sign-out-others is `POST /v1/me/session
 4. Owner decision on the pre-existing Prettier baseline (10 frontend files; separate formatting-only commit proposed).
 5. Documentation stash `phase0: consolidated handover from main` still held; compare and drop when Codex agrees.
 
-**Owner setup:** Google client pending; Resend/domain verification pending; AWS storage pending; hosting pending. No secrets belong here.
+**Owner setup:** Google OAuth client configured for local development (see Google evidence below); Resend/domain verification pending; AWS storage pending; hosting pending. No secrets belong here.
 
 **Open decisions:** none for Phase 1. Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
 
@@ -451,3 +451,5 @@ Route deviations from the planned table: sign-out-others is `POST /v1/me/session
 - `pnpm test:db` — 8 files, **66 passed** (PostgreSQL `grace_abounds_test`).
 - `pnpm test && pnpm lint && pnpm build` — 12 files / 40 passed (58 DB tests skipped as designed); ESLint clean for web, api, media-worker; `prettier --check .` — **All matched files use Prettier code style!**; all packages built, `next build` completed.
 - Claude, linked VM: `tsc --noEmit` clean for database, api, web.
+
+**Real Google OAuth — owner, 11 November 2026 (local dev).** Non-secret setup: Google Cloud project "Grace Abounds" on the church-controlled Google account; Google Auth Platform, audience External, publishing status **Testing** with listed test users; Web application client "Grace Abounds – local development", JavaScript origin `http://localhost:3000`, redirect URI `http://localhost:3000/api/auth/callback/google`; scopes are the Auth.js defaults (openid, email, profile). ID/secret entered by the owner into `.env` via a hidden prompt; Claude checked only their shape. Browser results after restarting `pnpm dev`, all pass: (1) new Google sign-up with a non-staff test account → Member dashboard, Settings shows Google connected, session listed as "Signed in with Google"; (2) local email-code account created first for a second test account → "Continue with Google" with that account refused with the OAuthAccountNotLinked guidance (no automatic linking); (3) the same person signed in by email code → Settings → Connect → re-authentication by emailed code → Google → "Google account connected."; (4) "Continue with Google" then signs in to that same account. Before launch: add the staging/production origins and callbacks, and review Google's publishing/verification requirements for the real audience (sign-in scopes only).

@@ -76,7 +76,11 @@ const adapter: Adapter = {
 export const authConfig: NextAuthConfig = {
   adapter,
   secret,
-  trustHost: process.env.AUTH_TRUST_HOST === 'true',
+  // AUTH_URL pins the site origin, so the incoming Host header is not used to
+  // build callback URLs. AUTH_TRUST_HOST=true is only for hosts that set a
+  // trusted Host header without AUTH_URL.
+  trustHost:
+    Boolean(process.env.AUTH_URL) || process.env.AUTH_TRUST_HOST === 'true',
   pages: { signIn: '/login', verifyRequest: '/verify-email', error: '/login' },
   session: { strategy: 'jwt', maxAge: SESSION_MAX_AGE_SECONDS },
   experimental: { enableWebAuthn: true },

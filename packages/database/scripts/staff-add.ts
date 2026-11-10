@@ -1,7 +1,7 @@
 /**
  * Operator command: create or update a fixed Pastor/Admin account.
  *
- *   pnpm --filter @grace-abounds/database staff:add -- \
+ *   pnpm --filter @grace-abounds/database staff:add \
  *     --email pastor@example.org --name "Pastor Name" --role pastor
  *
  * The person then signs in with an email code (which verifies the address),

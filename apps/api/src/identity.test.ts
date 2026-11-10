@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { dbTestsEnabled } from '../../../test/db-env';
+import { dbTestsEnabled } from '@grace-abounds/database/test-env';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
 import { prisma } from '@grace-abounds/database';
@@ -8,7 +8,7 @@ import {
   createSession,
   createUser,
   resetIdentityTables,
-} from '../../../test/db-reset';
+} from '@grace-abounds/database/testing';
 
 const key = () => new TextEncoder().encode(process.env.API_ASSERTION_SECRET!);
 

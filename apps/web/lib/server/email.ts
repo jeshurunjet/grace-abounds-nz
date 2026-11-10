@@ -26,7 +26,7 @@ export async function sendEmail(message: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from, to: message.to, ...message }),
+    body: JSON.stringify({ from, ...message }),
   });
   if (!response.ok)
     throw new Error(

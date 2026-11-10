@@ -1,12 +1,12 @@
 // @vitest-environment node
-import { dbTestsEnabled } from '../../../../test/db-env';
+import { dbTestsEnabled } from '@grace-abounds/database/test-env';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@grace-abounds/database';
 import {
   createSession,
   createUser,
   resetIdentityTables,
-} from '../../../../test/db-reset';
+} from '@grace-abounds/database/testing';
 import { POST as signup } from '../../app/api/account/signup/route';
 import { POST as verifySignup } from '../../app/api/account/signup/verify/route';
 import { POST as requestReset } from '../../app/api/account/password-reset/route';

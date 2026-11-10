@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { dbTestsEnabled } from '../../../test/db-env';
+import { dbTestsEnabled } from './test-env.ts';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   assertPastorRemains,
@@ -8,12 +8,12 @@ import {
   loadActiveSession,
   lockPastorSet,
   prisma,
-} from './index';
+} from './index.ts';
 import {
   createSession,
   createUser,
   resetIdentityTables,
-} from '../../../test/db-reset';
+} from './testing.ts';
 
 describe.skipIf(!dbTestsEnabled)('identity helpers (PostgreSQL)', () => {
   beforeEach(resetIdentityTables);

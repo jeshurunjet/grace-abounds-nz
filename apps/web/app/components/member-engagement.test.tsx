@@ -10,16 +10,16 @@ vi.mock('next-auth/react', () => ({
 }));
 
 describe('MemberEngagement', () => {
-  it('exposes appointment, participation, planner, and attendance controls', () => {
+  it('exposes appointments, next steps, activities and the shared planner', () => {
     render(<MemberEngagement />);
     expect(
       screen.getByRole('heading', { name: 'Appointments' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Join a group or ministry' }),
+      screen.getByRole('heading', { name: 'Take a next step' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Events & attendance' }),
+      screen.getByRole('heading', { name: 'Activities & bookings' }),
     ).toBeInTheDocument();
 
     fireEvent.change(
@@ -34,6 +34,12 @@ describe('MemberEngagement', () => {
       screen.getByRole('button', { name: 'Submit interest' }),
     ).toBeInTheDocument();
 
+    expect(
+      screen.getByRole('searchbox', { name: 'Search activities' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /^Join$/ }).length,
+    ).toBeGreaterThan(0);
     render(<MemberCalendar />);
     expect(
       screen.getByRole('heading', {

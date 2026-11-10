@@ -1,105 +1,113 @@
 # Grace Abounds NZ
 
-Grace Abounds NZ is the initial scaffold for a full-stack church website and CMS. The host application is intended to grow to support the public website, church administration, and pastoral workflows. A specifically bounded sermon media-processing subsystem will also form an AUT thesis project; the thesis concerns that subsystem's architecture, not the entire website.
+A church website and shared workspace for **Pastor, Admin and Member**, built with Next.js, React and TypeScript. The public website and role-based frontend are implemented as a development prototype. The Fastify API and media worker are scaffolds; durable backend features are not implemented yet.
 
-The project is currently in initial scaffolding and development. No CMS features, authentication, business data model, sermon workflow, or media processing has been implemented.
+## Current features and limits
 
-## Architecture overview
+- Seven main public pages: Home, About, Locations, Next steps, Giving, Events and Sermons; event/sermon detail pages and privacy/terms pages.
+- A shared responsive workspace with role-based navigation, messages, resources, pastoral care, member management, profiles and settings.
+- CMS controls for public page content, shared settings, imagery, team profiles, resources and sermons.
+- Unified activities for services, connect groups, Bible studies, events and ministry teams, with recurring schedules, date exceptions, memberships, bookings and capacity controls.
+- Authentication screens for email codes, passwords, Google and passkeys. Only the demo credentials provider currently authenticates users.
 
-The conventional application path is:
+**Staff edits publish immediately.** Pastor and Admin can manage website content; there is no pastor approval queue. Draft/archived records remain hidden, and activities can have a scheduled release. Pastor retains role and account-management authority; Admin's member directory is read-only.
+
+CMS and member activity currently persist in browser local storage, not a shared database. Role checks in the UI are not production authorization. Email, Google/passkeys, uploads, notifications, account export/deletion and media processing require backend implementation. Google/Outlook calendar synchronization is not connected.
+
+## Architecture
+
+Current preview: Next.js frontend → browser storage, with Auth.js demo sessions. The separate API exposes only `GET /health`; Prisma has no business models.
+
+Planned production path:
 
 ```text
-Web -> API -> PostgreSQL
+Browser → Next.js (public pages + session/API gateway) → Fastify API → PostgreSQL
+                                                           ↓
+                                                    durable job queue
+                                                           ↓
+                                               media worker → object storage
 ```
 
-The proposed, future thesis path is:
+See the [backend and API plan](docs/api/backend-plan.md) for the proposed contracts, permissions, database entities and implementation order. This architecture is a plan, not an implemented connection.
 
-```text
-Web/Admin -> API -> background queue -> media worker -> FFmpeg -> object storage
-                    |                                      |
-                    +---------- database/status updates ---+
-```
+## Repository
 
-These boundaries keep long-running media work outside the web and API request/response lifecycle. The queue, FFmpeg integration, object storage, and processing workflow shown above are plans, not implemented features.
+| Path                                    | Purpose                                                   |
+| --------------------------------------- | --------------------------------------------------------- |
+| `apps/web`                              | Public website, CMS and shared role-based workspace       |
+| `apps/api`                              | Fastify API scaffold, currently health only               |
+| `apps/media-worker`                     | Reserved process for asynchronous sermon media processing |
+| `packages/database`                     | Prisma/PostgreSQL boundary; no business models yet        |
+| `packages/types`, `packages/validation` | Boundaries for shared contracts and validation            |
+| `packages/config`, `packages/ui`        | Shared package scaffolds; current UI lives in the web app |
+| `docs/api`                              | Backend plan and proposed API contracts                   |
+| `docs/handoff`                          | Readiness reviews and implementation instructions         |
+| `docs/thesis`, `docs/architecture`      | Thesis scope and architectural background                 |
+| `tests/e2e`                             | Playwright browser tests                                  |
 
-## Repository structure
+## Run locally
 
-- `apps/web`: minimal Next.js and React host for the future public, admin, and pastor interfaces.
-- `apps/api`: minimal Fastify/TypeScript server with a development health endpoint.
-- `apps/media-worker`: isolated TypeScript process boundary for future media work.
-- `packages/database`: shared Prisma/PostgreSQL boundary; intentionally has no models.
-- `packages/types`: future shared TypeScript types.
-- `packages/validation`: future shared Zod schemas.
-- `packages/config`: future shared configuration helpers.
-- `packages/ui`: future reusable React components; no design system exists yet.
-- `docs/architecture`: high-level boundaries and architecture documentation.
-- `docs/thesis`: scope and proposed workflow for the thesis subsystem.
-- `docs/api`: future API documentation.
-- `docs/decisions`: future Architecture Decision Records (ADRs).
-- `infrastructure/docker`: reserved for supporting local Docker files.
-- `tests/e2e`: Playwright tests that run against the local web application.
-
-## Prerequisites
-
-- Node.js
-- pnpm (Corepack can provide it)
-- Docker and Docker Compose
-- Git
-
-## Local development
+Use Node.js compatible with the installed dependencies, pnpm (pinned in `package.json`), and Docker Compose if running PostgreSQL.
 
 ```sh
-git clone <repository-url>
-cd grace-abounds-nz
 corepack enable
 pnpm install
 cp .env.example .env
-docker compose up -d
 pnpm dev
 ```
 
-The placeholder web application runs at `http://localhost:3000`, the API at `http://localhost:4000`, and API health is available at `http://localhost:4000/health`. The worker currently starts and waits for future implementation; it performs no media work.
-
-Use `docker compose down` to stop local infrastructure. The named PostgreSQL volume preserves local data; add `--volumes` only when you deliberately want to delete it.
-
-## Testing and quality checks
+The web preview is at `http://localhost:3000`; the API health endpoint is `http://localhost:4000/health`. The worker currently prints a startup message and exits without doing media work. PostgreSQL is not required for the browser-only preview. To start the reserved local database:
 
 ```sh
-pnpm test          # Vitest unit and React component smoke tests
-pnpm test:e2e      # Playwright smoke test against a locally started web app
-pnpm lint          # ESLint across applications plus repository Prettier check
-pnpm typecheck     # strict TypeScript checks across the workspace
-pnpm build         # production compilation of all buildable workspace projects
+docker compose up -d
 ```
 
-Install Playwright's local Chromium binary once before the first end-to-end run with `pnpm exec playwright install chromium`. A deployment is not required for these tests.
+`docker compose down` stops PostgreSQL while preserving its named volume. Adding `--volumes` deletes that local database data.
 
-## Environment variables
+### Demo access
 
-`.env.example` contains safe development placeholders. Copy it to the ignored `.env` file for local use. Production URLs, database credentials, storage keys, and other secrets must be supplied by the target environment and must never be committed. Browser-visible Next.js variables use the `NEXT_PUBLIC_` prefix and must never contain secrets.
+Open **Developer demo access** on the login page. All three development accounts use password `grace-demo`:
 
-Docker Compose is development-only and provisions only PostgreSQL. Future work may add MinIO so S3-compatible upload and processing behavior can be tested locally without production Cloudflare R2 or Amazon S3; it is intentionally not configured yet.
+| Role   | Email                |
+| ------ | -------------------- |
+| Member | `member@example.org` |
+| Pastor | `pastor@example.org` |
+| Admin  | `admin@example.org`  |
 
-## Deployment philosophy
+These are public development credentials. They must be disabled in production. Preview data is local to the browser and should not contain real confidential information.
 
-Local development is the primary development environment. Normal features must be developed, exercised, linted, type-checked, tested, and built locally before they are pushed. A push must not be required to test ordinary functionality, and production must never be used as a feature-testing environment. Preview or staging validation should occur before production. Deployment configuration is outside the current scaffold.
+### Environment configuration
+
+Use `.env.example` as the development template; never commit real secrets. Set a unique `AUTH_SECRET` for each environment. Next.js uses its own environment-file loading; other processes must receive their environment explicitly. Copying the root `.env` does not by itself guarantee every workspace process loads it.
+
+For example, when starting only the web app locally:
+
+```sh
+AUTH_SECRET=your-local-random-secret pnpm --filter @grace-abounds/web dev
+```
+
+The current auth module has a development secret fallback that must be removed before production. `NEXT_PUBLIC_*` variables are browser-visible and must never hold secrets. `.env.example` includes reserved database/API settings; not every setting is wired to application behavior yet.
+
+## Verification
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm build
+pnpm test:e2e
+```
+
+`pnpm lint` includes the repository-wide Prettier check. Playwright's config starts the local web server or reuses an existing one outside CI. Install its Chromium binary once with `pnpm exec playwright install chromium`.
+
+The latest focused frontend review passed TypeScript and 30 unit/component tests. This is not a complete browser acceptance test or production deployment sign-off. See the [readiness review](docs/handoff/latest-readiness-review.md) for scope and outstanding work.
+
+## Backend implementation and launch
+
+Start with the [backend/API plan](docs/api/backend-plan.md) and [Claude implementation brief](docs/handoff/claude-backend-brief.md). Preserve the current UI and immediate publishing behavior. Earlier handovers describing pastor-only publishing approval are superseded.
+
+Before launch, implement real identity and server permissions, database persistence, media storage, notifications and recovery/backup processes. Verify all roles and public pages in staging, remove demo access, and replace placeholder church, banking and legal content. Develop and test locally before staging or production.
 
 ## AUT thesis boundary
 
-The Grace Abounds website is the host application. The AUT thesis focuses specifically on the proposed sermon media-processing subsystem. Likely architectural concerns include asynchronous processing, API communication, background jobs, media/object storage, FFmpeg, reliability, retry and error handling, scalability, processing status, service separation, and a review/publishing workflow.
-
-None of those thesis features is implemented. Their dedicated service boundary exists now so later research and implementation do not become coupled to normal web requests.
-
-## Development status
-
-Initial scaffold only. The next work should proceed incrementally from documented requirements rather than inventing application features or schemas in advance.
-
-## Frontend preview accounts
-
-The Auth.js credentials provider currently exposes development-only accounts so the protected interface can be reviewed before the user backend exists:
-
-- `member@example.org`
-- `pastor@example.org`
-- `admin@example.org`
-
-Use `grace-demo` as the password. These accounts and the browser-persisted CMS repository are mock frontend infrastructure and must be replaced by database-backed identity, authorization, and API services before production.
+The website is the host application. The AUT thesis concerns the sermon media-processing subsystem: asynchronous jobs, API communication, FFmpeg processing, object storage, status tracking, retries and reliability. The worker boundary exists, but processing is not implemented. Any media readiness/review checks are separate from the website publishing workflow; they must not reintroduce a pastor approval queue for ordinary CMS edits.

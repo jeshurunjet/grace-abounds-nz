@@ -286,9 +286,18 @@ function Fields({
                       url: '',
                       description: '',
                     }
-                  : value.length
-                    ? blankFrom(value[value.length - 1])
-                    : '',
+                  : !value.length && name === 'team'
+                    ? {
+                        id: crypto.randomUUID(),
+                        name: '',
+                        role: '',
+                        bio: '',
+                        image: '',
+                        status: 'draft',
+                      }
+                    : value.length
+                      ? blankFrom(value[value.length - 1])
+                      : '',
             ])
           }
         >

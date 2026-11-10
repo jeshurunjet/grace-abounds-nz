@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarPlus } from 'lucide-react';
 import { useContent } from './content-provider';
 import {
@@ -23,6 +23,16 @@ import {
 /** Activities plus lookups shared by every activity screen. */
 export function useActivities() {
   const { content } = useContent();
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    const refresh = () => setClockTick((tick) => tick + 1);
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
   return useMemo(() => {
     const now = nzNow();
     const locations = content.pages.locations;
@@ -41,7 +51,7 @@ export function useActivities() {
       campus,
       place,
     };
-  }, [content]);
+  }, [content, clockTick]);
 }
 
 /** Downloads an .ics file for one date or the whole series. */

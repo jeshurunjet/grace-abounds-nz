@@ -1,33 +1,39 @@
-# Claude backend instructions — Grace Abounds
+# Claude backend implementation brief — Grace Abounds
 
-Implement the backend for the existing Next.js frontend, Fastify API, and reserved media-worker boundary. Read `reference-update.md` first for the latest UI changes, then `ui-cms-audit.md`, `apps/web/app/lib/content.ts`, `page-content.ts`, and `components/content-provider.tsx` before changing contracts. The API currently has only a health endpoint; Prisma has no models. Preserve the current UI and provide a migration path from its seed data. Do not treat browser role checks or local storage as authorisation.
+Updated 10 November 2026. Read the [backend/API plan](../api/backend-plan.md), [current readiness review](latest-readiness-review.md) and root README before implementing. They supersede older draft/approval instructions in the handover archive.
 
-## Roles and access
+## Preserve the current product
 
-Use Pastor, Admin, Member only. Pastor has full app authority and is the sole publishing approver. Admin can create/edit all public CMS content and submit changes, but cannot publish, unpublish, delete live content, approve themselves, grant roles, suspend accounts, or change security settings. Members can use their own messages, prayers, appointment requests, applications, attendance responses, assignments, profile, and member resources. Pastor/admin retain ordinary member features.
+- Roles are Pastor, Admin and Member only. Reuse the shared frontend; do not redesign the app as part of backend work.
+- **Pastor and Admin website edits publish immediately.** The user explicitly chose this workflow. Do not implement submission, approval or rejection endpoints. Retain hidden drafts, archive states, activity scheduled releases, revision history and audited restore.
+- Pastor controls roles and account management. Admin member management is read-only. Staff retain member features.
+- Keep prayer requests, appointments and pastoral notes restricted to their member owner/Pastor as appropriate. Admin CMS access does not grant pastoral access. Pastor/Admin can handle member conversations.
+- Use unified activities for services, groups, studies, events and ministries. Derive public and member calendars from that source. Keep Next steps interest applications distinct from bookings/memberships.
 
-Derive identity and role from a verified session on every operation; ignore client-supplied role, sender, owner, approver and publication authority. Add record-level ownership checks, confidential-data filtering, and tests for guessed IDs. Current UI assumes prayer requests are pastor-only; member messages are visible to pastor and admin. Confirm any broader prayer access policy with the owner before expanding it. The current Admin member-management view is read-only; any operational write access needs an explicit permission decision. private pastoral notes must have separate authorisation. Role changes and suspension must update effective authentication, not just a CMS record. Protect the final active pastor and prevent self-lockout.
+## Inspect these sources before changing contracts
 
-## Public content and editorial workflow
+- `apps/web/app/lib/content.ts` and `page-content.ts`: existing content and member records.
+- `apps/web/app/lib/activities.ts`: recurrence, memberships, bookings and exceptions.
+- `apps/web/app/components/content-provider.tsx`: current browser repository and legacy data handling.
+- `apps/web/auth.ts`: demo-only identity, secret fallback and prototype ID mapping.
+- Current CMS/activity/sermon editors, member features, settings and authentication screens.
 
-Model public page content, repeatable collections, events, sermons, team, resources, and shared settings with stable IDs. Keep draft revisions separate from the published snapshot. Support draft, pending review, published revision, returned-with-feedback, and archived content. A change to a live record remains unpublished until pastor approval, including archive/removal/unpublish. Editing a submitted draft invalidates approval and requires resubmission.
+Fastify currently implements only a health endpoint, Prisma has no business models and the media worker does no processing. Authentication UI is not proof that email codes, Google or WebAuthn work.
 
-The current UI submits one complete website draft. Implement atomic snapshot approval first, or update the UI explicitly if introducing per-record review. Approve an exact revision ID/version in a transaction; prevent stale approvals and concurrent-edit overwrite with optimistic locking. Record actor, timestamp, changed records, feedback and publication audit events. Public reads must query only the published snapshot; staff preview requires staff authorisation and must not leak through public caches, detail URLs, sitemap, search or media endpoints. Rejection must preserve the published version.
+## Implementation approach
 
-Expose typed read/draft-update/submit/review/publish operations and replace the browser repository behind ContentProvider. Keep member activity outside public publishing transactions. Preserve data during migration and avoid seeded demo content replacing stored production content. Do not claim successful save/publish before server confirmation.
+Follow the phases and contracts in the API plan. Start with schema, real identity, server-enforced permissions and typed errors. Then connect public content and immediate CMS writes, followed by activities/bookings, member communication/care and remaining account/media operations. Keep each phase runnable and independently reviewable.
 
-## Required durable features
+Use the proposed Next.js session gateway/Fastify business boundary unless repository evidence requires a documented alternative. Verify identity assertions and current account status; never trust a browser-supplied user ID, role or unsigned gateway header. Use one canonical user identity, resolve demo profile IDs explicitly, and remove shared demo credentials/secret fallback from production.
 
-- Verified accounts, invitations/signup policy, secure password handling, email verification, password reset, session revocation, rate limits, and explicit development-only demo mode. Production must require a real secret and disable shared demo credentials.
-- Shared messages with sender ownership, conversation access, staff replies, delivery state, pagination and notifications.
-- Private prayer intake, member ownership and pastor review; optional anonymous/guest intake requires explicit rules, abuse controls, retention policy and clear confidentiality text.
-- Appointment requests and status, member applications, service assignments and attendance; each record must have one canonical identity mapping. The prototype has separate demo user/profile IDs—resolve this during migration.
-- Contact inbox and email delivery with confirmed success/failure states. Public forms currently do not deliver anything.
-- Events as the canonical public calendar source. Use ISO dates/times and Pacific/Auckland timezone semantics, including daylight saving, recurring events if required, and correct upcoming-event ordering. Do not maintain a second disconnected calendar dataset.
-- Resource file records and protected member downloads. Never rely on obscured public URLs for access control. Gallery images intended for the public website can be public assets.
-- Media storage/uploads and async processing in the worker. Signed uploads, size/type validation, ownership, progress/failure/retry, poster generation, accessible playback/captions as needed. Validate direct media URLs and avoid arbitrary server-side URL fetching.
-- Profile persistence and support contact configuration. Approved privacy/terms and retention/deletion processes before launch.
+Use resource-specific read/write contracts rather than persisting the entire mixed ContentState. Validate schemas and domain rules on the server. Use version preconditions for concurrent CMS edits, database transactions for capacity/uniqueness and an outbox for reliable job delivery. Store recurring times in Pacific/Auckland wall-clock terms and release instants in UTC; preserve original occurrence identity through exceptions.
 
-Validate payloads on the server: content shapes, required fields, unique slugs, valid dates, safe URLs, file metadata, image alt text, collection ordering and limits. Avoid silently converting user-entered content into HTML. Add CSRF/origin protections appropriate to the auth mechanism, request limits, structured errors, and safe logs without private message/prayer bodies.
+Provide migrations, development seeds and an explicit import strategy for older browser content. Never overwrite real data with seeds at startup. Replace browser storage incrementally behind typed frontend adapters. Show operation success only after server confirmation; preserve input and support retry on failures.
 
-Integrate one feature at a time and replace misleading frontend success states. Add contract/integration tests for admin publication denial, pastor approval, member cross-account denial, private prayer/media access, concurrent draft edits, rejected approval, live revisions remaining stable, role revocation, and data surviving restarts. Finish with migration/backup instructions, environment configuration, and a deployment smoke-test checklist. Do not deploy production until demo identity, browser-only persistence and placeholder church/bank/legal information are resolved.
+Keep media processing asynchronous in the worker. Implement signed uploads, protected member downloads, verified assets and durable processing status before treating media as ready. Account export/deletion, notifications and email also need durable job states; `202 Accepted` is not completed delivery.
+
+## Required validation and handover
+
+Test role/ownership denial, guessed private IDs, suspension/session revocation, final-Pastor protection, immediate Admin/Pastor publishing, stale CMS writes, restore, public/private caching, recurrence/DST, concurrent capacity claims, cancellation and notification retries. Verify content survives restarts and appears across devices. Use appropriate contract/integration tests, then complete browser acceptance for all three roles.
+
+Document actual environment variables, provider setup, migrations, backup/restore, worker operation and unresolved choices. Do not deploy production merely because the frontend renders. Include a field-to-contract inventory covering every CMS field across all seven public pages and shared content. Keep the AUT thesis scope limited to the sermon media subsystem.

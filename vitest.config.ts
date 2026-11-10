@@ -11,5 +11,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['apps/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}'],
     setupFiles: ['./vitest.setup.ts'],
+    // next-auth imports 'next/server' without an extension; let Vite resolve it.
+    server: { deps: { inline: ['next-auth', '@auth/core'] } },
   },
 });

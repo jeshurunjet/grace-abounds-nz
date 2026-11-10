@@ -114,17 +114,31 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const url = request.nextUrl;
   if (url.pathname.endsWith('/callback/passkey')) {
-    const form = await request
-      .clone()
-      .formData()
-      .catch(() => null);
-    const action = form?.get('action');
+    // Read the small form-encoded body once, within a byte limit, then hand
+    // Auth.js an identical request.
+    let text: string;
+    try {
+      text = await readBodyLimited(request, ACCOUNT_BODY_LIMIT);
+    } catch (failure) {
+      if (failure instanceof HttpError)
+        return NextResponse.json(
+          { error: { code: failure.code, message: failure.message } },
+          { status: failure.status, headers: { 'cache-control': 'no-store' } },
+        );
+      throw failure;
+    }
+    const action = new URLSearchParams(text).get('action');
     const { signedIn, allowed } = await checkSignedInIntent('passkey');
     if (action !== 'authenticate' && !(signedIn && allowed))
       return denied(
         'Confirm it’s you in Settings, then add the passkey again.',
       );
-    const response = await handlers.POST(request);
+    const forwarded = new NextRequest(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: text,
+    });
+    const response = await handlers.POST(forwarded);
     return action === 'register' ? clearIntent(response) : response;
   }
   return handlers.POST(request);

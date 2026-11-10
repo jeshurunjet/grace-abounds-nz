@@ -193,7 +193,12 @@ describe.skipIf(!dbTestsEnabled)(
           { role: 'MEMBER' },
         );
       const [first, second] = await Promise.all([demote(a, b), demote(b, a)]);
-      expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
+      // One wins. The other is refused either inside the lock (409: would
+      // leave no Pastor) or, if the winner committed first, because the loser
+      // is no longer a Pastor (403). Never both.
+      const statuses = [first.statusCode, second.statusCode].sort();
+      expect(statuses[0]).toBe(200);
+      expect([403, 409]).toContain(statuses[1]);
       expect(
         await prisma.user.count({
           where: { role: 'PASTOR', status: 'ACTIVE' },

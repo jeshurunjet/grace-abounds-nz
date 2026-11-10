@@ -8,9 +8,11 @@ import {
   recordAudit,
   revokeSessions,
   Role,
+  type Prisma,
 } from '@grace-abounds/database';
 import {
   AppError,
+  forbidden,
   notFound,
   parse,
   requireVersion,
@@ -24,6 +26,23 @@ const statusChange = z
 const roleChange = z
   .object({ role: z.enum(['MEMBER', 'ADMIN', 'PASTOR']) })
   .strict();
+
+/**
+ * Re-checks the acting Pastor inside the locked transaction: a Pastor who
+ * was demoted or suspended while this request was in flight cannot finish
+ * a Pastor-only change.
+ */
+async function assertStillPastor(
+  tx: Prisma.TransactionClient,
+  actorId: string,
+) {
+  const current = await tx.user.findUnique({
+    where: { id: actorId },
+    select: { role: true, status: true },
+  });
+  if (current?.role !== Role.PASTOR || current.status !== 'ACTIVE')
+    throw forbidden();
+}
 
 const lastPastor = () =>
   new AppError(
@@ -55,6 +74,7 @@ export function registerPastorMemberRoutes(app: FastifyInstance) {
       try {
         return await prisma.$transaction(async (tx) => {
           await lockPastorSet(tx);
+          await assertStillPastor(tx, actor.id);
           const target = await tx.user.findUnique({
             where: { id: request.params.id },
           });
@@ -105,6 +125,7 @@ export function registerPastorMemberRoutes(app: FastifyInstance) {
       try {
         return await prisma.$transaction(async (tx) => {
           await lockPastorSet(tx);
+          await assertStillPastor(tx, actor.id);
           const target = await tx.user.findUnique({
             where: { id: request.params.id },
           });

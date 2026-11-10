@@ -11,7 +11,7 @@ import { POST as signup } from '../../app/api/account/signup/route';
 import { POST as verifySignup } from '../../app/api/account/signup/verify/route';
 import { POST as requestReset } from '../../app/api/account/password-reset/route';
 import { POST as confirmReset } from '../../app/api/account/password-reset/confirm/route';
-import { issueChallenge } from './challenges';
+import { consumeChallenge, issueChallenge } from './challenges';
 import { hashPassword, verifyPassword } from './password';
 import { authorizePassword, PasswordRateLimited } from './password-signin';
 
@@ -132,6 +132,60 @@ describe.skipIf(!dbTestsEnabled)('account flows (PostgreSQL)', () => {
       password: 'new-password-1',
     });
     expect(response.status).toBe(400);
+  });
+
+  it('concurrent resends leave exactly one usable code: the latest', async () => {
+    const email = 'resend@example.test';
+    const issue = () =>
+      prisma.$transaction((tx) =>
+        issueChallenge(tx, { purpose: 'PASSWORD_RESET', email }),
+      );
+    const codes = await Promise.all([
+      issue(),
+      issue(),
+      issue(),
+      issue(),
+      issue(),
+    ]);
+    const live = await prisma.authChallenge.findMany({
+      where: { email, purpose: 'PASSWORD_RESET', consumedAt: null },
+    });
+    expect(live).toHaveLength(1);
+    const latest = await prisma.authChallenge.findFirstOrThrow({
+      where: { email },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    expect(live[0]!.id).toBe(latest.id);
+    // Exactly one of the issued codes works, and only once.
+    let accepted = 0;
+    for (const code of new Set(codes)) {
+      const result = await prisma.$transaction((tx) =>
+        consumeChallenge(tx, { purpose: 'PASSWORD_RESET', email, code }),
+      );
+      if (result) accepted += 1;
+    }
+    expect(accepted).toBe(1);
+  });
+
+  it('using the newest code never makes an older code usable', async () => {
+    const email = 'older@example.test';
+    const older = await prisma.$transaction((tx) =>
+      issueChallenge(tx, { purpose: 'PASSWORD_RESET', email }),
+    );
+    const newer = await prisma.$transaction((tx) =>
+      issueChallenge(tx, { purpose: 'PASSWORD_RESET', email }),
+    );
+    // Simulate a stale live row (e.g. left by a past bug) behind the newest.
+    await prisma.authChallenge.updateMany({
+      where: { email, consumedAt: { not: null } },
+      data: { consumedAt: null },
+    });
+    const use = (code: string) =>
+      prisma.$transaction((tx) =>
+        consumeChallenge(tx, { purpose: 'PASSWORD_RESET', email, code }),
+      );
+    expect(await use(newer)).not.toBeNull();
+    if (older !== newer) expect(await use(older)).toBeNull();
   });
 
   it('two simultaneous verifications of one code create one account', async () => {

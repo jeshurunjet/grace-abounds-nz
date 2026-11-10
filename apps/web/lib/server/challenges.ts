@@ -25,6 +25,22 @@ export const hashCode = (
 export const generateCode = () =>
   String(randomInt(0, 1_000_000)).padStart(6, '0');
 
+/** Lock namespace for challenges (two-key advisory locks; separate from single-key locks). */
+const CHALLENGE_LOCK_CLASS = 7_204_102;
+
+/**
+ * Serializes issuing and checking codes for one email and purpose, even
+ * when no challenge row exists yet. Held until the transaction ends.
+ */
+async function lockChallenges(
+  tx: Prisma.TransactionClient,
+  purpose: ChallengePurpose,
+  email: string,
+) {
+  const key = `${purpose}:${email}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CHALLENGE_LOCK_CLASS}::int, hashtext(${key}))`;
+}
+
 /**
  * Issues a new code and voids any outstanding code for the same purpose and
  * email. For sign-up, the pending password/name travel with this challenge
@@ -40,6 +56,7 @@ export async function issueChallenge(
     pendingName?: string;
   },
 ) {
+  await lockChallenges(tx, input.purpose, input.email);
   await tx.authChallenge.updateMany({
     where: { purpose: input.purpose, email: input.email, consumedAt: null },
     data: { consumedAt: new Date() },
@@ -61,24 +78,26 @@ export async function issueChallenge(
 
 /**
  * Checks a code and, if correct, marks it used in the caller's transaction.
- * Returns the challenge or null. A wrong guess is counted on the challenge;
- * after CODE_MAX_ATTEMPTS it is voided. Two concurrent correct submissions
- * cannot both succeed (the consume is a conditional update).
+ * Only the newest challenge for the email and purpose is ever considered:
+ * once it is used, voided or expired, no older code becomes usable. Returns
+ * the challenge or null. A wrong guess is counted on the challenge; after
+ * CODE_MAX_ATTEMPTS it is voided. Checks are serialized with issuing.
  */
 export async function consumeChallenge(
   tx: Prisma.TransactionClient,
   input: { purpose: ChallengePurpose; email: string; code: string },
 ) {
+  await lockChallenges(tx, input.purpose, input.email);
   const challenge = await tx.authChallenge.findFirst({
-    where: {
-      purpose: input.purpose,
-      email: input.email,
-      consumedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-    orderBy: { createdAt: 'desc' },
+    where: { purpose: input.purpose, email: input.email },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
-  if (!challenge) return null;
+  if (
+    !challenge ||
+    challenge.consumedAt ||
+    challenge.expiresAt.getTime() <= Date.now()
+  )
+    return null;
   const expected = Buffer.from(challenge.codeHash, 'hex');
   const actual = Buffer.from(
     hashCode(input.purpose, input.email, input.code),

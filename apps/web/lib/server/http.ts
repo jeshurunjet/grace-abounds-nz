@@ -44,6 +44,47 @@ export function errorResponse(error: HttpError, requestId: string) {
   );
 }
 
+/** Account and auth form bodies are small. */
+export const ACCOUNT_BODY_LIMIT = 16 * 1024;
+
+/**
+ * Reads a request body as UTF-8 text without ever buffering more than
+ * maxBytes: a declared Content-Length over the limit is refused before
+ * reading, and a chunked or undeclared body is cut off as soon as the byte
+ * count passes the limit. Throws HttpError 413.
+ */
+export async function readBodyLimited(request: Request, maxBytes: number) {
+  const tooLarge = () =>
+    new HttpError(413, 'TOO_LARGE', 'The request is too large.');
+  const declared = request.headers.get('content-length');
+  if (
+    declared !== null &&
+    (!/^\d+$/.test(declared) || Number(declared) > maxBytes)
+  )
+    throw tooLarge();
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /**
  * Wraps an account route: same-origin check, bounded JSON body, the API
  * error envelope, private no-store responses, and no stack traces.
@@ -61,9 +102,7 @@ export function accountRoute<T>(
           'CROSS_SITE_REQUEST',
           'Request origin not allowed.',
         );
-      const text = await request.text();
-      if (text.length > 16_384)
-        throw new HttpError(413, 'TOO_LARGE', 'The request is too large.');
+      const text = await readBodyLimited(request, ACCOUNT_BODY_LIMIT);
       let body: unknown;
       try {
         body = text ? JSON.parse(text) : {};

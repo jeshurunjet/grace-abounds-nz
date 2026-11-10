@@ -1,7 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { auth } from '../../../../auth';
 import { signIdentityAssertion } from '../../../../lib/server/assertion';
-import { isSameOrigin } from '../../../../lib/server/http';
+import {
+  HttpError,
+  isSameOrigin,
+  readBodyLimited,
+} from '../../../../lib/server/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,10 +52,6 @@ async function proxy(
       'Request origin not allowed.',
       requestId,
     );
-  const declared = Number(request.headers.get('content-length') ?? 0);
-  if (declared > MAX_BODY_BYTES)
-    return error(413, 'TOO_LARGE', 'The request is too large.', requestId);
-
   const session = await auth();
   const headers = new Headers({ 'x-request-id': requestId });
   for (const name of FORWARDED_HEADERS) {
@@ -71,9 +71,16 @@ async function proxy(
       )}`,
     );
 
-  const body = mutation ? await request.text() : undefined;
-  if (body && body.length > MAX_BODY_BYTES)
-    return error(413, 'TOO_LARGE', 'The request is too large.', requestId);
+  let body: string | undefined;
+  try {
+    body = mutation
+      ? await readBodyLimited(request, MAX_BODY_BYTES)
+      : undefined;
+  } catch (failure) {
+    if (failure instanceof HttpError)
+      return error(failure.status, failure.code, failure.message, requestId);
+    throw failure;
+  }
 
   let upstream: Response;
   try {

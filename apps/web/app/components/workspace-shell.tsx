@@ -45,7 +45,7 @@ export function WorkspaceShell({
   const role =
     data?.user?.role ??
     (kind === 'Admin' ? 'admin' : kind === 'Pastor' ? 'pastor' : 'member');
-  const profile = accountProfile(data?.user);
+  const profile = accountProfile({ ...data?.user, role });
   useEffect(() => {
     setOpen(false);
     setAccountOpen(false);

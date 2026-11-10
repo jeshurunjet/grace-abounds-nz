@@ -51,6 +51,8 @@ export function useActivities() {
       campus,
       place,
     };
+    // clockTick is intentional: it re-evaluates time-based status each minute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, clockTick]);
 }
 

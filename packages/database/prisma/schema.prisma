@@ -7,4 +7,128 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Intentionally no models: the application data model has not been designed yet.
+// ---------- Identity (Phase 1) ----------
+
+enum Role {
+  MEMBER
+  ADMIN
+  PASTOR
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETION_PENDING
+}
+
+/// One canonical person. Pastor/Admin are created by the staff:add command;
+/// sign-up always creates a MEMBER.
+model User {
+  id            String        @id @default(cuid())
+  /// Always stored lowercase and trimmed.
+  email         String        @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  bio           String        @default("")
+  role          Role          @default(MEMBER)
+  status        AccountStatus @default(ACTIVE)
+  /// Incremented on every profile write; used for If-Match checks.
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  authenticators Authenticator[]
+  auditEvents    AuditEvent[]    @relation("AuditActor")
+}
+
+// Auth.js Prisma adapter tables (https://authjs.dev/getting-started/adapters/prisma)
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  /// Stable id so a member can list and revoke individual sessions.
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Holds hashed six-digit email sign-in codes.
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+/// Passkeys (WebAuthn credentials).
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+/// Fixed-window counters for sign-in code requests and verification attempts.
+model AuthAttempt {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}
+
+// ---------- Audit ----------
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  requestId  String?
+  /// Never store prayer/message bodies or credentials here.
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}

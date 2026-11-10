@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 
+process.env.API_ASSERTION_SECRET ??= 'test-only-assertion-secret-0123456789';
 const app = buildApp();
 
 afterEach(async () => app.close());

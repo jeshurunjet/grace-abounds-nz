@@ -1,5 +1,6 @@
 'use client';
 import { useSession } from 'next-auth/react';
+import { signIn as passkeySignIn } from 'next-auth/webauthn';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
@@ -307,24 +308,26 @@ export default function SettingsPage() {
       >
         <div className="empty-feature">
           <KeyRound size={35} />
-          <h3>Device credentials unavailable</h3>
+          <h3>Sign in with your device</h3>
           <p>
-            When account services are connected, your registered passkeys,
-            creation dates and last-used activity will appear here.
-          </p>
-          <p>
-            Adding a passkey will use your browser’s secure prompt with your
-            device screen lock.
+            A passkey lets you sign in with your phone or computer’s screen lock
+            instead of an email code. Add one on each device you use.
           </p>
         </div>
         <button
           className="button"
-          onClick={() => {
-            setModal(null);
-            unavailable('Passkey registration');
+          onClick={async () => {
+            try {
+              await passkeySignIn('passkey', { action: 'register' });
+              setModal(null);
+              setNotice('Passkey added. You can use it next time you sign in.');
+            } catch {
+              setModal(null);
+              setNotice('No passkey was added. Please try again.');
+            }
           }}
         >
-          Add a passkey
+          Add a passkey on this device
         </button>
       </Modal>
       <Modal

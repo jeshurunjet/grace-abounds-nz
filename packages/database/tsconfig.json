@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true },
-  "include": ["src/**/*.ts"]
+  "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "prisma/**/*.ts"]
 }

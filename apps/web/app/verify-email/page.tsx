@@ -4,14 +4,14 @@ export default function VerifyEmailPage() {
     <main className="auth-simple">
       <div>
         <p className="eyebrow">Email verification</p>
-        <h1>Verify your email</h1>
+        <h1>Check your email</h1>
         <p>
-          Start with your email address to view the six-digit verification
-          screen. Email delivery and code verification are not connected yet; no
-          code has been sent.
+          We sent a six-digit sign-in code. Enter it on the sign-in page within
+          10 minutes. If it doesn’t arrive, check your spam folder or request a
+          new code.
         </p>
-        <Link className="button" href="/signup">
-          Continue with email
+        <Link className="button" href="/login">
+          Enter your code
         </Link>
       </div>
     </main>

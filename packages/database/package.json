@@ -2,16 +2,27 @@
   "name": "@grace-abounds/database",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "prisma:validate": "prisma validate"
+    "prisma:validate": "dotenv -e ../../.env -- prisma validate",
+    "generate": "dotenv -e ../../.env -- prisma generate",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "staff:add": "dotenv -e ../../.env -- tsx scripts/staff-add.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0"
   },
   "devDependencies": {
     "prisma": "^6.15.0",
-    "typescript": "^5.9.2"
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "dotenv-cli": "^8.0.0"
   }
 }

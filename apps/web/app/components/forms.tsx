@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
+import { signIn as passkeySignIn } from 'next-auth/webauthn';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useContent } from './content-provider';
 import { KeyRound, Mail, ArrowLeft } from 'lucide-react';
@@ -56,18 +57,37 @@ function GoogleMark() {
   );
 }
 
-export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
+const errorMessages: Record<string, string> = {
+  Verification: 'That code is wrong or has expired. Request a new code.',
+  TooManyAttempts: 'Too many attempts. Request a new code and try again.',
+  AccessDenied:
+    'This account can’t sign in right now. Contact the church office if you need help.',
+  OAuthAccountNotLinked:
+    'That email already has an account. Sign in with an email code first.',
+};
+
+/** Only same-site paths are accepted as a post-sign-in destination. */
+function safeCallback() {
+  const next = new URLSearchParams(window.location.search).get('callbackUrl');
+  return next?.startsWith('/') && !next.startsWith('//') && !next.includes('\\')
+    ? next
+    : '/members';
+}
+
+export function AuthForm({
+  mode,
+  googleEnabled = false,
+}: {
+  mode: 'login' | 'signup';
+  googleEnabled?: boolean;
+}) {
   const login = mode === 'login';
-  const [step, setStep] = useState<'start' | 'code' | 'password' | 'demo'>(
-    'start',
-  );
+  const [step, setStep] = useState<'start' | 'code'>('start');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [show, setShow] = useState(false);
   const [pending, setPending] = useState(false);
-  const [role, setRole] = useState<'member' | 'pastor' | 'admin'>('member');
   const digits = useRef<(HTMLInputElement | null)[]>([]);
   const { content } = useContent();
   const verses = useMemo(
@@ -94,11 +114,21 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   useEffect(() => {
     if (step === 'code') digits.current[0]?.focus();
   }, [step]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('error');
+    if (code)
+      setError(errorMessages[code] ?? 'Sign-in failed. Please try again.');
+    const saved = sessionStorage.getItem('grace-sign-in-email');
+    if (code && saved) {
+      setEmail(saved);
+      if (code === 'Verification') setStep('code');
+    }
+  }, []);
   function navigate(next: typeof step) {
     setStep(next);
     setNotice('');
     setError('');
-    setShow(false);
   }
   function fillDigits(value: string, start: number) {
     const numbers = value.replace(/\D/g, '').slice(0, 6 - start);
@@ -113,38 +143,53 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     digits.current[Math.min(start + numbers.length, 5)]?.focus();
     setError('');
   }
-  async function demo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function requestCode(fullName?: string) {
     setPending(true);
     setError('');
     try {
-      const result = await signIn('credentials', {
-        email: `${role}@example.org`,
-        password: String(new FormData(event.currentTarget).get('password')),
+      const address = email.trim().toLowerCase();
+      sessionStorage.setItem('grace-sign-in-email', address);
+      if (fullName?.trim())
+        sessionStorage.setItem('grace-pending-name', fullName.trim());
+      const result = await signIn('email-code', {
+        email: address,
         redirect: false,
+        callbackUrl: safeCallback(),
       });
       if (!result || result.error) {
-        setError('Demo sign-in failed. Use the development demo password.');
-        return;
+        setError('We couldn’t send a code. Check the address and try again.');
+        return false;
       }
-      const next = new URLSearchParams(window.location.search).get(
-        'callbackUrl',
+      setCode(['', '', '', '', '', '']);
+      setNotice(
+        `If ${address} can receive email, a six-digit code is on its way. It expires in 10 minutes.`,
       );
-      const safe =
-        next?.startsWith('/') && !next.startsWith('//') && !next.includes('\\');
-      window.location.assign(
-        safe
-          ? next!
-          : role === 'pastor'
-            ? '/pastor'
-            : role === 'admin'
-              ? '/admin'
-              : '/members',
-      );
+      return true;
     } catch {
       setError('The sign-in service could not be reached. Please try again.');
+      return false;
     } finally {
       setPending(false);
+    }
+  }
+  function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    const params = new URLSearchParams({
+      email: email.trim().toLowerCase(),
+      token: code.join(''),
+      callbackUrl: safeCallback(),
+    });
+    window.location.assign(`/api/auth/callback/email-code?${params}`);
+  }
+  async function usePasskey() {
+    setError('');
+    try {
+      await passkeySignIn('passkey', { callbackUrl: safeCallback() });
+    } catch {
+      setError(
+        'No passkey was used. Sign in with an email code, then add a passkey in Settings.',
+      );
     }
   }
   const verse = verses[verseIndex] ?? verses[0];
@@ -177,11 +222,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
             </button>
           )}
           <p className="eyebrow">
-            {step === 'code'
-              ? 'Email verification'
-              : step === 'demo'
-                ? 'Development preview'
-                : 'Your church community'}
+            {step === 'code' ? 'Email verification' : 'Your church community'}
           </p>
           <h1>
             {step === 'code'
@@ -192,29 +233,34 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           </h1>
           <p>
             {step === 'code'
-              ? `Six-digit verification for ${email}`
+              ? `Enter the six-digit code we sent to ${email}.`
               : login
-                ? 'Sign in to your church account.'
-                : 'Find your place in the Grace Abounds community.'}
+                ? 'Sign in to your church account. No password needed.'
+                : 'Create your member account with your email or Google.'}
           </p>
           <div className="auth-card form">
             {step === 'start' && (
               <>
                 <form
                   className="form"
-                  onSubmit={(event) => {
+                  onSubmit={async (event) => {
                     event.preventDefault();
-                    setCode(['', '', '', '', '', '']);
-                    setStep('code');
-                    setNotice(
-                      'Email verification is not connected. No code has been sent; you are viewing the verification screen.',
+                    const name = new FormData(event.currentTarget).get(
+                      'fullName',
                     );
+                    if (await requestCode(name ? String(name) : undefined))
+                      setStep('code');
                   }}
                 >
                   {!login && (
                     <label>
                       Full name
-                      <input name="fullName" autoComplete="name" required />
+                      <input
+                        name="fullName"
+                        autoComplete="name"
+                        required
+                        maxLength={80}
+                      />
                     </label>
                   )}
                   <label>
@@ -227,55 +273,52 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                       required
                     />
                   </label>
-                  <button className="button">
-                    <Mail size={17} /> Continue with email
+                  <button className="button" disabled={pending}>
+                    <Mail size={17} />{' '}
+                    {pending ? 'Sending code…' : 'Email me a code'}
                   </button>
                 </form>
-                <div className="auth-divider">or</div>
-                <button
-                  type="button"
-                  className="auth-provider"
-                  onClick={() =>
-                    setNotice(
-                      'Google sign-in is not connected. No Google account has been authenticated.',
-                    )
-                  }
-                >
-                  <GoogleMark /> Continue with Google
-                </button>
-                <button
-                  type="button"
-                  className="auth-provider"
-                  onClick={() =>
-                    setNotice(
-                      'Passkey sign-in is not connected. No device prompt or authentication has occurred.',
-                    )
-                  }
-                >
-                  <KeyRound size={19} /> Continue with a passkey
-                </button>
-                <p className="form-note">
-                  Use your device screen lock with a registered passkey when
-                  account services are available.
-                </p>
-                <button
-                  className="auth-text-button"
-                  onClick={() => navigate('password')}
-                >
-                  Use a password instead
-                </button>
+                {(googleEnabled || login) && (
+                  <div className="auth-divider">or</div>
+                )}
+                {googleEnabled && (
+                  <button
+                    type="button"
+                    className="auth-provider"
+                    onClick={() => {
+                      const name = document.querySelector<HTMLInputElement>(
+                        'input[name="fullName"]',
+                      )?.value;
+                      if (name?.trim())
+                        sessionStorage.setItem(
+                          'grace-pending-name',
+                          name.trim(),
+                        );
+                      void signIn('google', { callbackUrl: safeCallback() });
+                    }}
+                  >
+                    <GoogleMark /> Continue with Google
+                  </button>
+                )}
+                {login && (
+                  <>
+                    <button
+                      type="button"
+                      className="auth-provider"
+                      onClick={usePasskey}
+                    >
+                      <KeyRound size={19} /> Sign in with a passkey
+                    </button>
+                    <p className="form-note">
+                      Passkeys use your phone or computer’s screen lock. Add one
+                      in Settings after you sign in.
+                    </p>
+                  </>
+                )}
               </>
             )}
             {step === 'code' && (
-              <form
-                className="form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setError(
-                    'Code verification is unavailable until authentication services are connected. No sign-in has occurred.',
-                  );
-                }}
-              >
+              <form className="form" onSubmit={verify}>
                 <fieldset className="otp-fieldset">
                   <legend>Six-digit verification code</legend>
                   <div className="otp-inputs">
@@ -325,20 +368,17 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 </fieldset>
                 <button
                   className="button"
-                  disabled={code.some((digit) => !digit)}
+                  disabled={pending || code.some((digit) => !digit)}
                 >
-                  Verify code
+                  {pending ? 'Checking…' : 'Verify code'}
                 </button>
                 <button
                   type="button"
                   className="auth-text-button"
-                  onClick={() =>
-                    setNotice(
-                      'Resending is unavailable. No code has been sent.',
-                    )
-                  }
+                  disabled={pending}
+                  onClick={() => void requestCode()}
                 >
-                  Resend code
+                  Send a new code
                 </button>
                 <button
                   type="button"
@@ -347,73 +387,6 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 >
                   Change email
                 </button>
-              </form>
-            )}
-            {(step === 'password' || step === 'demo') && (
-              <form
-                className="form"
-                onSubmit={
-                  step === 'demo'
-                    ? demo
-                    : (event) => {
-                        event.preventDefault();
-                        setNotice(
-                          'Password authentication is not connected for church accounts. No sign-in has occurred.',
-                        );
-                      }
-                }
-              >
-                {step === 'demo' ? (
-                  <label>
-                    Demo role
-                    <select
-                      value={role}
-                      onChange={(event) =>
-                        setRole(event.target.value as typeof role)
-                      }
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                      <option value="pastor">Pastor</option>
-                    </select>
-                  </label>
-                ) : (
-                  <label>
-                    Email
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      required
-                    />
-                  </label>
-                )}
-                <label htmlFor="auth-password">Password</label>
-                <div className="password">
-                  <input
-                    id="auth-password"
-                    name="password"
-                    type={show ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    minLength={8}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShow((value) => !value)}
-                  >
-                    {show ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <button className="button" disabled={pending}>
-                  {pending
-                    ? 'Signing in…'
-                    : step === 'demo'
-                      ? 'Enter demo workspace'
-                      : 'Sign in with password'}
-                </button>
-                <Link href="/forgot-password">Forgot password?</Link>
               </form>
             )}
             {notice && (
@@ -437,25 +410,6 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
             By continuing, you agree to our <Link href="/terms">Terms</Link> and{' '}
             <Link href="/privacy">Privacy Policy</Link>.
           </p>
-          <p className="form-note">
-            Church account services are not connected yet.
-          </p>
-          {process.env.NODE_ENV !== 'production' && (
-            <details className="demo-access">
-              <summary>Developer demo access</summary>
-              <p>
-                Seeded test accounts only. This does not create a church
-                account.
-              </p>
-              <button
-                type="button"
-                className="button button-outline"
-                onClick={() => navigate('demo')}
-              >
-                Open demo sign-in
-              </button>
-            </details>
-          )}
         </div>
       </section>
     </div>

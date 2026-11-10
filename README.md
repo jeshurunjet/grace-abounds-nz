@@ -41,7 +41,7 @@ See the [project handover](docs/handoff/PROJECT-HANDOVER.md) for the proposed co
 | `packages/types`, `packages/validation` | Boundaries for shared contracts and validation            |
 | `packages/config`, `packages/ui`        | Shared package scaffolds; current UI lives in the web app |
 | `docs/api`                              | Backend plan and proposed API contracts                   |
-| `docs/handoff`                          | Single Claude/Codex handover and backend plan         |
+| `docs/handoff`                          | Single Claude/Codex handover and backend plan             |
 | `docs/thesis`, `docs/architecture`      | Thesis scope and architectural background                 |
 | `tests/e2e`                             | Playwright browser tests                                  |
 

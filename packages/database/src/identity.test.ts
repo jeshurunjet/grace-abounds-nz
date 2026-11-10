@@ -9,11 +9,7 @@ import {
   lockPastorSet,
   prisma,
 } from './index.ts';
-import {
-  createSession,
-  createUser,
-  resetIdentityTables,
-} from './testing.ts';
+import { createSession, createUser, resetIdentityTables } from './testing.ts';
 
 describe.skipIf(!dbTestsEnabled)('identity helpers (PostgreSQL)', () => {
   beforeEach(resetIdentityTables);

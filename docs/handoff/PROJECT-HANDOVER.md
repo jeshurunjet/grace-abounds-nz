@@ -353,3 +353,18 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 **Next instruction for Claude (paste into Claude):**
 
 > Implement Phase 1 on `backend-phase-1` following the Phase 0 reconciliation section and the Codex Phase 0 checkpoint notes in `docs/handoff/PROJECT-HANDOVER.md`. Add dependency changes first, then give me one setup command at a time. Do not merge, push or deploy. Update the same file at the end.
+
+
+### Codex Phase 1 preliminary source checkpoint — 10 November 2026
+
+Reviewed commit `53ee7de` on `backend-phase-1`. Implementation exists but is **unverified**, not accepted as complete. No install, migration, typecheck or tests run by Codex. Initial migration and updated lockfile are still missing. The handover's earlier Phase 0 status/instructions were not updated by that implementation commit and must be refreshed after setup.
+
+Focused findings to return to Claude while setup proceeds:
+
+1. `apps/web/lib/server/challenges.ts`: concurrent `issueChallenge` transactions can both invalidate the old set and then each create an outstanding code. Serialize issuance/consumption per normalized email and purpose (including the empty-set case), and ensure a consumed code cannot reveal an older still-live code. Add a concurrent resend test proving only the intended latest challenge remains usable. Keep the existing single-use tests.
+2. `apps/web/lib/server/http.ts`: `accountRoute` reads the entire body with `request.text()` before enforcing a 16,384-character limit. This is not a bounded byte read. Enforce an actual byte limit while streaming (with appropriate content-length rejection as an early check); use the same bounded helper for the gateway. Add oversized/chunked-body checks.
+3. The claimed Google/passkey guards need route-level verification, not just helper tests: signed-out registration denied, signed-in linking without intent/recent proof denied, mismatched/revoked intent denied and intended linking successful. Verify these with real provider/browser acceptance before sign-off. Verify JWT initial sign-in and subsequent reads with every login method.
+
+Setup can proceed with version checks and dependency installation; these findings do not require another planning phase. Claude should fix concrete findings before Phase 1 acceptance and commit migration/lockfile plus exact test evidence. Database security tests use `pnpm test:db` and a dedicated disposable `_test` database; ordinary `pnpm test` skips them and must not be reported as their acceptance. Do not point destructive reset helpers at the development or production database.
+
+**Next action:** owner runs `node -v && pnpm -v && docker --version` and shares version output with Claude; Claude guides the remaining setup one command at a time, addresses findings above, updates live status here, and returns the verified Phase 1 diff for focused Codex review. No merge, push or deployment yet.

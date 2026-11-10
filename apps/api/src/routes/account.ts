@@ -6,7 +6,11 @@ import {
   revokeSessions,
 } from '@grace-abounds/database';
 import { AppError, notFound } from '../lib/errors.js';
-import { requireActor, requireRecentAuth } from '../lib/identity.js';
+import {
+  lockAndRecheck,
+  requireActor,
+  requireRecentAuth,
+} from '../lib/identity.js';
 
 /**
  * Personal sign-in methods and sessions. Every account has a verified email,
@@ -63,6 +67,7 @@ export function registerAccountRoutes(app: FastifyInstance) {
   app.delete('/v1/me/google', async (request, reply) => {
     const actor = requireRecentAuth(request);
     await prisma.$transaction(async (tx) => {
+      await lockAndRecheck(tx, actor, { requireRecent: true });
       const removed = await tx.account.deleteMany({
         where: { userId: actor.id, provider: 'google' },
       });
@@ -85,6 +90,7 @@ export function registerAccountRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const actor = requireRecentAuth(request);
       await prisma.$transaction(async (tx) => {
+        await lockAndRecheck(tx, actor, { requireRecent: true });
         const removed = await tx.authenticator.deleteMany({
           where: { userId: actor.id, credentialID: request.params.id },
         });
@@ -134,17 +140,20 @@ export function registerAccountRoutes(app: FastifyInstance) {
     '/v1/me/sessions/:id',
     async (request, reply) => {
       const actor = requireActor(request);
-      const result = await prisma.userSession.updateMany({
-        where: { id: request.params.id, userId: actor.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      if (result.count === 0) throw notFound('Session');
-      await recordAudit(prisma, {
-        actorId: actor.id,
-        action: 'session.revoked',
-        entityType: 'UserSession',
-        entityId: request.params.id,
-        requestId: request.id,
+      await prisma.$transaction(async (tx) => {
+        await lockAndRecheck(tx, actor);
+        const result = await tx.userSession.updateMany({
+          where: { id: request.params.id, userId: actor.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        if (result.count === 0) throw notFound('Session');
+        await recordAudit(tx, {
+          actorId: actor.id,
+          action: 'session.revoked',
+          entityType: 'UserSession',
+          entityId: request.params.id,
+          requestId: request.id,
+        });
       });
       return reply.status(204).send();
     },
@@ -153,16 +162,20 @@ export function registerAccountRoutes(app: FastifyInstance) {
   /** Signs out every other session; this one stays signed in. */
   app.post('/v1/me/sessions/revoke-others', async (request) => {
     const actor = requireActor(request);
-    const result = await revokeSessions(prisma, actor.id, {
-      except: actor.sessionId,
-    });
-    await recordAudit(prisma, {
-      actorId: actor.id,
-      action: 'session.revoked_others',
-      entityType: 'User',
-      entityId: actor.id,
-      requestId: request.id,
-      metadata: { count: result.count },
+    const result = await prisma.$transaction(async (tx) => {
+      await lockAndRecheck(tx, actor);
+      const revoked = await revokeSessions(tx, actor.id, {
+        except: actor.sessionId,
+      });
+      await recordAudit(tx, {
+        actorId: actor.id,
+        action: 'session.revoked_others',
+        entityType: 'User',
+        entityId: actor.id,
+        requestId: request.id,
+        metadata: { count: revoked.count },
+      });
+      return revoked;
     });
     return { data: { revoked: result.count } };
   });

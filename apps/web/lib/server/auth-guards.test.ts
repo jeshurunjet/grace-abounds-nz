@@ -13,7 +13,12 @@ import {
 const state = vi.hoisted(() => ({
   cookies: new Map<string, string>(),
   session: null as null | { user: { id: string }; sessionId: string },
-  handled: [] as { method: string; url: string; body: string }[],
+  handled: [] as {
+    method: string;
+    url: string;
+    body: string;
+    linkedSession: string | null;
+  }[],
 }));
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -29,14 +34,22 @@ vi.mock('../../auth', () => ({
   auth: async () => state.session,
   handlers: {
     GET: async (request: Request) => {
-      state.handled.push({ method: 'GET', url: request.url, body: '' });
+      const { currentLink } = await import('./sessions');
+      state.handled.push({
+        method: 'GET',
+        url: request.url,
+        body: '',
+        linkedSession: currentLink()?.sessionId ?? null,
+      });
       return new Response('handled', { status: 200 });
     },
     POST: async (request: Request) => {
+      const { currentLink } = await import('./sessions');
       state.handled.push({
         method: 'POST',
         url: request.url,
         body: await request.text(),
+        linkedSession: currentLink()?.sessionId ?? null,
       });
       return new Response('handled', { status: 200 });
     },
@@ -99,6 +112,8 @@ describe.skipIf(!dbTestsEnabled)('Auth.js route guards (PostgreSQL)', () => {
 
   it('signed out: Google sign-in goes to Auth.js (sign-in rules apply there)', async () => {
     expect((await get('/callback/google?code=x&state=y')).status).toBe(200);
+    // Sign-in, not linking: no linking context even if an intent cookie exists.
+    expect(state.handled.at(-1)!.linkedSession).toBeNull();
   });
 
   it('signed in without an intent: linking and registration are refused', async () => {
@@ -162,6 +177,7 @@ describe.skipIf(!dbTestsEnabled)('Auth.js route guards (PostgreSQL)', () => {
     expect(done.headers.get('set-cookie')).toContain(
       'grace-auth-intent=; Path=/api/auth; Max-Age=0',
     );
+    expect(state.handled.at(-1)!.linkedSession).toBe(row.id);
   });
 
   it('allows intended Google linking and clears the intent', async () => {
@@ -170,6 +186,7 @@ describe.skipIf(!dbTestsEnabled)('Auth.js route guards (PostgreSQL)', () => {
     const done = await get('/callback/google?code=x&state=y');
     expect(done.status).toBe(200);
     expect(done.headers.get('set-cookie')).toContain('grace-auth-intent=;');
+    expect(state.handled.at(-1)!.linkedSession).toBe(row.id);
   });
 
   it('rejects an oversized passkey callback body', async () => {

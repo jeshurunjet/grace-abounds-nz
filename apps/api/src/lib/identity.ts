@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { jwtVerify } from 'jose';
 import {
+  checkSessionAuthority,
   isRecentlyAuthenticated,
   loadActiveSession,
+  lockUserSecurity,
   prisma,
+  type Prisma,
   type Role,
 } from '@grace-abounds/database';
 import { AppError, forbidden, unauthenticated } from './errors.js';
@@ -112,4 +115,29 @@ export function requireRecentAuth(request: FastifyRequest): Actor {
       'For your security, confirm it’s you first.',
     );
   return actor;
+}
+
+/**
+ * Inside a transaction: takes the actor's security lock and re-checks that
+ * the acting session is still valid (and recently authenticated when
+ * required) before a credential or session change commits.
+ */
+export async function lockAndRecheck(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  options: { requireRecent?: boolean } = {},
+) {
+  await lockUserSecurity(tx, actor.id);
+  const authority = await checkSessionAuthority(tx, {
+    userId: actor.id,
+    sessionId: actor.sessionId,
+    requireRecent: options.requireRecent,
+  });
+  if (authority === 'invalid') throw expired();
+  if (authority === 'reauth')
+    throw new AppError(
+      403,
+      'REAUTH_REQUIRED',
+      'For your security, confirm it’s you first.',
+    );
 }

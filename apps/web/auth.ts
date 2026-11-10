@@ -16,7 +16,11 @@ import { emails, sendEmail } from './lib/server/email';
 import { clientIp } from './lib/server/http';
 import { allow, CODE_MAX_AGE_SECONDS } from './lib/server/limits';
 import { authorizePassword } from './lib/server/password-signin';
-import { readIntent, startSession } from './lib/server/sessions';
+import {
+  currentLink,
+  startSession,
+  type PasswordProof,
+} from './lib/server/sessions';
 
 export type AppRole = 'member' | 'pastor' | 'admin';
 
@@ -99,11 +103,11 @@ export const authConfig: NextAuthConfig = {
           },
           select: { userId: true, user: { select: { status: true } } },
         });
-        const intent = await readIntent('google');
-        if (intent) {
+        const link = currentLink();
+        if (link) {
           // Linking from Settings (the route guard has already checked the
           // session and recent authentication).
-          if (linked && linked.userId !== intent.sub)
+          if (linked && linked.userId !== link.userId)
             return '/settings?error=GoogleLinkedElsewhere';
           return true;
         }
@@ -131,7 +135,14 @@ export const authConfig: NextAuthConfig = {
       if (user?.id && account) {
         // A real authentication just happened: record (or, for Settings
         // linking, keep) the server-side session.
-        const session = await startSession(user.id, account.provider);
+        // Password sign-ins carry server-only proof from authorizePassword;
+        // other providers never do.
+        const proof =
+          account.provider === 'password'
+            ? ((user as { passwordProof?: PasswordProof }).passwordProof ??
+              null)
+            : null;
+        const session = await startSession(user.id, account.provider, proof);
         return {
           sub: user.id,
           sid: session.id,

@@ -1,7 +1,11 @@
 import { cookies, headers } from 'next/headers';
 import { jwtVerify, SignJWT } from 'jose';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash } from 'node:crypto';
 import {
+  checkSessionAuthority,
   isRecentlyAuthenticated,
+  lockUserSecurity,
   prisma,
   SESSION_MAX_AGE_SECONDS,
 } from '@grace-abounds/database';
@@ -42,39 +46,88 @@ function deviceLabel(userAgent: string) {
 }
 
 /**
- * Called once per successful authentication (from the Auth.js jwt callback).
- * Linking Google or registering a passkey from Settings keeps the current
- * session (proved by the signed intent cookie); every other sign-in creates
- * a new session record. A revoked session is never brought back.
+ * Request-scoped linking context. The Auth.js route guard sets it only after
+ * checking that a signed-in, recently authenticated session holds a valid
+ * intent; the intent cookie alone never switches on linking.
  */
-export async function startSession(userId: string, method: string) {
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: { sessionVersion: true, status: true },
-  });
-  if (user.status !== 'ACTIVE') throw new Error('Account is not active.');
-  const intent = await readIntent();
-  if (intent && intent.sub === userId) {
-    const current = await prisma.userSession.findFirst({
-      where: {
-        id: intent.sid,
+type LinkContext = { userId: string; sessionId: string };
+const linkContext = new AsyncLocalStorage<LinkContext>();
+export const runLinked = <T>(context: LinkContext, run: () => Promise<T>) =>
+  linkContext.run(context, run);
+export const currentLink = () => linkContext.getStore() ?? null;
+
+/**
+ * Server-only evidence from password verification: which password hash and
+ * security epoch were checked. Never taken from the browser or session updates.
+ */
+export type PasswordProof = { sessionVersion: number; hashFingerprint: string };
+export const fingerprint = (passwordHash: string) =>
+  createHash('sha256').update(passwordHash).digest('hex');
+
+/** Thrown when a session must not be created; Auth.js treats it as a failed sign-in. */
+export class SessionRefused extends Error {}
+
+/**
+ * Called once per successful authentication (from the Auth.js jwt callback),
+ * as one transaction under the user's security lock:
+ * - the account must still be active;
+ * - a password sign-in's proof must still match the current password hash
+ *   and sessionVersion (a reset or change in between refuses it);
+ * - when linking Google or registering a passkey from Settings, the session
+ *   that started it must still be valid and recently authenticated, and is
+ *   kept; otherwise linking fails closed;
+ * - every other sign-in creates a new session record (revoked ones are never
+ *   brought back).
+ */
+export async function startSession(
+  userId: string,
+  method: string,
+  proof?: PasswordProof | null,
+) {
+  const userAgent = (await headers()).get('user-agent') ?? '';
+  const link = currentLink();
+  return prisma.$transaction(async (tx) => {
+    await lockUserSecurity(tx, userId);
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { sessionVersion: true, status: true, passwordHash: true },
+    });
+    if (user.status !== 'ACTIVE')
+      throw new SessionRefused('Account is not active.');
+    if (
+      method === 'password' &&
+      (!proof ||
+        !user.passwordHash ||
+        proof.sessionVersion !== user.sessionVersion ||
+        fingerprint(user.passwordHash) !== proof.hashFingerprint)
+    )
+      throw new SessionRefused('Password proof is no longer current.');
+    if (link) {
+      const authority =
+        link.userId === userId
+          ? await checkSessionAuthority(tx, {
+              userId,
+              sessionId: link.sessionId,
+              requireRecent: true,
+            })
+          : 'invalid';
+      if (authority !== 'ok')
+        throw new SessionRefused(
+          'The session that started linking is no longer valid.',
+        );
+      return tx.userSession.findUniqueOrThrow({
+        where: { id: link.sessionId },
+      });
+    }
+    return tx.userSession.create({
+      data: {
         userId,
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
         sessionVersion: user.sessionVersion,
+        method,
+        deviceLabel: deviceLabel(userAgent),
+        expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000),
       },
     });
-    if (current) return current;
-  }
-  const userAgent = (await headers()).get('user-agent') ?? '';
-  return prisma.userSession.create({
-    data: {
-      userId,
-      sessionVersion: user.sessionVersion,
-      method,
-      deviceLabel: deviceLabel(userAgent),
-      expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000),
-    },
   });
 }
 

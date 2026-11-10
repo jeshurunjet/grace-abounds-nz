@@ -13,6 +13,7 @@ import {
   INTENT_COOKIE_NAME,
   isRecent,
   readIntent,
+  runLinked,
   type IntentKind,
 } from '../../../../lib/server/sessions';
 
@@ -31,7 +32,8 @@ const denied = (message: string) =>
  */
 async function checkSignedInIntent(kind: IntentKind) {
   const session = await auth();
-  if (!session?.user?.id) return { signedIn: false, allowed: false };
+  if (!session?.user?.id)
+    return { signedIn: false, allowed: false, link: null };
   const intent = await readIntent(kind);
   const row = await currentSessionRow(session.sessionId, session.user.id);
   const allowed =
@@ -40,7 +42,11 @@ async function checkSignedInIntent(kind: IntentKind) {
     intent.sid === row.id &&
     intent.sub === session.user.id &&
     isRecent(row);
-  return { signedIn: true, allowed };
+  return {
+    signedIn: true,
+    allowed,
+    link: allowed ? { userId: session.user.id, sessionId: row!.id } : null,
+  };
 }
 
 function clearIntent(response: Response) {
@@ -83,13 +89,15 @@ export async function GET(request: NextRequest) {
 
   // Google: a signed-in browser may only link with a Settings intent.
   if (url.pathname.endsWith('/callback/google')) {
-    const { signedIn, allowed } = await checkSignedInIntent('google');
+    const { signedIn, allowed, link } = await checkSignedInIntent('google');
     if (signedIn && !allowed)
       return NextResponse.redirect(
         new URL('/settings?error=LinkReauthRequired', url),
         303,
       );
-    const response = await handlers.GET(request);
+    const response = link
+      ? await runLinked(link, () => handlers.GET(request))
+      : await handlers.GET(request);
     return signedIn ? clearIntent(response) : response;
   }
 
@@ -128,7 +136,7 @@ export async function POST(request: NextRequest) {
       throw failure;
     }
     const action = new URLSearchParams(text).get('action');
-    const { signedIn, allowed } = await checkSignedInIntent('passkey');
+    const { signedIn, allowed, link } = await checkSignedInIntent('passkey');
     if (action !== 'authenticate' && !(signedIn && allowed))
       return denied(
         'Confirm it’s you in Settings, then add the passkey again.',
@@ -138,7 +146,11 @@ export async function POST(request: NextRequest) {
       headers: request.headers,
       body: text,
     });
-    const response = await handlers.POST(forwarded);
+    // Registration runs in the verified linking context; sign-in never does.
+    const response =
+      action === 'register' && link
+        ? await runLinked(link, () => handlers.POST(forwarded))
+        : await handlers.POST(forwarded);
     return action === 'register' ? clearIntent(response) : response;
   }
   return handlers.POST(request);

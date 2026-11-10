@@ -4,6 +4,7 @@ import {
   assertPastorRemains,
   LastPastorError,
   lockPastorSet,
+  lockUserSecurity,
   prisma,
   recordAudit,
   revokeSessions,
@@ -80,6 +81,8 @@ export function registerPastorMemberRoutes(app: FastifyInstance) {
           });
           if (!target) throw notFound('Member');
           if (target.version !== expected) throw versionConflict();
+          // Serialized with the target's sign-ins, resets and revocations.
+          await lockUserSecurity(tx, target.id);
           await assertPastorRemains(tx, target.id, { status });
           const updated = await tx.user.update({
             where: { id: target.id },

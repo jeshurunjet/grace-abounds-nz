@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { prisma, recordAudit, revokeSessions } from '@grace-abounds/database';
+import {
+  lockUserSecurity,
+  prisma,
+  recordAudit,
+  revokeSessions,
+} from '@grace-abounds/database';
 import {
   codeField,
   emailField,
@@ -46,6 +51,8 @@ export const POST = accountRoute(
         code,
       });
       if (!challenge?.userId) return false;
+      // Serialized with password changes, sign-ins and revocations for this user.
+      await lockUserSecurity(tx, challenge.userId);
       const updated = await tx.user.updateMany({
         where: { id: challenge.userId, email, status: 'ACTIVE' },
         data: {

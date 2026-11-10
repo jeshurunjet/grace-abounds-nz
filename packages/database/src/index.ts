@@ -193,3 +193,52 @@ export async function assertPastorRemains(
   });
   if (others === 0) throw new LastPastorError();
 }
+
+/** Lock namespace for per-user security changes (two-key advisory locks). */
+const USER_SECURITY_LOCK_CLASS = 7_204_103;
+
+/**
+ * Serializes every change to one user's credentials or sessions: password
+ * set/change/reset, re-authentication, sign-in session creation, session
+ * revocation, suspension and sign-in method removal. Each caller takes this
+ * lock inside its transaction and re-checks its authority while holding it,
+ * so a request that was valid when it started cannot commit after a
+ * competing reset or revocation. Lock order: pastor set, then challenge,
+ * then user security (never the reverse).
+ */
+export async function lockUserSecurity(
+  tx: Prisma.TransactionClient,
+  userId: string,
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${USER_SECURITY_LOCK_CLASS}::int, hashtext(${userId}))`;
+}
+
+export type SessionAuthority = 'ok' | 'invalid' | 'reauth';
+
+/**
+ * Re-checks, under lockUserSecurity, that a session still speaks for its
+ * user: owned by the user, not revoked or expired, created under the
+ * current sessionVersion, account active and, when required, recently
+ * authenticated.
+ */
+export async function checkSessionAuthority(
+  tx: Prisma.TransactionClient,
+  input: { userId: string; sessionId: string; requireRecent?: boolean },
+): Promise<SessionAuthority> {
+  const row = await tx.userSession.findUnique({
+    where: { id: input.sessionId },
+    include: { user: { select: { status: true, sessionVersion: true } } },
+  });
+  if (
+    !row ||
+    row.userId !== input.userId ||
+    row.revokedAt ||
+    row.expiresAt.getTime() <= Date.now() ||
+    row.user.status !== 'ACTIVE' ||
+    row.sessionVersion !== row.user.sessionVersion
+  )
+    return 'invalid';
+  if (input.requireRecent && !isRecentlyAuthenticated(row.authenticatedAt))
+    return 'reauth';
+  return 'ok';
+}

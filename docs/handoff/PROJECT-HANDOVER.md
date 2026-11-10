@@ -285,11 +285,11 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                          | Evidence / blocker                                                                                                                                                                                                    |
-| ----- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                                    | Source review, defaults confirmed, session design below.                                                                                                                                                              |
-| 1     | Implemented; automated checks verified; browser and provider acceptance pending | `backend-phase-1` @ `3949f34`. Typecheck, 40 unit tests and 57 PostgreSQL tests pass (see Phase 1 section). Not yet: lint/build, browser walkthrough, real Google callback, real email delivery, real-device passkey. |
-| 2–6   | Not implemented                                                                 | Main remains a frontend prototype.                                                                                                                                                                                    |
+| Phase | Status                                                                          | Evidence / blocker                                                                                                                                                                                           |
+| ----- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Complete — accepted by Codex                                                    | Source review, defaults confirmed, session design below.                                                                                                                                                     |
+| 1     | Implemented; automated checks verified; browser and provider acceptance pending | `backend-phase-1`. Typecheck, ESLint, build, 40 unit tests and 57 PostgreSQL tests pass (see Phase 1 section). Not yet: browser walkthrough, real Google callback, real email delivery, real-device passkey. |
+| 2–6   | Not implemented                                                                 | Main remains a frontend prototype.                                                                                                                                                                           |
 
 ### Phase 0 reconciliation — Claude, 10 November 2026
 
@@ -396,13 +396,14 @@ Route deviations from the planned table: sign-out-others is `POST /v1/me/session
 - Owner, Mac: `docker compose exec postgres createdb -U grace_abounds grace_abounds_test` then `pnpm --filter @grace-abounds/database migrate:test` — migration applied to the `_test` database only.
 - Owner, Mac: `pnpm test:db` — 7 files, **57 passed** against PostgreSQL 17 (`grace_abounds_test`): forged/expired/mis-addressed assertions, foreign `sid`, session revoke/revoke-others, Member/Admin denied Pastor routes, suspension on next request, concurrent mutual demotion leaves one Pastor (DB helper and API), stale role change 412, recent-auth required, no credential leakage, atomic limiter (20 concurrent → 5), signup pre-hijack, non-enumerating signup/reset, keyed hashes, 5-guess void, purpose binding, concurrent resend → one usable code, newest-only, concurrent verify → one account, reset single use + revocation, password throttling before hashing, suspended password sign-in refused, all passkey/Google route-guard cases, JWT first sign-in + later reads for password/email-code/google/passkey, role change picked up, sign-out revocation, Google rules.
 - Owner, Mac: `pnpm lint` — ESLint passes for web, api and media-worker (zero warnings, after `4f8da75`). `prettier --check .` still reports 10 frontend files (`app/error.tsx`, `help/layout.tsx`, `loading.tsx`, `next-steps/page.tsx`, `not-found.tsx`, `privacy/page.tsx`, `robots.ts`, `styles.css`, `template.tsx`, `terms/page.tsx`) that already failed at frontend snapshot `590f1bd` and on `main`; untouched by Phase 1. Proposed: a separate formatting-only commit with owner approval. `README.md` (unformatted by the docs consolidation) and Phase 1 files are formatted.
-- Not run: `pnpm build`, browser walkthrough, real provider flows.
+- Owner, Mac: `pnpm build` — all packages built; `next build` completed (Next 15.5.23), API `tsc --noEmit` clean.
+- Not run: browser walkthrough, real provider flows.
 
 **Local setup facts (non-secret):** the Mac also runs a native PostgreSQL on `localhost:5432`, so the project's Docker database uses `POSTGRES_PORT=5433` (`.env` URLs updated by the owner; `.env.example` notes this). `.env` has `AUTH_URL`, `AUTH_TRUST_HOST=false`, `TRUSTED_PROXY_HOPS=0`, `AUTH_CHALLENGE_SECRET`, `TEST_DATABASE_URL`; the two placeholder secrets were replaced with random values by the owner's own command (values never shown to agents). Dev database `grace_abounds` and test database `grace_abounds_test` both at migration `20261110044618_phase1_identity`.
 
 **Blockers before Phase 1 acceptance**
 
-1. `pnpm build` on the Mac; decide on the pre-existing Prettier baseline (10 frontend files).
+1. Decide on the pre-existing Prettier baseline (10 frontend files).
 2. Browser walkthrough with dev codes (`pnpm dev`): password sign-up → sign-in → restart servers → still signed in; email-code sign-in; reset; Settings re-auth, password change, devices revoke from a second browser; profile save in two browsers; `staff:add` Pastor suspends a Member who is then signed out.
 3. Real Google OAuth client (callback `http://localhost:3000/api/auth/callback/google`): new-user sign-up, existing-email refusal, Settings linking.
 4. Resend + verified domain for real code/reset delivery (dev console codes are not delivery evidence).

@@ -10,6 +10,7 @@ const profileSelect = {
   name: true,
   image: true,
   bio: true,
+  phone: true,
   role: true,
   status: true,
   createdAt: true,
@@ -20,6 +21,11 @@ const profilePatch = z
   .object({
     name: z.string().trim().min(1, 'Enter your name.').max(80),
     bio: z.string().trim().max(1000),
+    phone: z
+      .string()
+      .trim()
+      .max(40)
+      .regex(/^[+()0-9 .-]*$/, 'Use digits, spaces and + ( ) - only.'),
     image: z
       .string()
       .trim()

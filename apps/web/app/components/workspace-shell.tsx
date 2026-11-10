@@ -21,7 +21,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
 import Image from 'next/image';
-import { profileById, profileByRole } from '../lib/profiles';
+import { accountProfile } from '../lib/profiles';
 import { isRouteActive } from '../lib/role-navigation';
 
 export type WorkspaceLink = { href: string; label: string; icon?: string };
@@ -45,7 +45,7 @@ export function WorkspaceShell({
   const role =
     data?.user?.role ??
     (kind === 'Admin' ? 'admin' : kind === 'Pastor' ? 'pastor' : 'member');
-  const profile = profileById(data?.user?.profileId) ?? profileByRole(role);
+  const profile = accountProfile(data?.user);
   useEffect(() => {
     setOpen(false);
     setAccountOpen(false);

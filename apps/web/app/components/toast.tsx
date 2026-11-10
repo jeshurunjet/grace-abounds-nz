@@ -14,14 +14,26 @@ const ToastContext = createContext<{
   push: (message: string, kind?: ToastKind) => void;
 } | null>(null);
 
+/** Most toasts shown at once; older ones are dropped first. */
+const MAX_TOASTS = 4;
+let nextToastId = 0;
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = useCallback((message: string, kind: ToastKind = 'success') => {
-    const id = Date.now();
-    setToasts((items) => [...items, { id, message, kind }]);
+    // A counter, not a timestamp: two toasts in the same millisecond must
+    // not share an id.
+    const id = ++nextToastId;
+    setToasts((items) => [
+      ...items
+        .filter((item) => item.message !== message)
+        .slice(-(MAX_TOASTS - 1)),
+      { id, message, kind },
+    ]);
+    // Errors stay longer; recovery controls stay inline on the form itself.
     window.setTimeout(
       () => setToasts((items) => items.filter((item) => item.id !== id)),
-      4200,
+      kind === 'error' ? 8000 : 4200,
     );
   }, []);
   const value = useMemo(() => ({ push }), [push]);

@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:db": "RUN_DB_TESTS=1 vitest run --no-file-parallelism apps/api packages/database apps/web/lib"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

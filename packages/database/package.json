@@ -14,7 +14,8 @@
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "staff:add": "dotenv -e ../../.env -- tsx scripts/staff-add.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "migrate:test": "dotenv -e ../../.env -- sh -c 'case \"$TEST_DATABASE_URL\" in *_test*) DATABASE_URL=\"$TEST_DATABASE_URL\" prisma migrate deploy ;; *) echo \"TEST_DATABASE_URL must name a _test database\"; exit 1 ;; esac'"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0"

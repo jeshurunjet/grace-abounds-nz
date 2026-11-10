@@ -69,3 +69,47 @@ export const profileById = (id?: string) =>
   profiles.find((profile) => profile.id === id);
 export const profileByRole = (role?: AppRole) =>
   profiles.find((profile) => profile.role === role) ?? profiles[2]!;
+
+const ROLE_TITLES: Record<AppRole, string> = {
+  pastor: 'Pastor',
+  admin: 'Administrator',
+  member: 'Member',
+};
+export const DEFAULT_AVATAR = '/images/avatar-default.svg';
+const IMAGE_HOSTS = ['lh3.googleusercontent.com', 'images.unsplash.com'];
+
+/** Only same-site paths or configured image hosts are rendered. */
+export function safeAvatar(image?: string | null) {
+  if (!image) return DEFAULT_AVATAR;
+  if (image.startsWith('/') && !image.startsWith('//')) return image;
+  try {
+    const url = new URL(image);
+    return url.protocol === 'https:' && IMAGE_HOSTS.includes(url.hostname)
+      ? image
+      : DEFAULT_AVATAR;
+  } catch {
+    return DEFAULT_AVATAR;
+  }
+}
+
+/**
+ * Display details for the signed-in account, from the real session. The
+ * profile id is the canonical user id; there is no demo-profile fallback.
+ */
+export function accountProfile(user?: {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: AppRole;
+}) {
+  const name =
+    user?.name?.trim() || user?.email?.split('@')[0] || 'Your account';
+  return {
+    id: user?.id ?? '',
+    name,
+    shortName: name,
+    title: ROLE_TITLES[user?.role ?? 'member'],
+    photo: safeAvatar(user?.image),
+  };
+}

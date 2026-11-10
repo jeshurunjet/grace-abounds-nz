@@ -1,9 +1,13 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../../auth';
-import { profileById } from '../../lib/profiles';
 import { getRoleNavigation } from '../../lib/role-navigation';
 import { ProfileView } from './profile-view';
 
+/**
+ * Own profile, keyed by the canonical user id. Staff views of other
+ * members belong to the limited directory (Phase 4); until then any other
+ * id redirects to the signed-in person's own profile.
+ */
 export default async function ProfilePage({
   params,
 }: {
@@ -12,20 +16,6 @@ export default async function ProfilePage({
   const session = await auth();
   if (!session) redirect('/login');
   const { id } = await params;
-  const ownProfile = profileById(session.user.profileId);
-  if (!ownProfile) redirect('/');
-  const requestedProfile = profileById(id);
-  if (
-    !requestedProfile ||
-    (!['admin', 'pastor'].includes(session.user.role) &&
-      requestedProfile.id !== ownProfile.id)
-  )
-    redirect(`/profile/${ownProfile.id}`);
-  return (
-    <ProfileView
-      profile={requestedProfile}
-      workspace={getRoleNavigation(session.user.role)}
-      canEdit={requestedProfile.id === ownProfile.id}
-    />
-  );
+  if (id !== session.user.id) redirect(`/profile/${session.user.id}`);
+  return <ProfileView workspace={getRoleNavigation(session.user.role)} />;
 }

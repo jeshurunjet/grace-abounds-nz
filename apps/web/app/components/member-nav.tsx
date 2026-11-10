@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Home, Images, LayoutDashboard, Menu } from 'lucide-react';
-import { profileById, profileByRole } from '../lib/profiles';
+import { accountProfile } from '../lib/profiles';
 import { isRouteActive } from '../lib/role-navigation';
 import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
@@ -17,7 +17,7 @@ export function MemberNav() {
   const { data } = useSession();
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
-  const profile = profileById(data?.user?.profileId) ?? profileByRole('member');
+  const profile = accountProfile(data?.user);
   useEffect(() => {
     setOpen(false);
     setNavOpen(false);

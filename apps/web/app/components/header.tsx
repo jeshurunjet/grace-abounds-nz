@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
-import { profileById, profileByRole } from '../lib/profiles';
+import { accountProfile } from '../lib/profiles';
 import { getRoleNavigation } from '../lib/role-navigation';
 import { Logo } from './logo';
 const links = [
@@ -24,9 +24,7 @@ export function Header() {
   const { data: session, status } = useSession();
   const role = session?.user?.role;
   const roleNav = getRoleNavigation(role);
-  const profile = session?.user
-    ? (profileById(session.user.profileId) ?? profileByRole(role))
-    : undefined;
+  const profile = session?.user ? accountProfile(session.user) : undefined;
   useEffect(() => {
     setOpen(false);
     setAccountOpen(false);

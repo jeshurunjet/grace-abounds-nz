@@ -11,12 +11,19 @@ function assertionKey() {
 
 /**
  * A 60-second, audience-scoped statement of who is calling the API. The API
- * still reloads the user's role and status itself; this only proves identity.
+ * still reloads the session, role and status itself; this only proves identity.
  */
-export function signIdentityAssertion(userId: string, requestId: string) {
-  return new SignJWT({ rid: requestId })
+export function signIdentityAssertion(
+  identity: { userId: string; sessionId: string; sessionVersion: number },
+  requestId: string,
+) {
+  return new SignJWT({
+    rid: requestId,
+    sid: identity.sessionId,
+    sv: identity.sessionVersion,
+  })
     .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(userId)
+    .setSubject(identity.userId)
     .setIssuer('grace-web')
     .setAudience('grace-api')
     .setIssuedAt()

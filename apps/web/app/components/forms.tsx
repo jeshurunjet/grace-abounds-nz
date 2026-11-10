@@ -4,8 +4,10 @@ import { signIn } from 'next-auth/react';
 import { signIn as passkeySignIn } from 'next-auth/webauthn';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useContent } from './content-provider';
+import { useToast } from './toast';
 import { KeyRound, Mail, ArrowLeft } from 'lucide-react';
 import { Logo } from './logo';
+import { accountApi, errorMessage } from '../lib/api-client';
 export function PrayerForm() {
   const [sent, setSent] = useState(false);
   function submit(e: FormEvent) {
@@ -63,16 +65,135 @@ const errorMessages: Record<string, string> = {
   AccessDenied:
     'This account can’t sign in right now. Contact the church office if you need help.',
   OAuthAccountNotLinked:
-    'That email already has an account. Sign in with an email code first.',
+    'That email already has an account. Sign in your usual way, then connect Google in Settings.',
+  GoogleEmailUnverified:
+    'Google hasn’t verified that email address, so it can’t be used to sign in.',
+  CredentialsSignin: 'Email or password is incorrect.',
 };
 
 /** Only same-site paths are accepted as a post-sign-in destination. */
-function safeCallback() {
+export function safeCallback(fallback = '/members') {
   const next = new URLSearchParams(window.location.search).get('callbackUrl');
   return next?.startsWith('/') && !next.startsWith('//') && !next.includes('\\')
     ? next
-    : '/members';
+    : fallback;
 }
+
+/** Six single-digit inputs with paste and arrow-key support. */
+export function CodeInputs({
+  code,
+  setCode,
+  autoFocus = true,
+}: {
+  code: string[];
+  setCode: (update: (current: string[]) => string[]) => void;
+  autoFocus?: boolean;
+}) {
+  const digits = useRef<(HTMLInputElement | null)[]>([]);
+  useEffect(() => {
+    if (autoFocus) digits.current[0]?.focus();
+  }, [autoFocus]);
+  function fill(value: string, start: number) {
+    const numbers = value.replace(/\D/g, '').slice(0, 6 - start);
+    if (!numbers) return;
+    setCode((current) =>
+      current.map((digit, index) =>
+        index >= start && index < start + numbers.length
+          ? numbers[index - start]!
+          : digit,
+      ),
+    );
+    digits.current[Math.min(start + numbers.length, 5)]?.focus();
+  }
+  return (
+    <fieldset className="otp-fieldset">
+      <legend>Six-digit verification code</legend>
+      <div className="otp-inputs">
+        {code.map((digit, index) => (
+          <input
+            key={index}
+            ref={(node) => {
+              digits.current[index] = node;
+            }}
+            aria-label={`Verification code digit ${index + 1}`}
+            inputMode="numeric"
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            pattern="[0-9]"
+            required
+            value={digit}
+            onChange={(event) => {
+              if (!event.target.value)
+                setCode((current) =>
+                  current.map((item, i) => (i === index ? '' : item)),
+                );
+              else fill(event.target.value, index);
+            }}
+            onPaste={(event) => {
+              event.preventDefault();
+              fill(event.clipboardData.getData('text'), index);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Backspace' && !digit && index > 0)
+                digits.current[index - 1]?.focus();
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                digits.current[Math.max(0, index - 1)]?.focus();
+              }
+              if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                digits.current[Math.min(5, index + 1)]?.focus();
+              }
+            }}
+          />
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** Password input with a show/hide button (the existing .password style). */
+export function PasswordInput({
+  id,
+  autoComplete,
+  value,
+  onChange,
+  label = 'Password',
+}: {
+  id: string;
+  autoComplete: 'current-password' | 'new-password';
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <>
+      <label htmlFor={id}>{label}</label>
+      <div className="password">
+        <input
+          id={id}
+          name="password"
+          type={show ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          minLength={autoComplete === 'new-password' ? 8 : undefined}
+          maxLength={128}
+          required
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button type="button" onClick={() => setShow((current) => !current)}>
+          {show ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {autoComplete === 'new-password' && (
+        <p className="form-note">At least 8 characters.</p>
+      )}
+    </>
+  );
+}
+
+const emptyCode = () => ['', '', '', '', '', ''];
+type Step = 'start' | 'code' | 'password' | 'signup-code';
 
 export function AuthForm({
   mode,
@@ -82,13 +203,16 @@ export function AuthForm({
   googleEnabled?: boolean;
 }) {
   const login = mode === 'login';
-  const [step, setStep] = useState<'start' | 'code'>('start');
+  const toast = useToast();
+  const [step, setStep] = useState<Step>('start');
+  const [passwordless, setPasswordless] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [password, setPassword] = useState('');
+  const [code, setCode] = useState(emptyCode);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
-  const digits = useRef<(HTMLInputElement | null)[]>([]);
   const { content } = useContent();
   const verses = useMemo(
     () =>
@@ -112,47 +236,36 @@ export function AuthForm({
     return () => window.clearInterval(timer);
   }, [verses.length]);
   useEffect(() => {
-    if (step === 'code') digits.current[0]?.focus();
-  }, [step]);
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('error');
-    if (code)
-      setError(errorMessages[code] ?? 'Sign-in failed. Please try again.');
+    const errorCode = params.get('error');
+    if (errorCode)
+      setError(errorMessages[errorCode] ?? 'Sign-in failed. Please try again.');
+    if (params.get('reset') === '1')
+      setNotice(
+        'Your password was changed and every device was signed out. Sign in with your new password.',
+      );
     const saved = sessionStorage.getItem('grace-sign-in-email');
-    if (code && saved) {
+    if (errorCode && saved) {
       setEmail(saved);
-      if (code === 'Verification') setStep('code');
+      if (errorCode === 'Verification') setStep('code');
     }
   }, []);
-  function navigate(next: typeof step) {
+  function navigate(next: Step) {
     setStep(next);
     setNotice('');
     setError('');
   }
-  function fillDigits(value: string, start: number) {
-    const numbers = value.replace(/\D/g, '').slice(0, 6 - start);
-    if (!numbers) return;
-    setCode((current) =>
-      current.map((digit, index) =>
-        index >= start && index < start + numbers.length
-          ? numbers[index - start]!
-          : digit,
-      ),
-    );
-    digits.current[Math.min(start + numbers.length, 5)]?.focus();
-    setError('');
-  }
+  const address = () => email.trim().toLowerCase();
+
   async function requestCode(fullName?: string) {
     setPending(true);
     setError('');
     try {
-      const address = email.trim().toLowerCase();
-      sessionStorage.setItem('grace-sign-in-email', address);
+      sessionStorage.setItem('grace-sign-in-email', address());
       if (fullName?.trim())
         sessionStorage.setItem('grace-pending-name', fullName.trim());
       const result = await signIn('email-code', {
-        email: address,
+        email: address(),
         redirect: false,
         callbackUrl: safeCallback(),
       });
@@ -160,9 +273,9 @@ export function AuthForm({
         setError('We couldn’t send a code. Check the address and try again.');
         return false;
       }
-      setCode(['', '', '', '', '', '']);
+      setCode(emptyCode());
       setNotice(
-        `If ${address} can receive email, a six-digit code is on its way. It expires in 10 minutes.`,
+        `If ${address()} can receive email, a six-digit code is on its way. It expires in 10 minutes.`,
       );
       return true;
     } catch {
@@ -172,27 +285,104 @@ export function AuthForm({
       setPending(false);
     }
   }
-  function verify(event: FormEvent<HTMLFormElement>) {
+  function verifySignInCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     const params = new URLSearchParams({
-      email: email.trim().toLowerCase(),
+      email: address(),
       token: code.join(''),
       callbackUrl: safeCallback(),
     });
     window.location.assign(`/api/auth/callback/email-code?${params}`);
   }
+  async function passwordSignIn(target: string) {
+    const result = await signIn('password', {
+      email: address(),
+      password,
+      redirect: false,
+    });
+    if (!result || result.error) {
+      setError(
+        result?.code === 'rate_limited'
+          ? 'Too many attempts. Wait 15 minutes or sign in with an email code.'
+          : errorMessages.CredentialsSignin!,
+      );
+      return false;
+    }
+    window.location.assign(target);
+    return true;
+  }
+  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError('');
+    try {
+      if (!(await passwordSignIn(safeCallback()))) setPending(false);
+    } catch {
+      setError('The sign-in service could not be reached. Please try again.');
+      setPending(false);
+    }
+  }
+  async function startPasswordSignup() {
+    setPending(true);
+    setError('');
+    try {
+      await accountApi('/signup', { name, email: address(), password });
+      setCode(emptyCode());
+      setStep('signup-code');
+      setNotice(
+        `If ${address()} can receive email, a six-digit code is on its way. It expires in 10 minutes.`,
+      );
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setPending(false);
+    }
+  }
+  async function verifySignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError('');
+    try {
+      await accountApi('/signup/verify', {
+        email: address(),
+        code: code.join(''),
+      });
+    } catch (failure) {
+      setError(errorMessage(failure));
+      setPending(false);
+      return;
+    }
+    toast.push('Your account is ready. Signing you in…', 'success');
+    try {
+      if (!(await passwordSignIn(safeCallback()))) {
+        setPending(false);
+        setError(
+          'Your account was created. Sign in with your email and password.',
+        );
+      }
+    } catch {
+      setPending(false);
+      setError(
+        'Your account was created. Sign in with your email and password.',
+      );
+    }
+  }
   async function usePasskey() {
     setError('');
     try {
-      await passkeySignIn('passkey', { callbackUrl: safeCallback() });
+      await passkeySignIn('passkey', {
+        action: 'authenticate',
+        callbackUrl: safeCallback(),
+      });
     } catch {
       setError(
-        'No passkey was used. Sign in with an email code, then add a passkey in Settings.',
+        'No passkey was used. Sign in another way, then add a passkey in Settings.',
       );
     }
   }
   const verse = verses[verseIndex] ?? verses[0];
+  const codeStep = step === 'code' || step === 'signup-code';
   return (
     <div className="auth-page">
       <aside>
@@ -222,21 +412,17 @@ export function AuthForm({
             </button>
           )}
           <p className="eyebrow">
-            {step === 'code' ? 'Email verification' : 'Your church community'}
+            {codeStep ? 'Email verification' : 'Your church community'}
           </p>
           <h1>
-            {step === 'code'
-              ? 'Enter your code'
-              : login
-                ? 'Welcome Back'
-                : 'Join Us'}
+            {codeStep ? 'Enter your code' : login ? 'Welcome Back' : 'Join Us'}
           </h1>
           <p>
-            {step === 'code'
-              ? `Enter the six-digit code we sent to ${email}.`
+            {codeStep
+              ? `Enter the six-digit code we sent to ${address()}.`
               : login
-                ? 'Sign in to your church account. No password needed.'
-                : 'Create your member account with your email or Google.'}
+                ? 'Sign in to your church account.'
+                : 'Find your place in the Grace Abounds community.'}
           </p>
           <div className="auth-card form">
             {step === 'start' && (
@@ -245,10 +431,8 @@ export function AuthForm({
                   className="form"
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    const name = new FormData(event.currentTarget).get(
-                      'fullName',
-                    );
-                    if (await requestCode(name ? String(name) : undefined))
+                    if (!login && !passwordless) return startPasswordSignup();
+                    if (await requestCode(login ? undefined : name))
                       setStep('code');
                   }}
                 >
@@ -260,6 +444,8 @@ export function AuthForm({
                         autoComplete="name"
                         required
                         maxLength={80}
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
                       />
                     </label>
                   )}
@@ -273,23 +459,44 @@ export function AuthForm({
                       required
                     />
                   </label>
+                  {!login && !passwordless && (
+                    <PasswordInput
+                      id="signup-password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={setPassword}
+                    />
+                  )}
                   <button className="button" disabled={pending}>
                     <Mail size={17} />{' '}
-                    {pending ? 'Sending code…' : 'Email me a code'}
+                    {pending
+                      ? 'Sending code…'
+                      : login || passwordless
+                        ? 'Email me a code'
+                        : 'Create account'}
                   </button>
+                  {!login && (
+                    <button
+                      type="button"
+                      className="auth-text-button"
+                      onClick={() => {
+                        setPasswordless((value) => !value);
+                        setError('');
+                      }}
+                    >
+                      {passwordless
+                        ? 'Create a password instead'
+                        : 'Sign up with an email code instead (no password)'}
+                    </button>
+                  )}
                 </form>
-                {(googleEnabled || login) && (
-                  <div className="auth-divider">or</div>
-                )}
+                <div className="auth-divider">or</div>
                 {googleEnabled && (
                   <button
                     type="button"
                     className="auth-provider"
                     onClick={() => {
-                      const name = document.querySelector<HTMLInputElement>(
-                        'input[name="fullName"]',
-                      )?.value;
-                      if (name?.trim())
+                      if (name.trim())
                         sessionStorage.setItem(
                           'grace-pending-name',
                           name.trim(),
@@ -307,65 +514,29 @@ export function AuthForm({
                       className="auth-provider"
                       onClick={usePasskey}
                     >
-                      <KeyRound size={19} /> Sign in with a passkey
+                      <KeyRound size={19} /> Continue with a passkey
                     </button>
                     <p className="form-note">
                       Passkeys use your phone or computer’s screen lock. Add one
                       in Settings after you sign in.
                     </p>
+                    <button
+                      type="button"
+                      className="auth-text-button"
+                      onClick={() => navigate('password')}
+                    >
+                      Use a password instead
+                    </button>
                   </>
                 )}
               </>
             )}
-            {step === 'code' && (
-              <form className="form" onSubmit={verify}>
-                <fieldset className="otp-fieldset">
-                  <legend>Six-digit verification code</legend>
-                  <div className="otp-inputs">
-                    {code.map((digit, index) => (
-                      <input
-                        key={index}
-                        ref={(node) => {
-                          digits.current[index] = node;
-                        }}
-                        aria-label={`Verification code digit ${index + 1}`}
-                        inputMode="numeric"
-                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                        pattern="[0-9]"
-                        required
-                        value={digit}
-                        onChange={(event) => {
-                          if (!event.target.value)
-                            setCode((current) =>
-                              current.map((item, i) =>
-                                i === index ? '' : item,
-                              ),
-                            );
-                          else fillDigits(event.target.value, index);
-                        }}
-                        onPaste={(event) => {
-                          event.preventDefault();
-                          fillDigits(
-                            event.clipboardData.getData('text'),
-                            index,
-                          );
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Backspace' && !digit && index > 0)
-                            digits.current[index - 1]?.focus();
-                          if (event.key === 'ArrowLeft') {
-                            event.preventDefault();
-                            digits.current[Math.max(0, index - 1)]?.focus();
-                          }
-                          if (event.key === 'ArrowRight') {
-                            event.preventDefault();
-                            digits.current[Math.min(5, index + 1)]?.focus();
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                </fieldset>
+            {codeStep && (
+              <form
+                className="form"
+                onSubmit={step === 'code' ? verifySignInCode : verifySignup}
+              >
+                <CodeInputs code={code} setCode={setCode} />
                 <button
                   className="button"
                   disabled={pending || code.some((digit) => !digit)}
@@ -376,7 +547,11 @@ export function AuthForm({
                   type="button"
                   className="auth-text-button"
                   disabled={pending}
-                  onClick={() => void requestCode()}
+                  onClick={() =>
+                    void (step === 'code'
+                      ? requestCode()
+                      : startPasswordSignup())
+                  }
                 >
                   Send a new code
                 </button>
@@ -387,6 +562,30 @@ export function AuthForm({
                 >
                   Change email
                 </button>
+              </form>
+            )}
+            {step === 'password' && (
+              <form className="form" onSubmit={submitPassword}>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </label>
+                <PasswordInput
+                  id="auth-password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={setPassword}
+                />
+                <button className="button" disabled={pending}>
+                  {pending ? 'Signing in…' : 'Sign in with password'}
+                </button>
+                <Link href="/forgot-password">Forgot password?</Link>
               </form>
             )}
             {notice && (

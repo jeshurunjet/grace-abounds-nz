@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { auth } from '../../../../auth';
 import { signIdentityAssertion } from '../../../../lib/server/assertion';
+import { isSameOrigin } from '../../../../lib/server/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,8 @@ const FORWARDED_HEADERS = [
   'idempotency-key',
   'accept',
 ];
+/** Matches the API's own body limit. */
+const MAX_BODY_BYTES = 1_048_576;
 const RETURNED_HEADERS = ['content-type', 'etag', 'location', 'retry-after'];
 
 function error(
@@ -38,16 +41,16 @@ async function proxy(
   const requestId = crypto.randomUUID();
   const { path } = await params;
   const mutation = !['GET', 'HEAD'].includes(request.method);
-  if (mutation) {
-    const origin = request.headers.get('origin');
-    if (!origin || new URL(origin).host !== request.nextUrl.host)
-      return error(
-        403,
-        'CROSS_SITE_REQUEST',
-        'Request origin not allowed.',
-        requestId,
-      );
-  }
+  if (mutation && !isSameOrigin(request))
+    return error(
+      403,
+      'CROSS_SITE_REQUEST',
+      'Request origin not allowed.',
+      requestId,
+    );
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (declared > MAX_BODY_BYTES)
+    return error(413, 'TOO_LARGE', 'The request is too large.', requestId);
 
   const session = await auth();
   const headers = new Headers({ 'x-request-id': requestId });
@@ -58,8 +61,19 @@ async function proxy(
   if (session?.user?.id)
     headers.set(
       'authorization',
-      `Bearer ${await signIdentityAssertion(session.user.id, requestId)}`,
+      `Bearer ${await signIdentityAssertion(
+        {
+          userId: session.user.id,
+          sessionId: session.sessionId,
+          sessionVersion: session.sessionVersion,
+        },
+        requestId,
+      )}`,
     );
+
+  const body = mutation ? await request.text() : undefined;
+  if (body && body.length > MAX_BODY_BYTES)
+    return error(413, 'TOO_LARGE', 'The request is too large.', requestId);
 
   let upstream: Response;
   try {
@@ -68,7 +82,7 @@ async function proxy(
       {
         method: request.method,
         headers,
-        body: mutation ? await request.text() : undefined,
+        body,
         cache: 'no-store',
       },
     );

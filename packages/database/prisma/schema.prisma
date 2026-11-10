@@ -31,16 +31,23 @@ model User {
   name          String?
   image         String?
   bio           String        @default("")
+  phone         String        @default("")
   role          Role          @default(MEMBER)
   status        AccountStatus @default(ACTIVE)
   /// Incremented on every profile write; used for If-Match checks.
   version       Int           @default(1)
+  /// Argon2id hash. Only set after the email address has been verified.
+  passwordHash      String?
+  passwordUpdatedAt DateTime?
+  /// Incrementing this ends every existing session on the next request.
+  sessionVersion    Int       @default(1)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   accounts       Account[]
-  sessions       Session[]
+  sessions       UserSession[]
   authenticators Authenticator[]
+  challenges     AuthChallenge[]
   auditEvents    AuditEvent[]    @relation("AuditActor")
 }
 
@@ -67,18 +74,61 @@ model Account {
   @@index([userId])
 }
 
-model Session {
-  /// Stable id so a member can list and revoke individual sessions.
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+/// Server record of a signed-in browser. The JWT cookie carries its id (sid)
+/// and the user's sessionVersion (sv); both are checked on every protected
+/// request, so revocation takes effect immediately.
+model UserSession {
+  id              String    @id @default(cuid())
+  userId          String
+  /// User.sessionVersion when this session was created.
+  sessionVersion  Int
+  /// How the person signed in: password, email-code, google, passkey.
+  method          String
+  /// Short device description for the Settings list (no full user agent).
+  deviceLabel     String    @default("")
+  createdAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  /// Last real authentication (sign-in or re-authentication). Session
+  /// refreshes never move this; sensitive changes require it to be recent.
+  authenticatedAt DateTime  @default(now())
+  /// Absolute expiry; matches the cookie lifetime set at sign-in.
+  expiresAt       DateTime
+  revokedAt       DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([userId, revokedAt])
+}
+
+enum ChallengePurpose {
+  SIGNUP_VERIFY
+  PASSWORD_RESET
+  REAUTH
+}
+
+/// Six-digit codes for sign-up verification, password reset and
+/// re-authentication. Email-code sign-in uses Auth.js VerificationToken, so
+/// a code for one purpose can never be used for another.
+model AuthChallenge {
+  id                  String           @id @default(cuid())
+  purpose             ChallengePurpose
+  /// Normalized email the code was sent to.
+  email               String
+  userId              String?
+  /// HMAC-SHA256 with AUTH_CHALLENGE_SECRET, bound to purpose and email.
+  codeHash            String
+  /// Sign-up only: the password and name submitted with this request. They
+  /// become an account only when this exact challenge is verified.
+  pendingPasswordHash String?
+  pendingName         String?
+  attempts            Int              @default(0)
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([purpose, email, consumedAt])
 }
 
 /// Holds hashed six-digit email sign-in codes.
@@ -100,6 +150,7 @@ model Authenticator {
   credentialDeviceType String
   credentialBackedUp   Boolean
   transports           String?
+  createdAt            DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

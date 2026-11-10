@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation';
-// Accounts are passwordless (email code, Google or passkey).
+import Link from 'next/link';
+import { RecoveryForm } from '../components/recovery-form';
 export default function ResetPasswordPage() {
-  redirect('/login');
+  return (
+    <RecoveryForm
+      mode="reset"
+      footer={<Link href="/login">Return to sign in</Link>}
+    />
+  );
 }

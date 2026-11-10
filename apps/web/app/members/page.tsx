@@ -9,12 +9,12 @@ import { MemberCalendar } from '../components/member-calendar';
 import { SundayStatus } from '../components/activity-ui';
 import { Reveal } from '../components/reveal';
 import { useContent } from '../components/content-provider';
-import { profileById, profileByRole } from '../lib/profiles';
+import { accountProfile } from '../lib/profiles';
 
 export default function MembersPage() {
   const { content } = useContent();
   const { data } = useSession();
-  const member = profileById(data?.user?.profileId) ?? profileByRole('member');
+  const member = accountProfile(data?.user);
   const role = data?.user?.role ?? 'member';
   const notices = content.appointmentRequests
     .filter(

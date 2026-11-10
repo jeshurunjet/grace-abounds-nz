@@ -47,3 +47,43 @@ export async function api<T>(
     );
   return body;
 }
+
+/**
+ * Calls a same-origin account handler (/api/account/*): sign-up, password
+ * reset, re-authentication and password changes. Same error handling as api().
+ */
+export async function accountApi<T = { status: string }>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<{ data: T; status: number }> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/account${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      'NETWORK',
+      'Couldn’t reach the server. Check your connection and try again.',
+    );
+  }
+  const json = await response.json().catch(() => null);
+  if (!response.ok)
+    throw new ApiError(
+      response.status,
+      json?.error?.code ?? 'UNKNOWN',
+      json?.error?.message ?? 'Something went wrong. Please try again.',
+      json?.error?.fieldErrors,
+    );
+  return { data: json?.data as T, status: response.status };
+}
+
+/** A safe, human message for any thrown error. */
+export const errorMessage = (error: unknown) =>
+  error instanceof ApiError
+    ? error.message
+    : 'Something went wrong. Please try again.';

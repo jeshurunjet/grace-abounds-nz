@@ -1,1 +1,24 @@
-export default function TermsPage() { return <main className="policy-page"><div className="container prose"><p className="eyebrow">Legal</p><h1>Terms of Use</h1><p className="legal-draft">Draft placeholder — replace with approved legal text before launch.</p><h2>Website use</h2><p>This preview is provided for design and development. Content, schedules, contact details, giving information, and accounts are placeholders unless explicitly approved.</p><h2>Services</h2><p>No payment, booking, media-processing, or pastoral-care service is completed by this frontend preview.</p></div></main>; }
+export default function TermsPage() {
+  return (
+    <main className="policy-page">
+      <div className="container prose">
+        <p className="eyebrow">Legal</p>
+        <h1>Terms of Use</h1>
+        <p className="legal-draft">
+          Draft placeholder — replace with approved legal text before launch.
+        </p>
+        <h2>Website use</h2>
+        <p>
+          This preview is provided for design and development. Content,
+          schedules, contact details, giving information, and accounts are
+          placeholders unless explicitly approved.
+        </p>
+        <h2>Services</h2>
+        <p>
+          No payment, booking, media-processing, or pastoral-care service is
+          completed by this frontend preview.
+        </p>
+      </div>
+    </main>
+  );
+}

@@ -1,1 +1,24 @@
-export default function PrivacyPage() { return <main className="policy-page"><div className="container prose"><p className="eyebrow">Legal</p><h1>Privacy Policy</h1><p className="legal-draft">Draft placeholder — replace with approved legal text before launch.</p><h2>Information we collect</h2><p>We may collect information you submit through account, contact, event, giving, or prayer forms. This frontend preview does not transmit this information to a production database.</p><h2>How information will be used</h2><p>Approved production practices, retention periods, service providers, and contact details will be documented here before launch.</p></div></main>; }
+export default function PrivacyPage() {
+  return (
+    <main className="policy-page">
+      <div className="container prose">
+        <p className="eyebrow">Legal</p>
+        <h1>Privacy Policy</h1>
+        <p className="legal-draft">
+          Draft placeholder — replace with approved legal text before launch.
+        </p>
+        <h2>Information we collect</h2>
+        <p>
+          We may collect information you submit through account, contact, event,
+          giving, or prayer forms. This frontend preview does not transmit this
+          information to a production database.
+        </p>
+        <h2>How information will be used</h2>
+        <p>
+          Approved production practices, retention periods, service providers,
+          and contact details will be documented here before launch.
+        </p>
+      </div>
+    </main>
+  );
+}

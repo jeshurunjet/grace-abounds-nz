@@ -288,7 +288,7 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 | Phase | Status | Evidence / blocker |
 | --- | --- | --- |
-| 0 | Review complete; awaiting Codex checkpoint | Claude source inspection, 10 Nov 2026. Defaults confirmed. Findings and chosen session design below. Nothing installed, migrated or run. |
+| 0 | Source review accepted by Codex | Claude source inspection, 10 Nov 2026. Defaults confirmed. Findings and chosen session design below. Nothing installed, migrated or run. |
 | 1 | Draft exists; unverified and needs revision | `backend-phase-1` @ `544af29`. Revision plan below. No install/migration/runtime evidence. |
 | 2–6 | Not implemented | Main remains a frontend prototype. |
 
@@ -326,7 +326,25 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 **Owner setup:** Google client pending; Resend/domain verification pending; AWS storage pending; hosting pending. No secrets belong here.
 
-**Open decisions:** Codex/owner to accept the proposed Google linking policy (fix 3). Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
+**Open decisions:** Google linking policy accepted by owner (10 Nov). Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
+
+### Codex Phase 0 checkpoint — 10 November 2026
+
+**Verdict:** Phase 0 source review accepted; proceed to Phase 1 implementation using the confirmed defaults. This is approval of the implementation direction, not working-backend acceptance. No packages installed or runtime checks performed by Codex.
+
+**Evidence:** Installed `@auth/core 0.41.3` callback source has JWT paths for Credentials and WebAuthn; session source invokes `callbacks.jwt` on session reads. The existing API only checks account status and must add session ID/version/revocation/expiry checks. Source also confirms the draft limiter uses a read-then-update transaction. The durable `UserSession` plus JWT design is suitable, subject to integration tests.
+
+**Google recommendation:** Accept explicit linking from Settings after recent authentication; refuse email-match auto-linking. The owner accepted this policy on 10 November 2026. Implement the conservative behavior (no automatic linking) and test signed-in linking separately: Auth.js may link accounts during its OAuth callback, so enforce recent authentication and intended linking there, not only on the Settings button. Google-only existing accounts continue signing in by their already linked provider identity. Staff bootstrap uses email-code sign-in first. Use helpful collision guidance without exposing private account details.
+
+**Required implementation details:**
+- Create `UserSession` only after successful authentication; check that `sid` belongs to `sub`, its expiry/revocation and current `sessionVersion` at both boundaries. Never recreate a revoked session in a later JWT callback. Fail closed if validation cannot run. Sign-out revokes the current row. Keep authoritative expiry aligned with cookie lifetime and throttle last-seen writes.
+- Recent authentication needs a server-recorded proof time and an actual reauthentication operation. Ordinary session refresh must not advance it; linking/passkey/password actions must enforce it server-side.
+- Prevent signup pre-hijacking: verifying an email must not activate a password submitted by an earlier unverified requester. Bind password enrollment to the same verified signup transaction/challenge; reset/replace pending enrollment safely. Challenge consumption and password/session changes are atomic; reset and email-login challenges cannot be interchanged.
+- Test failed-password throttling as well as email-code/reset limits; keep password responses non-enumerating and rate-limit Argon2 work. Six-digit challenge hashes must resist offline enumeration (for example, keyed HMAC with a separate server secret); do not log proofs.
+- Apply the same final-Pastor serialization protocol to every role/status/deletion/operator mutation that can reduce active Pastor count. A shared advisory lock is clearer than assuming an arbitrary row lock protects a changing set.
+- Commit the generated initial migration and updated lockfile before Phase 1 review. The owner can run generation/install commands as agreed, but these artifacts must return to the branch. Run schema generation before typecheck; record the exact command used. Do not leave the first migration as a deployment-time invention.
+
+**Next checkpoint:** Review Phase 1 diff and evidence once implemented. No repeated Phase 0 audit needed. Keep the documentation safety stash for now; it need not block development and should only be removed after its contents are compared with committed docs.
 
 **Next instruction for Codex (paste into Codex):**
 
@@ -334,4 +352,4 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 **Next instruction for Claude (paste into Claude):**
 
-> Implement Phase 1 on `backend-phase-1` following the Phase 0 reconciliation section and any Codex notes in `docs/handoff/PROJECT-HANDOVER.md`. Add dependency changes first, then give me one setup command at a time. Do not merge, push or deploy. Update the same file at the end.
+> Implement Phase 1 on `backend-phase-1` following the Phase 0 reconciliation section and the Codex Phase 0 checkpoint notes in `docs/handoff/PROJECT-HANDOVER.md`. Add dependency changes first, then give me one setup command at a time. Do not merge, push or deploy. Update the same file at the end.

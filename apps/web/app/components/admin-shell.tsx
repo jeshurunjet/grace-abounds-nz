@@ -8,7 +8,7 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
     { href: '/members', label: 'Home', icon: '◈' },
     { href: '/members/messages', label: 'Messages', icon: '✉' },
     { href: '/members/gallery', label: 'Resource gallery', icon: '▧' },
-    { href: '/events', label: 'Events & calendar', icon: '□' },
+    { href: '/members/calendar', label: 'Events & calendar', icon: '□' },
   ];
   if (role === 'pastor' || role === 'admin')
     links.push(

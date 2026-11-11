@@ -55,7 +55,7 @@ describe('workspace navigation trial', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveAttribute('aria-controls', 'workspace-navigation');
     expect(toggle).toHaveAttribute('title', 'Expand sidebar');
-    expect(toggle.closest('header')).toHaveClass('workspace-topbar');
+    expect(toggle.closest('aside')).not.toBeNull();
     fireEvent.click(toggle);
     expect(document.documentElement.dataset.sidebar).toBe('expanded');
     expect(container.firstChild).not.toHaveClass('workspace-collapsed');

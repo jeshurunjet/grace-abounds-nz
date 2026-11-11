@@ -155,31 +155,14 @@ export function WorkspaceShell({
         <span>Menu</span>
       </button>
       <header className="workspace-topbar" inert={mobile && open}>
-        <div className="workspace-topbar-lead">
-          <button
-            type="button"
-            className="workspace-sidebar-toggle"
-            onClick={toggleSidebar}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-expanded={!collapsed}
-            aria-controls="workspace-navigation"
-          >
-            {collapsed ? (
-              <PanelLeftOpen size={18} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose size={18} aria-hidden="true" />
-            )}
-          </button>
-          <Link
-            href={homeHref}
-            className="workspace-topbar-title"
-            aria-label="Workspace home"
-          >
-            <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
-            <strong>Grace Abounds International</strong>
-          </Link>
-        </div>
+        <Link
+          href={homeHref}
+          className="workspace-topbar-title"
+          aria-label="Workspace home"
+        >
+          <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
+          <strong>Grace Abounds International</strong>
+        </Link>
         <div className="workspace-account-controls">
           {pathname !== homeHref && (
             <Link
@@ -243,6 +226,21 @@ export function WorkspaceShell({
       >
         <div className="workspace-brand">
           <Logo light href={homeHref} />
+          <button
+            type="button"
+            className="workspace-sidebar-toggle"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            aria-controls="workspace-navigation"
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} aria-hidden="true" />
+            )}
+          </button>
           <strong>{kind === 'Members' ? 'Member' : kind} workspace</strong>
           <button
             className="workspace-drawer-close icon-button"

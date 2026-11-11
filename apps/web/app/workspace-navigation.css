@@ -1,10 +1,13 @@
 /* Reversible navigation trial; shared by Member, Admin and Pastor workspaces. */
-/* Subtle desktop sidebar toggle at the left of the top bar. */
-.workspace-topbar-lead {
-  display: flex;
+/* Subtle desktop sidebar toggle at the top of the sidebar, beside the logo. */
+.workspace .workspace-brand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
+  column-gap: 0.5rem;
+}
+.workspace .workspace-brand > strong {
+  grid-column: 1 / -1;
 }
 .workspace .workspace-sidebar-toggle {
   display: inline-flex;
@@ -74,6 +77,9 @@
   }
   :root[data-sidebar='collapsed'] .workspace .workspace-brand {
     padding: 0 0 1rem;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    row-gap: 0.6rem;
   }
   :root[data-sidebar='collapsed'] .workspace .workspace-brand .brand {
     justify-content: center;
@@ -109,4 +115,9 @@
     min-height: 2.5rem;
     justify-content: center;
   }
+}
+/* On mobile the drawer's close button takes the toggle's place beside the logo. */
+.workspace .workspace-brand > .workspace-drawer-close {
+  grid-column: 2;
+  grid-row: 1;
 }

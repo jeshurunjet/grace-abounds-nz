@@ -5736,9 +5736,20 @@ body:has(.auth-page) .auth-page {
   gap: 1.5rem;
   align-items: stretch;
 }
-.member-overview-grid > .reveal,
-.member-overview-grid > .reveal > * {
+/* The left column holds the Sunday card and the calendar. The column fills
+   the row; the Sunday card keeps its natural height and the calendar takes
+   the rest. (Forcing every child to 100% pushed the calendar a full column
+   height down, over the sections below.) */
+.member-overview-grid > .reveal {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.member-overview-grid > .reveal > * {
+  flex: 0 0 auto;
+}
+.member-overview-grid > .reveal > .member-calendar {
+  flex: 1 1 auto;
 }
 .member-overview-side {
   display: grid;

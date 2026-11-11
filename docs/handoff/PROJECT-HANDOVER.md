@@ -569,6 +569,22 @@ Gold is never used as text on white (1.9:1). The dark sidebar and active gold te
 - `workspace-shell.test.tsx` updated for the default-collapsed state and topbar toggle; `pnpm test`, lint and build pass.
 - Owner visual acceptance, then Codex focused diff review. Phase 1 final checkpoint and the Phase 2 plan follow; no merge, push or deploy.
 
+### UI side quest — owner feedback and site-wide theme proposal (12 November 2026) — awaiting approval
+
+**Done after the step A approval (each commit separate and reversible):** `37db912` calendar overlap fix (hunk-only, owner experiment excluded); `bd4b4d5` desktop sidebar collapsed by default with remembered choice and no flash; `a8a8a08` workspace light palette (`workspace-theme.css`); after owner feedback, `d2754e7` toggle moved to the top of the sidebar beside the logo; `11fb690` "Events & calendar" opens `/members/calendar` inside the workspace (public `/events` unchanged). Pending: a screenshot of the leftover old colours in the Admin sidebar.
+
+**Owner decision (12 Nov):** apply a new theme to the whole website, public pages included, without keeping the old walnut/cream/olive scheme. Centralise colours so they are easy to edit.
+
+**Proposal**
+
+1. **One colour file.** New `apps/web/app/theme.css`, imported first, becomes the only place with colour values. It has two layers: a small raw palette (logo gold `#F2B31C`, gold hover `#E0A10C`, dark gold `#9A6A00`, dark amber `#7A4F00`, pale gold `#FDF0C2`/`#FFF8E1`, charcoal `#1F2328`, greys `#31363B`/`#596067`/`#858B91`/`#E3E3DF`/`#F6F6F4`, white, error `#B42318`, success `#1E7A4C`), and semantic tokens components use (page, surface, text, muted text, heading, accent, on-accent, link, border, control, focus, dark section, hero overlay, success, error). Existing token names (`--gold`, `--ink`, `--surface`, `--cream`, `--walnut`, `--maple`, …) become aliases, so the 748 existing `var()` uses keep working. The one dark-mode block lives there too.
+2. **Remove scattered colours.** The ~190 literal colours in `styles.css` (66 hex, 123 `rgba`) become tokens; translucent shades use `color-mix(in srgb, var(--token) N%, transparent)`. A small test fails if a colour literal appears in any stylesheet other than `theme.css`, which keeps it centralised. The Google logo colours in `forms.tsx` stay (brand-mandated).
+3. **New look, everywhere.** White/light-grey sections instead of cream/linen; charcoal headings and text; logo-gold buttons with dark labels; dark-amber links; dark sections and the footer in charcoal with white text and gold accents; photo heroes keep a neutral dark overlay for legible white text; olive, maple, wine and walnut retired. Dark mode becomes a neutral charcoal theme with the same gold. `workspace-theme.css` keeps only sidebar layout rules, with no colour values.
+4. **Two commits so review stays small:** (A) centralise with the _current_ colours, so there's no visual change and the review is mechanical; (B) change the palette values in `theme.css` only, which is the actual new theme.
+5. **Owner's uncommitted `styles.css` experiment** (walnut → slate/charcoal) is folded into commit A deliberately as the starting point, and superseded by the new palette in B.
+
+**Verification:** the 7 public pages and Member/Pastor/Admin workspaces in light and dark at 1440/1024/768/375 px; contrast table re-checked for text, buttons, links, focus and dark sections; `pnpm test`, lint and build; owner visual acceptance; Codex focused review. Then back to the Phase 1 final checkpoint and Phase 2. No merge, push or deploy.
+
 **Return to backend phases:** this side quest does not itself accept or merge Phase 1. Codex still needs to record its final review of credential-persistence fix `ca0a20b` and the latest evidence. Once that checkpoint and the UI side quest are accepted, prepare a concrete merge plan for the owner, then continue Phase 2 from the existing backend plan (CMS/database persistence and uploads). Do not reopen settled identity decisions or repeat successful provider setup.
 
 **Instruction to paste into Claude:**

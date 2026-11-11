@@ -1,5 +1,5 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
-import type { Adapter } from 'next-auth/adapters';
+import type { Adapter, AdapterAuthenticator } from 'next-auth/adapters';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import Passkey from 'next-auth/providers/passkey';
@@ -10,6 +10,7 @@ import {
   prisma,
   recordAudit,
   SESSION_MAX_AGE_SECONDS,
+  type Prisma,
 } from '@grace-abounds/database';
 import { randomInt } from 'node:crypto';
 import { emails, sendEmail } from './lib/server/email';
@@ -18,6 +19,9 @@ import { allow, CODE_MAX_AGE_SECONDS } from './lib/server/limits';
 import { authorizePassword } from './lib/server/password-signin';
 import {
   currentLink,
+  noteCreatedUser,
+  persistAuthenticator,
+  persistLinkedAccount,
   startSession,
   type PasswordProof,
 } from './lib/server/sessions';
@@ -72,9 +76,24 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET)
 const baseAdapter = PrismaAdapter(prisma);
 const adapter: Adapter = {
   ...baseAdapter,
-  createUser: (user) =>
-    baseAdapter.createUser!({ ...user, email: normalizeEmail(user.email) }),
+  async createUser(user) {
+    const created = await baseAdapter.createUser!({
+      ...user,
+      email: normalizeEmail(user.email),
+    });
+    noteCreatedUser(created.id);
+    return created;
+  },
   getUserByEmail: (email) => baseAdapter.getUserByEmail!(normalizeEmail(email)),
+  // Auth.js saves links and passkeys before the jwt callback runs, so the
+  // linking authority is checked at the write itself (see sessions.ts).
+  linkAccount: async (account) => {
+    await persistLinkedAccount(account as Prisma.AccountUncheckedCreateInput);
+  },
+  createAuthenticator: async (authenticator) =>
+    (await persistAuthenticator(
+      authenticator as Prisma.AuthenticatorUncheckedCreateInput,
+    )) as unknown as AdapterAuthenticator,
 };
 
 export const authConfig: NextAuthConfig = {

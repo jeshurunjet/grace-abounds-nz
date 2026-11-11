@@ -13,7 +13,7 @@ import {
   INTENT_COOKIE_NAME,
   isRecent,
   readIntent,
-  runLinked,
+  runAuthRequest,
   type IntentKind,
 } from '../../../../lib/server/sessions';
 
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         303,
       );
     }
-    const response = await handlers.GET(request);
+    const response = await runAuthRequest(null, () => handlers.GET(request));
     const location = response.headers.get('location') ?? '';
     if (
       response.status >= 300 &&
@@ -96,8 +96,8 @@ export async function GET(request: NextRequest) {
         303,
       );
     const response = link
-      ? await runLinked(link, () => handlers.GET(request))
-      : await handlers.GET(request);
+      ? await runAuthRequest(link, () => handlers.GET(request))
+      : await runAuthRequest(null, () => handlers.GET(request));
     return signedIn ? clearIntent(response) : response;
   }
 
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       );
   }
 
-  return handlers.GET(request);
+  return runAuthRequest(null, () => handlers.GET(request));
 }
 
 export async function POST(request: NextRequest) {
@@ -149,9 +149,9 @@ export async function POST(request: NextRequest) {
     // Registration runs in the verified linking context; sign-in never does.
     const response =
       action === 'register' && link
-        ? await runLinked(link, () => handlers.POST(forwarded))
-        : await handlers.POST(forwarded);
+        ? await runAuthRequest(link, () => handlers.POST(forwarded))
+        : await runAuthRequest(null, () => handlers.POST(forwarded));
     return action === 'register' ? clearIntent(response) : response;
   }
-  return handlers.POST(request);
+  return runAuthRequest(null, () => handlers.POST(request));
 }

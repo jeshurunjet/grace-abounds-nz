@@ -285,11 +285,13 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                       | Evidence / blocker                                                                                                                                                                                                                                        |
-| ----- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                                 | Source review, defaults confirmed, session design below.                                                                                                                                                                                                  |
-| 1     | Implemented; all Phase 1 exit evidence met locally; awaiting Codex re-review | `backend-phase-1`. After `1fabe30`: typecheck, ESLint + full Prettier check, build, 40 unit tests, 66 PostgreSQL tests pass; owner browser walkthrough passed; real Google OAuth passed (11 Nov); real Resend delivery with SPF/DKIM/DMARC pass (12 Nov). |
-| 2–6   | Not implemented                                                              | Main remains a frontend prototype.                                                                                                                                                                                                                        |
+| Phase | Status                                                                 | Evidence / blocker                                                                                                                                                                                             |
+| ----- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete — accepted by Codex                                           | Source review, defaults confirmed, session design below.                                                                                                                                                       |
+| 1     | Codex final finding fixed (`ca0a20b`); awaiting final Codex checkpoint | `backend-phase-1`. Credential writes now checked at persistence. 77 PostgreSQL tests and 40 unit tests pass; real Google and Resend accepted earlier. Final lint/build/browser re-check: see the last section. |
+| 2–6   | Not implemented                                                        | Main remains a frontend prototype.                                                                                                                                                                             |
+
+**How to read this section:** the sections below are a chronological record. Blockers, "pending", "not run" and next-instruction lines inside earlier sections are **historical**. The current state is the table above, and the current next instructions are only in the **last section** of this file.
 
 ### Phase 0 reconciliation — Claude, 10 November 2026
 
@@ -352,9 +354,11 @@ Focused findings to return to Claude while setup proceeds:
 
 Setup can proceed with version checks and dependency installation; these findings do not require another planning phase. Claude should fix concrete findings before Phase 1 acceptance and commit migration/lockfile plus exact test evidence. Database security tests use `pnpm test:db` and a dedicated disposable `_test` database; ordinary `pnpm test` skips them and must not be reported as their acceptance. Do not point destructive reset helpers at the development or production database.
 
-**Next action:** owner runs `node -v && pnpm -v && docker --version` and shares version output with Claude; Claude guides the remaining setup one command at a time, addresses findings above, updates live status here, and returns the verified Phase 1 diff for focused Codex review. No merge, push or deployment yet.
+**Next action (historical, 10 Nov):** owner runs `node -v && pnpm -v && docker --version` and shares version output with Claude; Claude guides the remaining setup one command at a time, addresses findings above, updates live status here, and returns the verified Phase 1 diff for focused Codex review. No merge, push or deployment yet.
 
 ### Phase 1 implementation — Claude, 10 November 2026
+
+_Historical record of the first implementation pass (10–11 Nov). "Not run"/"pending" items here were completed later; see the sections that follow._
 
 **Commits on `backend-phase-1` (none pushed):** `53ee7de` implementation · `c750922` Codex preliminary notes · `df3ef8d` owner-generated migration `20261110044618_phase1_identity` + `pnpm-lock.yaml` + test-helper move · `43c1cb5` Codex findings 1–3 · `3949f34` passkey body limit (the 43c1cb5 edit had not applied; caught by test) + acting-Pastor re-check inside the lock.
 
@@ -402,7 +406,7 @@ Route deviations from the planned table: sign-out-others is `POST /v1/me/session
 
 **Local setup facts (non-secret):** the Mac also runs a native PostgreSQL on `localhost:5432`, so the project's Docker database uses `POSTGRES_PORT=5433` (`.env` URLs updated by the owner; `.env.example` notes this). `.env` has `AUTH_URL`, `AUTH_TRUST_HOST=false`, `TRUSTED_PROXY_HOPS=0`, `AUTH_CHALLENGE_SECRET`, `TEST_DATABASE_URL`; the two placeholder secrets were replaced with random values by the owner's own command (values never shown to agents). Dev database `grace_abounds` and test database `grace_abounds_test` both at migration `20261110044618_phase1_identity`.
 
-**Blockers before Phase 1 acceptance**
+**Blockers before Phase 1 acceptance (historical, as of 12 Nov morning)**
 
 1. Codex re-review of `1f54ff3..HEAD` (security fixes `1fabe30`, formatting `14670a1`, provider evidence).
 
@@ -414,14 +418,6 @@ Carried to later phases (not Phase 1 blockers): staging/production OAuth origins
 
 **Open decisions:** none for Phase 1. Before Phase 4 confirm retention/access wording; before Phase 6 choose hosting/budget and approve final content.
 
-**Next instruction for Codex (paste into Codex):**
-
-> Re-review `backend-phase-1` from `1f54ff3` to HEAD against "Claude response to Codex Phase 1 review" and the Google/Resend evidence in `docs/handoff/PROJECT-HANDOVER.md`: confirm the two P1 fixes (per-user security lock + in-lock authority checks; password proof bound to session creation; fail-closed linking) and their deterministic tests, and that `14670a1` is formatting-only. Record a Phase 1 acceptance verdict or findings in this file. No merge, push or deploy.
-
-**Next instruction for Claude (paste into Claude):**
-
-> Read the latest Codex verdict in `docs/handoff/PROJECT-HANDOVER.md`. If Phase 1 is accepted, prepare the Phase 1 merge plan for my approval (no merge yet) and begin Phase 2 planning from its section; otherwise fix the findings with focused tests. Update the same file. No merge, push or deploy without my explicit approval.
-
 ### Codex Phase 1 source review — head `223aca5`, 10 November 2026
 
 **Verdict:** Changes requested before acceptance. Source review of the Phase 1 implementation and follow-up fixes is complete; the previous challenge serialization and streamed byte-limit findings are addressed. Migration and lockfile are committed. Recorded Mac test/browser evidence is acknowledged, not independently rerun by Codex. Real Google OAuth and Resend delivery remain pending.
@@ -432,7 +428,7 @@ Carried to later phases (not Phase 1 blockers): staging/production OAuth origins
 
 **Evidence correction:** `pnpm lint` is not fully passing: ESLint passes, but repository Prettier still reports ten baseline files. This is a mechanical cleanup and needs no new product decision. Claude may format only those ten files in a separate commit, then rerun the formatting check; no unrelated refactoring. Fix the malformed status/role row in the inventory and refresh stale pending browser-evidence cells too.
 
-**Next instruction for Claude:** Fix the two security findings above with focused deterministic regression tests, using the smallest shared concurrency mechanism. Reuse the existing test setup; do not repeat a general audit. Format the ten identified baseline files in a separate formatting-only commit and correct the handover inventory/status. Run relevant focused tests, then the required Phase 1 checks after the final code changes. Guide the owner through Google OAuth and Resend setup one step at a time and record real-provider evidence. Keep this as the sole handover. Do not merge, push or deploy; return the diff/evidence for Codex review.
+**Next instruction for Claude (historical, done in `1fabe30`/`14670a1`):** Fix the two security findings above with focused deterministic regression tests, using the smallest shared concurrency mechanism. Reuse the existing test setup; do not repeat a general audit. Format the ten identified baseline files in a separate formatting-only commit and correct the handover inventory/status. Run relevant focused tests, then the required Phase 1 checks after the final code changes. Guide the owner through Google OAuth and Resend setup one step at a time and record real-provider evidence. Keep this as the sole handover. Do not merge, push or deploy; return the diff/evidence for Codex review.
 
 ### Claude response to Codex Phase 1 review — 10 November 2026
 
@@ -456,7 +452,6 @@ Carried to later phases (not Phase 1 blockers): staging/production OAuth origins
 
 **Resend email — owner, 12 November 2026.** Non-secret setup: Resend team "graceaboundsintl" (church account); sending domain `mail.graceabounds.nz`, region Tokyo (`ap-northeast-1`; Resend states account data and logs stay in the US — note for the privacy policy); receiving off. DNS for `graceabounds.nz` is hosted at 1st Domains (`ns1/ns2.1stdomains.net.nz`); the zone previously held only the parking-page `A` and `www` `CNAME` records (no MX, no existing DMARC), which were left untouched. Added: `TXT resend._domainkey.mail` (DKIM public key), `CNAME rsend.mail → rsend-apne1.forge.rmta.net`, `CNAME send.mail → send.forge.rmta.net`, `TXT _dmarc "v=DMARC1; p=none;"` (monitoring only). Domain verified in Resend. API key "Grace Abounds – local development" created with **Sending access** restricted to `mail.graceabounds.nz`; the owner entered `RESEND_API_KEY` via a hidden prompt (Claude checked only its shape) and `EMAIL_FROM="Grace Abounds <no-reply@mail.graceabounds.nz>"`; dev server restarted. Owner results, all pass: email-code sign-in to a real inbox delivered from Grace Abounds and signed in (no `[dev email]` console output); password reset code delivered, new password set and used to sign in; Gmail "Show original" reported SPF, DKIM and DMARC PASS. Before launch: separate production key per environment, a monitored reply/support address, and DMARC tightening (`p=quarantine` with reporting) once delivery has been observed.
 
-
 ### Codex final Phase 1 re-review — 12 November 2026, head `e00aea1`
 
 **Verdict: one focused security fix still required before Phase 1 acceptance.** Both earlier password findings are resolved in source: password writes recheck authority under the shared security lock, and password login proof is bound to the hash/security epoch and checked during session creation. Deterministic regression tests cover both. The separate ten-file formatting commit was inspected; no functional change identified. Google and Resend local acceptance evidence above is acknowledged. Codex did not repeat installs, migrations or the recorded test/browser suite in this review.
@@ -468,9 +463,32 @@ Fix by guarding actual linking/registration persistence using the request-scoped
 Add deterministic adapter/callback-level tests that pause before persistence, complete reset or session revocation, then resume. Assert **no new linked Account/Authenticator**, not only no new UserSession; include valid recent linking as the success control. Existing tests only establish that the route supplies context and `startSession` fails closed, which misses earlier writes.
 
 Source ordering verified against the pinned upstream source:
+
 - https://github.com/nextauthjs/next-auth/blob/%40auth/core%400.41.3/packages/core/src/lib/actions/callback/index.ts (OAuth handleLoginOrRegister before JWT; WebAuthn createAuthenticator before JWT).
 - https://github.com/nextauthjs/next-auth/blob/%40auth/core%400.41.3/packages/core/src/lib/actions/callback/handle-login.ts (linkAccount persistence).
 
-**Current next instruction for Claude (supersedes earlier instructions):** Address only the credential-persistence finding above with focused regression coverage. Update this handover and rerun affected checks; request a final Codex checkpoint. No merge, push or deployment yet. Do not start Phase 2 or change the sidebar. The owner has requested planning only for a calmer Pastor/Admin sidebar; member navigation should remain unchanged, and any implementation awaits agreement on that plan.
+**Next instruction for Claude (historical, done in `ca0a20b`):** Address only the credential-persistence finding above with focused regression coverage. Update this handover and rerun affected checks; request a final Codex checkpoint. No merge, push or deployment yet. Do not start Phase 2 or change the sidebar. The owner has requested planning only for a calmer Pastor/Admin sidebar; member navigation should remain unchanged, and any implementation awaits agreement on that plan.
 
 **Documentation cleanup at next update:** label earlier provider-pending and old lint/test statements as historical, and point the live status/next instruction to this verdict, so older evidence cannot be mistaken for current blockers. Keep one handover file.
+
+### Claude response to Codex final re-review — 12 November 2026
+
+**Commit:** `ca0a20b` (on top of Codex's `93b2e39`). Nothing merged, pushed or deployed. Sidebar untouched (planning only); Phase 2 not started.
+
+**[P1] Linking authority checked at the credential write — fixed.** Confirmed in installed `@auth/core` 0.41.3 (`lib/actions/callback/index.js`, `handle-login.js`): `linkAccount` (OAuth with session, WebAuthn with session, new-user OAuth/WebAuthn) and `createAuthenticator` run before `callbacks.jwt`. The adapter in `apps/web/auth.ts` now overrides both:
+
+- `linkAccount` → `persistLinkedAccount`: inside a verified linking context it runs one transaction that takes `lockUserSecurity`, requires the credential's `userId` to equal the context user, and requires `checkSessionAuthority(requireRecent: true) === 'ok'` before `account.create`; otherwise `CredentialRefused` and nothing is written. Without a linking context the only allowed link is the first provider of a user created by `adapter.createUser` in the same request (brand-new Google sign-up); any other link is refused.
+- `createAuthenticator` → `persistAuthenticator`: same in-transaction check; never allowed without a linking context. If authority is lost between Auth.js's `linkAccount` (passkey `Account` row) and `createAuthenticator`, the passkey `Account` row is deleted as well, so no intermediate credential remains.
+- Every Auth.js handler call in the route wrapper now runs in a request-scoped context (`runAuthRequest`); the verified `link` is set only where the guard approved it. No DB lock is held during provider network calls (the lock is taken only in the short write transaction).
+
+**Regression tests:** `apps/web/lib/server/credential-persistence.test.ts` (11) drives the real adapter from `authConfig` in Auth.js order and asserts **no `Account`/`Authenticator` rows** remain: Google link paused before the write then session revoked → refused; reset transaction holding the user lock while the link waits behind it → refused; stale authentication → refused; credential for another user → refused; no context (inside and outside a request) → refused; passkey with session revoked before the first write → nothing saved; reset between the two passkey writes → both rows absent; passkey without context → refused. Success controls: valid recent linking saves the Google link; valid passkey registration saves both rows; new Google sign-up links to the user created in the same request (email normalized).
+
+**Checks after `ca0a20b`, owner's Mac:** `pnpm test:db` — 9 files, **77 passed**. `pnpm test` — 12 files / 40 passed (69 DB tests skipped as designed). ESLint clean for web, api, media-worker. `prettier --check .` flagged only this handover (Codex's unformatted addition), formatted in this update. Claude, linked VM: `tsc --noEmit` clean for web. Pending owner re-run: `pnpm lint && pnpm build`, and a browser re-check of new Google sign-up, Settings Google linking and passkey registration through the new write guard (results to be appended below).
+
+**Next instruction for Codex (paste into Codex):**
+
+> Final Phase 1 checkpoint on `backend-phase-1` at HEAD: review `ca0a20b` (credential-persistence fix and tests) against "Claude response to Codex final re-review" in `docs/handoff/PROJECT-HANDOVER.md`. Record a Phase 1 acceptance verdict or findings in this file. No merge, push or deploy.
+
+**Next instruction for Claude (paste into Claude):**
+
+> Read the latest Codex verdict at the end of `docs/handoff/PROJECT-HANDOVER.md`. If Phase 1 is accepted, draft the calmer Pastor/Admin sidebar plan (planning only, member navigation unchanged) and a Phase 1 merge plan for my approval; otherwise fix the findings with focused tests. Update the same file. No merge, push or deploy without my explicit approval.

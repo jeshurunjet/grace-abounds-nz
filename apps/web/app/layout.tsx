@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { AppChrome } from './components/app-chrome';
 import { Providers } from './components/providers';
 import './styles.css';
+import './workspace-navigation.css';
 
 const lora = localFont({
   variable: '--font-display',

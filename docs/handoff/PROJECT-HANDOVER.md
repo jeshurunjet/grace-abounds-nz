@@ -492,3 +492,11 @@ Source ordering verified against the pinned upstream source:
 **Next instruction for Claude (paste into Claude):**
 
 > Read the latest Codex verdict at the end of `docs/handoff/PROJECT-HANDOVER.md`. If Phase 1 is accepted, draft the calmer Pastor/Admin sidebar plan (planning only, member navigation unchanged) and a Phase 1 merge plan for my approval; otherwise fix the findings with focused tests. Update the same file. No merge, push or deploy without my explicit approval.
+
+### Navigation trial — Codex, 12 November 2026
+
+Owner approved implementation of the proposed navigation trial. Shared WorkspaceShell now has a desktop collapse/expand toggle for all three roles, accessible icon labels/native tooltips, a browser-local remembered preference, and the existing mobile drawer with focus/Escape behavior retained. Messages moved from the sidebar to a bottom-right shortcut (hidden on the Messages page and inert behind the mobile drawer); no fabricated unread count or new messaging backend. Home links now target the current role; workspace brand/title return there. A visible return link on public Events & calendar closes the navigation dead end. Other sidebar destinations and page layouts are unchanged.
+
+Styling is isolated in `apps/web/app/workspace-navigation.css`; the owner's pre-existing uncommitted `styles.css` edits were preserved and must not be included accidentally in this change. No backend/auth changes.
+
+Checks: 14 focused tests passed (workspace shell, header, role navigation), changed-source ESLint passed, whitespace check passed. Standard web typecheck was blocked by existing duplicate generated `.next/types/* 2.ts` declarations. A source typecheck excluding only those duplicate generated files passed (150 entries); generated files were not deleted. No browser visual acceptance or production build run; localhost:3000 was not running. Owner to preview desktop expanded/collapsed and mobile drawer on Pastor/Admin/Member, check floating-button placement and Events → Home, then decide whether Home layout needs further work. Backend Phase 1 acceptance review remains separate.

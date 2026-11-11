@@ -1,0 +1,99 @@
+/* Reversible navigation trial; shared by Member, Admin and Pastor workspaces. */
+.workspace .workspace-collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.8rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(245, 232, 206, 0.2);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.workspace > aside {
+  overflow-y: auto;
+}
+.workspace .workspace-content {
+  min-width: 0;
+  padding-bottom: 7rem;
+}
+.workspace-home-return,
+.workspace-calendar-return {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+.workspace-calendar-return {
+  margin-bottom: 1.5rem;
+}
+.workspace .workspace-message-fab {
+  position: fixed;
+  right: max(1.25rem, env(safe-area-inset-right));
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1.15rem;
+  border: 1px solid var(--gold);
+  border-radius: 2rem;
+  background: var(--dark-section);
+  color: var(--on-dark);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.18);
+}
+.workspace-message-fab:hover {
+  filter: brightness(1.15);
+}
+@media (min-width: 901px) {
+  .workspace.workspace-collapsed > aside {
+    width: 5rem;
+    flex-basis: 5rem;
+    padding-inline: 0.6rem;
+  }
+  .workspace.workspace-collapsed .workspace-topbar {
+    left: 5rem;
+  }
+  .workspace.workspace-collapsed .workspace-brand {
+    padding: 0 0 1rem;
+  }
+  .workspace.workspace-collapsed .workspace-brand .brand {
+    justify-content: center;
+  }
+  .workspace.workspace-collapsed .workspace-brand .brand > span,
+  .workspace.workspace-collapsed .workspace-brand > strong,
+  .workspace.workspace-collapsed .workspace-link-label,
+  .workspace.workspace-collapsed .workspace-nav-caption,
+  .workspace.workspace-collapsed .workspace-collapse-toggle > span {
+    display: none;
+  }
+  .workspace.workspace-collapsed aside nav a,
+  .workspace.workspace-collapsed .workspace-collapse-toggle {
+    justify-content: center;
+  }
+}
+@media (max-width: 900px) {
+  .workspace .workspace-collapse-toggle {
+    display: none;
+  }
+  .workspace .workspace-message-fab {
+    padding: 0.85rem;
+  }
+  .workspace .workspace-message-fab > span {
+    display: none;
+  }
+  .workspace .workspace-topbar .workspace-account-controls {
+    gap: 0.4rem;
+  }
+  .workspace .workspace-home-return > span {
+    display: none;
+  }
+  .workspace .workspace-home-return {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    justify-content: center;
+  }
+}

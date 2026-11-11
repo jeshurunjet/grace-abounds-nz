@@ -2,7 +2,10 @@
 import {
   Home,
   Globe,
-  Mail,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ArrowLeft,
   FolderOpen,
   CalendarDays,
   FilePenLine,
@@ -22,7 +25,7 @@ import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
 import Image from 'next/image';
 import { accountProfile } from '../lib/profiles';
-import { isRouteActive } from '../lib/role-navigation';
+import { getRoleNavigation, isRouteActive } from '../lib/role-navigation';
 
 export type WorkspaceLink = { href: string; label: string; icon?: string };
 export function WorkspaceShell({
@@ -35,6 +38,7 @@ export function WorkspaceShell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -45,7 +49,26 @@ export function WorkspaceShell({
   const role =
     data?.user?.role ??
     (kind === 'Admin' ? 'admin' : kind === 'Pastor' ? 'pastor' : 'member');
+  const homeHref = getRoleNavigation(role).workspaceHref;
   const profile = accountProfile({ ...data?.user, role });
+  useEffect(() => {
+    try {
+      setCollapsed(
+        window.localStorage.getItem('grace-sidebar-collapsed') === 'true',
+      );
+    } catch {
+      /* Navigation still works when browser storage is unavailable. */
+    }
+  }, []);
+  function toggleSidebar() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      window.localStorage.setItem('grace-sidebar-collapsed', String(next));
+    } catch {
+      /* Optional preference only. */
+    }
+  }
   useEffect(() => {
     setOpen(false);
     setAccountOpen(false);
@@ -106,7 +129,7 @@ export function WorkspaceShell({
     };
   }, [accountOpen]);
   return (
-    <div className="workspace">
+    <div className={`workspace${collapsed ? ' workspace-collapsed' : ''}`}>
       <button
         ref={menuButton}
         className="workspace-menu"
@@ -119,11 +142,25 @@ export function WorkspaceShell({
         <span>Menu</span>
       </button>
       <header className="workspace-topbar" inert={mobile && open}>
-        <div className="workspace-topbar-title">
+        <Link
+          href={homeHref}
+          className="workspace-topbar-title"
+          aria-label="Workspace home"
+        >
           <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
           <strong>Grace Abounds International</strong>
-        </div>
+        </Link>
         <div className="workspace-account-controls">
+          {pathname !== homeHref && (
+            <Link
+              href={homeHref}
+              aria-label="Back to home"
+              className="workspace-home-return"
+            >
+              <ArrowLeft size={17} aria-hidden="true" />
+              <span>Back to home</span>
+            </Link>
+          )}
           <Link href="/" className="workspace-view-site">
             View website
           </Link>
@@ -175,7 +212,7 @@ export function WorkspaceShell({
         className={open ? 'open' : ''}
       >
         <div className="workspace-brand">
-          <Logo light />
+          <Logo light href={homeHref} />
           <strong>{kind === 'Members' ? 'Member' : kind} workspace</strong>
           <button
             className="workspace-drawer-close icon-button"
@@ -185,52 +222,84 @@ export function WorkspaceShell({
             <X size={20} />
           </button>
         </div>
-        <nav aria-label="Workspace navigation">
-          {links.map((link) => {
-            const active =
-              link.href === '/members'
-                ? ['/members', '/admin', '/pastor'].includes(pathname)
-                : isRouteActive(pathname, link.href);
-            const Icon =
-              (
-                {
-                  'Main website': Globe,
-                  Home,
-                  Messages: Mail,
-                  'Resource gallery': FolderOpen,
-                  'Events & calendar': CalendarDays,
-                  'Website content': FilePenLine,
-                  'Manage events': CalendarDays,
-                  'Manage sermons': Video,
-                  'Members & roles': Users,
-                  'Member activity': Users,
-                  'Pastoral care': Heart,
-                  Settings,
-                  Help: CircleHelp,
-                } as Record<string, typeof Home>
-              )[link.label] ?? Home;
-            return (
-              <Fragment key={link.href}>
-                {link.href === '/admin/cms' && (
-                  <p className="workspace-nav-caption">Manage</p>
-                )}
-                <Link
-                  href={link.href}
-                  key={link.href}
-                  onClick={() => setOpen(false)}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <Icon size={19} aria-hidden="true" />
-                  {link.label}
-                </Link>
-              </Fragment>
-            );
-          })}
+        <button
+          className="workspace-collapse-toggle"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          aria-controls="workspace-navigation"
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={20} />
+          ) : (
+            <PanelLeftClose size={20} />
+          )}
+          <span>Collapse sidebar</span>
+        </button>
+        <nav id="workspace-navigation" aria-label="Workspace navigation">
+          {links
+            .filter((link) => link.href !== '/members/messages')
+            .map((link) => {
+              const href = link.label === 'Home' ? homeHref : link.href;
+              const active =
+                link.label === 'Home'
+                  ? ['/members', '/admin', '/pastor'].includes(pathname)
+                  : isRouteActive(pathname, link.href);
+              const Icon =
+                (
+                  {
+                    'Main website': Globe,
+                    Home,
+                    Messages: MessageCircle,
+                    'Resource gallery': FolderOpen,
+                    'Events & calendar': CalendarDays,
+                    'Website content': FilePenLine,
+                    'Manage events': CalendarDays,
+                    'Activities & calendar': CalendarDays,
+                    'Manage sermons': Video,
+                    'Members & roles': Users,
+                    'Member activity': Users,
+                    'Pastoral care': Heart,
+                    Settings,
+                    Help: CircleHelp,
+                  } as Record<string, typeof Home>
+                )[link.label] ?? Home;
+              return (
+                <Fragment key={link.href}>
+                  {link.href === '/admin/cms' && (
+                    <p className="workspace-nav-caption">Manage</p>
+                  )}
+                  <Link
+                    href={href}
+                    aria-label={link.label}
+                    title={link.label}
+                    key={link.href}
+                    onClick={() => setOpen(false)}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <Icon size={19} aria-hidden="true" />
+                    <span className="workspace-link-label">{link.label}</span>
+                  </Link>
+                </Fragment>
+              );
+            })}
         </nav>
       </aside>
       <main inert={mobile && open} className="workspace-content">
         {children}
       </main>
+      {pathname !== '/members/messages' && (
+        <Link
+          href="/members/messages"
+          className="workspace-message-fab"
+          aria-label="Open messages"
+          title="Messages"
+          inert={mobile && open}
+        >
+          <MessageCircle size={23} aria-hidden="true" />
+          <span>Messages</span>
+        </Link>
+      )}
     </div>
   );
 }

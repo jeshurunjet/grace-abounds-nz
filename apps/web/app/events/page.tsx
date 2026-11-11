@@ -2,6 +2,7 @@ import { PublicEventCalendar } from '../components/public-event-calendar';
 import type { Metadata } from 'next';
 import { EventGrid } from '../components/content-cards';
 import { PageHero } from '../components/page-hero';
+import { WorkspaceReturn } from '../components/workspace-return';
 import { SundayStatus } from '../components/activity-ui';
 export const metadata: Metadata = { title: 'Events' };
 export default function EventsPage() {
@@ -12,6 +13,7 @@ export default function EventsPage() {
       </PageHero>
       <section className="section">
         <div className="container">
+          <WorkspaceReturn />
           <SundayStatus />
           <PublicEventCalendar />
           <h2>Upcoming gatherings</h2>

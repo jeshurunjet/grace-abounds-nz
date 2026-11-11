@@ -1,0 +1,103 @@
+/*
+ * Workspace light palette trial (Member, Pastor and Admin shells only).
+ * Matched to the gold in public/brand/logo.png. Scoped to light mode inside
+ * .workspace, so the public website and dark mode are unchanged. Delete this
+ * file (and its import in layout.tsx) to revert.
+ *
+ * Contrast (WCAG): charcoal on white 15.8, on page 14.6; secondary 6.4/5.9;
+ * charcoal on gold button 8.5 (hover 7.0); active nav text 13.9; active bar
+ * 4.7; dark-amber accents 7.1/6.6; control outlines 3.4/3.2. Gold is never
+ * used as text on white (1.9).
+ */
+:root:not([data-theme='dark']) .workspace {
+  --surface: #f6f6f4;
+  --surface-raised: #ffffff;
+  --ink: #1f2328;
+  --ink-strong: #1f2328;
+  --ink-mid: #31363b;
+  --ink-soft: #596067;
+  --line: #e3e3df;
+  --gold: #f2b31c;
+  --on-gold: #1f2328;
+  --maple: #7a4f00;
+  --wine: #1f2328;
+  --olive: #596067;
+  --dark-section: #1f2328;
+  --on-dark: #ffffff;
+  --ws-gold-hover: #e0a10c;
+  --ws-active: #fdf0c2;
+  --ws-active-bar: #9a6a00;
+  --ws-highlight: #fff8e1;
+  --ws-control-line: #858b91;
+}
+
+/* Sidebar: light surface instead of the large dark panel. */
+:root:not([data-theme='dark']) .workspace > aside {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
+}
+:root:not([data-theme='dark']) .workspace-brand .brand strong {
+  color: var(--ink);
+}
+:root:not([data-theme='dark']) .workspace-brand > strong,
+:root:not([data-theme='dark']) .workspace-nav-caption {
+  color: var(--ink-soft);
+}
+:root:not([data-theme='dark']) .workspace aside nav a {
+  color: var(--ink-mid);
+}
+:root:not([data-theme='dark']) .workspace aside nav a:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+:root:not([data-theme='dark']) .workspace aside nav a[aria-current='page'] {
+  background: var(--ws-active);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--ws-active-bar);
+}
+:root:not([data-theme='dark']) .workspace-user {
+  border-top-color: var(--line);
+}
+:root:not([data-theme='dark']) .workspace-user > a {
+  color: var(--ink);
+}
+:root:not([data-theme='dark']) .workspace-user small,
+:root:not([data-theme='dark']) .workspace-user button {
+  color: var(--ink-soft);
+}
+
+/* Primary actions: logo gold with a dark label, also on hover. */
+:root:not([data-theme='dark']) .workspace .button:hover {
+  background: var(--ws-gold-hover);
+  color: var(--on-gold);
+}
+:root:not([data-theme='dark']) .workspace .button-outline:hover {
+  background: var(--ws-highlight);
+}
+
+/* Restrained yellow highlights. */
+:root:not([data-theme='dark'])
+  .workspace
+  .pastor-calendar-grid
+  button.selected {
+  border-color: var(--ws-active-bar);
+  background: var(--ws-highlight);
+}
+
+/* Inline text links and form controls. */
+:root:not([data-theme='dark']) .workspace-content p a:not([class]) {
+  color: var(--maple);
+  text-decoration: underline;
+}
+:root:not([data-theme='dark'])
+  .workspace
+  :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
+  border-color: var(--ws-control-line);
+}
+
+/* Visible keyboard focus everywhere in the workspace. */
+:root:not([data-theme='dark']) .workspace :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

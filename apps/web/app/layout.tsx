@@ -5,6 +5,7 @@ import { AppChrome } from './components/app-chrome';
 import { Providers } from './components/providers';
 import './styles.css';
 import './workspace-navigation.css';
+import './workspace-theme.css';
 
 const lora = localFont({
   variable: '--font-display',

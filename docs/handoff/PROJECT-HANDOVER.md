@@ -500,3 +500,77 @@ Owner approved implementation of the proposed navigation trial. Shared Workspace
 Styling is isolated in `apps/web/app/workspace-navigation.css`; the owner's pre-existing uncommitted `styles.css` edits were preserved and must not be included accidentally in this change. No backend/auth changes.
 
 Checks: 14 focused tests passed (workspace shell, header, role navigation), changed-source ESLint passed, whitespace check passed. Standard web typecheck was blocked by existing duplicate generated `.next/types/* 2.ts` declarations. A source typecheck excluding only those duplicate generated files passed (150 entries); generated files were not deleted. No browser visual acceptance or production build run; localhost:3000 was not running. Owner to preview desktop expanded/collapsed and mobile drawer on Pastor/Admin/Member, check floating-button placement and Events → Home, then decide whether Home layout needs further work. Backend Phase 1 acceptance review remains separate.
+
+### UI side quest — agreed brief, 12 November 2026
+
+This brief supersedes earlier sidebar suggestions. Complete a focused plan first; the owner has not yet approved the final palette or implementation of these refinements. Existing navigation trial `f18bc04` remains the baseline. Backend phases are paused for this small UI checkpoint; no backend redesign is needed.
+
+**Purpose:** make Pastor/Admin workspaces calmer, preserve easy navigation for every role, and fix the reported Home calendar overlap. Keep the member experience familiar. No new features, dependencies, messaging backend or broad redesign.
+
+**Scope and decisions**
+
+1. Desktop sidebar starts fully collapsed to its icon rail when no saved preference exists; retain labels through accessible names and tooltips. Remember an explicit expand/collapse choice across navigation and login; do not reset an existing preference on every login. Replace the prominent collapse control with a subtle top-bar panel icon, clear focus state, tooltip and accessible expanded state. Mobile keeps its closed drawer, Escape/focus handling and accessible opener. Home remains reachable in both modes.
+2. Retain the floating bottom-right Messages shortcut and the Events/calendar return link. Verify safe-area spacing and no obstruction of form actions, calendar controls, dialogs or the mobile drawer. Do not invent unread counts.
+3. Workspace light theme must match the **actual yellow logo**. Inspect the logo and current theme tokens first. Propose neutral white/light-grey surfaces, charcoal text, logo-yellow primary actions with dark labels, pale-yellow active navigation and restrained yellow highlights. Reduce large brown/dark surfaces and pervasive cream in light mode. Do not use olive as the primary accent. Do not use bright yellow body/link text on white. Verify text, focus, selected, hover, disabled and error states with appropriate contrast. Semantic errors/success need not be yellow.
+4. Trial palette applies to workspaces (including shared member workspace surfaces), not a recolouring of the public website. Preserve public brand styling and intentional dark mode; ensure explicit light/dark/system settings still work. Avoid a global token override that accidentally changes the public pages. Prefer scoped workspace tokens/styles and reuse existing components.
+5. Diagnose the Pastor Home calendar position/overlap from the actual rendered screen. Identify the precise route, component and CSS rule; inspect the relevant grid/flex layout, fixed/sticky positioning, offsets, intrinsic sizing and overflow. Fix the cause, not arbitrary negative margins or fixed heights. Inspect staff CMS only if it shares the faulty layout; do not conflate `/pastor` Home with `/admin/cms` or redesign unrelated pages.
+
+**Preserve current work:** `apps/web/app/styles.css` has owner colour experiments already uncommitted. Inspect that diff and build on or isolate it deliberately. Do not discard, overwrite or silently include unrelated changes in a commit. Do not read or alter secrets. Keep auth/API/database changes out of the UI side quest.
+
+**Claude step A — plan and diagnose only**
+
+Read this section and relevant source/diffs, avoiding another broad audit. Use the owner's running app for focused visual inspection when available; if the exact broken screen cannot be reproduced, request its route and viewport/screenshot before guessing. Return one concise proposal: exact sidebar interaction, a small palette swatch/token table sampled against the real logo, calendar root cause with affected files, and focused acceptance checks. Record it in this same handover. Wait for the owner's approval of that concrete proposal before changing UI code. Do not create another plan/backup file.
+
+**Claude step B — only after proposal approval**
+
+Implement the smallest reversible patch, separating the calendar correction from theme/navigation changes where practical. Verify Pastor/Admin Home, member Home, public Events → role Home, staff CMS if affected, Messages shortcut, expanded/collapsed desktop navigation, mobile drawer and light/dark/system modes. Check representative desktop, tablet and narrow mobile widths; no overlapping sections or horizontal overflow; keyboard navigation, tooltips/focus and dialog stacking remain usable. Keep meaningful navigation regressions; run affected tests and source checks. Record any generated-type baseline problem honestly instead of deleting unknown build files. Record exact evidence and limitations; screenshots alone do not prove functional navigation. Owner visually accepts the trial, then Codex performs a focused diff review. No merge, push or deployment without existing project approval rules.
+
+### UI side quest — step A proposal (Claude, 12 November 2026) — awaiting owner approval
+
+Source/diff inspection only; no UI code changed. Baseline `f18bc04`. Owner's uncommitted `styles.css` experiment (walnut → slate/charcoal tokens, 73 lines; it also affects public pages) is left untouched and unstaged; nothing below depends on it.
+
+**1. Sidebar (files: `components/workspace-shell.tsx`, `workspace-navigation.css`, the existing pre-hydration theme script in `layout.tsx`).**
+
+- No saved preference → desktop starts collapsed (icon rail). Saved `grace-sidebar-collapsed` = `true`/`false` is honoured; it is never cleared on sign-in/out, so a user's explicit choice persists. The existing inline theme script also sets `data-sidebar` on `<html>` before paint, so neither default nor saved state flashes.
+- The large in-sidebar "Collapse sidebar" button is removed. A subtle 36 px icon-only button sits at the left of the desktop top bar (`PanelLeftOpen`/`PanelLeftClose`, 18 px): no border at rest, light hover tint, 2 px charcoal focus ring, `title` tooltip, `aria-label` "Expand/Collapse sidebar", `aria-expanded`, `aria-controls="workspace-navigation"`. Hidden at ≤900 px, where the existing Menu drawer (Escape, scrim, focus return, `inert`) is unchanged.
+- Collapsed rail keeps icon links with accessible names and tooltips; Home stays the first item; Events → role Home link, "Back to home", floating Messages button and safe-area spacing unchanged.
+
+**2. Workspace light palette (new `apps/web/app/workspace-theme.css`, imported beside `workspace-navigation.css`).** Scoped to `:root:not([data-theme='dark']) .workspace` (Member, Pastor and Admin shells). It overrides existing tokens only inside workspaces, so public pages and dark mode are untouched; deleting the file reverts it. Logo sampled from `public/brand/logo.png`: metallic gold, face median `#FCBA1A`, mid-tone `#E79104`; the current `--gold` `#F3B000` is already within 1.1:1 of the logo.
+
+| Role                                     | Value                                                         | Contrast (WCAG)             |
+| ---------------------------------------- | ------------------------------------------------------------- | --------------------------- |
+| Page background                          | `#F6F6F4` light grey                                          | —                           |
+| Cards, sidebar, top bar                  | `#FFFFFF` + `#E3E3DF` hairline                                | —                           |
+| Body/heading text                        | charcoal `#1F2328`                                            | 15.8 on white, 14.6 on page |
+| Secondary text                           | `#596067`                                                     | 6.4 / 5.9                   |
+| Primary button                           | logo gold `#F2B31C`, label `#1F2328`; hover `#E0A10C`         | 8.5 / 7.0                   |
+| Active nav item                          | pale yellow `#FDF0C2`, charcoal text, 3 px `#9A6A00` left bar | 13.9 text; bar 4.7 vs white |
+| Highlights (selected/today day, notices) | `#FFF8E1`                                                     | —                           |
+| Links in workspace                       | dark amber `#7A4F00`                                          | 7.1 / 6.6                   |
+| Input/control outlines                   | `#858B91`                                                     | 3.4 / 3.2 (≥3:1 non-text)   |
+| Focus ring                               | 2 px `#1F2328`, 2 px offset                                   | 15.8                        |
+| Error / success                          | `#B42318` / `#1E7A4C`                                         | 6.6 / 5.3                   |
+| Floating Messages button                 | charcoal `#1F2328`, white label, gold border                  | 15.8                        |
+
+Gold is never used as text on white (1.9:1). The dark sidebar and active gold text become light; olive is not used as an accent.
+
+**3. Pastor Home calendar overlap — root cause.** Route `/pastor` re-exports `app/members/page.tsx` (Member Home, same layout; no other page uses it). The left column is one `<Reveal>` containing `<SundayStatus />` and `<MemberCalendar />`. `styles.css` (≈ line 5743) sets `.member-overview-grid > .reveal > * { height: 100% }`. That rule dates from `032aa0b`, when the column held only the calendar. `718d119` added the Sunday card to the same column, so **both** children are forced to the full column height: the Sunday card stretches tall and the calendar starts a full column-height lower, overflowing the grid row onto the "Staff shortcuts" panel and sections below. `.member-calendar { min-height: 35rem }` and `.sunday-status { margin: 1rem 0 }` add to it. `/admin/cms` does not share this layout.
+
+- **Fix (source rule, no magic numbers):** make that column a flex column (`display:flex; flex-direction:column`), drop `height:100%` from its children, and let the calendar take the remaining space (`flex:1 1 auto`). It's a one-rule change in `styles.css`, committed **hunk-only** (staged with a patch) so the owner's colour experiment stays unstaged. Separate commit from palette/navigation.
+- To confirm against the rendered screen before changing code: the owner sends one screenshot of `/pastor` at the width where it occurs. Expected appearance: tall, mostly empty "This Sunday" card with the calendar sliding over "Staff shortcuts".
+
+**Step B acceptance checks (after approval).** Three commits: calendar, navigation, palette. Then:
+
+- Pastor, Admin and Member Home at 1440, 1024, 768 and 375 px: no overlap or horizontal scroll.
+- Desktop: default collapsed with no saved preference; expanded choice survives reload and sign-out/in; toggle reachable by Tab with tooltip and `aria-expanded`.
+- Mobile: drawer opens/closes with Escape, focus returns, page inert behind it.
+- Events → role Home, "Back to home" and the Messages button don't cover form actions, calendar controls or dialogs.
+- Light/dark/system all switch correctly; public Home, Events and Give unchanged in light and dark.
+- `workspace-shell.test.tsx` updated for the default-collapsed state and topbar toggle; `pnpm test`, lint and build pass.
+- Owner visual acceptance, then Codex focused diff review. Phase 1 final checkpoint and the Phase 2 plan follow; no merge, push or deploy.
+
+**Return to backend phases:** this side quest does not itself accept or merge Phase 1. Codex still needs to record its final review of credential-persistence fix `ca0a20b` and the latest evidence. Once that checkpoint and the UI side quest are accepted, prepare a concrete merge plan for the owner, then continue Phase 2 from the existing backend plan (CMS/database persistence and uploads). Do not reopen settled identity decisions or repeat successful provider setup.
+
+**Instruction to paste into Claude:**
+
+> Read the latest "UI side quest — agreed brief" in `docs/handoff/PROJECT-HANDOVER.md`. Start step A only: inspect the existing navigation trial, preserve my uncommitted colour experiments, diagnose the Pastor Home calendar overlap and propose a subtle sidebar control plus a yellow-logo-matched neutral light workspace palette. Desktop defaults collapsed only when no preference exists; preserve the user's choice and the mobile drawer. Keep public-site branding and dark mode intact. Record one concise proposal and verification plan in the same handover and wait for my approval before implementation. After approval, follow step B, then return to the existing backend phases through the pending final Phase 1 checkpoint. No new handover files, backend redesign, merge, push or deployment.

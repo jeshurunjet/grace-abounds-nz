@@ -60,7 +60,9 @@ export default function GalleryPage() {
             <a
               className="file-card"
               key={item.title}
-              style={{ '--file-color': '#B95428' } as CSSProperties}
+              style={
+                { '--file-color': 'var(--palette-maple)' } as CSSProperties
+              }
               href={
                 item.url.startsWith('https://') ||
                 (item.url.startsWith('/') && !item.url.startsWith('//'))

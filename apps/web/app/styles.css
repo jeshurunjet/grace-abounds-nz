@@ -1,20 +1,3 @@
-:root {
-  --gold-light: #f7c840;
-  --charcoal-mid: #4a3b34;
-  --charcoal-soft: #7a6a62;
-  --gold: #f3b000;
-  --maple: #b95428;
-  --wine: #71352f;
-  --olive: #6f713f;
-  --walnut: #3c2c25;
-  --cream: #f5e8ce;
-  --linen: #fff9ed;
-  --charcoal: #211c19;
-  --muted: #705f56;
-  --border: rgba(60, 44, 37, 0.14);
-  --shadow: 0 12px 40px rgba(60, 44, 37, 0.1);
-  --radius: 1.25rem;
-}
 * {
   box-sizing: border-box;
 }
@@ -53,12 +36,12 @@ blockquote {
 }
 h2 {
   font-size: clamp(2rem, 5vw, 3.4rem);
-  color: var(--walnut);
+  color: var(--ink);
   margin-bottom: 1rem;
 }
 h3 {
   font-size: 1.35rem;
-  color: var(--walnut);
+  color: var(--ink);
   margin-bottom: 0.5rem;
 }
 p {
@@ -94,7 +77,7 @@ p {
   position: fixed;
   inset: 0 0 auto;
   z-index: 50;
-  background: rgba(255, 249, 237, 0.88);
+  background: color-mix(in srgb, var(--palette-linen) 88%, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid transparent;
   transition:
@@ -103,9 +86,14 @@ p {
     box-shadow 0.3s ease;
 }
 .site-header.is-scrolled {
-  background: rgba(255, 249, 237, 0.97);
-  border-color: rgba(60, 44, 37, 0.12);
-  box-shadow: 0 2px 20px rgba(60, 44, 37, 0.08);
+  background: color-mix(in srgb, var(--palette-linen) 97%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--palette-charcoal-ink) 12%,
+    transparent
+  );
+  box-shadow: 0 2px 20px
+    color-mix(in srgb, var(--palette-charcoal-ink) 8%, transparent);
 }
 .nav {
   height: 4rem;
@@ -131,7 +119,7 @@ p {
 }
 .brand strong {
   font: 600 1.05rem var(--font-display);
-  color: var(--walnut);
+  color: var(--ink);
 }
 .brand strong.light {
   color: var(--cream);
@@ -181,9 +169,10 @@ p {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-raised, var(--cream));
-  color: var(--ink, var(--walnut));
+  color: var(--ink, var(--charcoal));
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 4px
+    color-mix(in srgb, var(--palette-black) 12%, transparent);
 }
 .public-account > button img {
   width: 2.25rem;
@@ -248,7 +237,7 @@ p {
   display: block;
   width: 1.45rem;
   height: 2px;
-  background: var(--walnut);
+  background: var(--ink);
   margin: 4px;
   transition:
     transform 0.2s ease,
@@ -272,7 +261,7 @@ p {
   border: 0;
   border-radius: 999px;
   background: var(--gold);
-  color: var(--walnut);
+  color: var(--on-gold);
   font-weight: 700;
   cursor: pointer;
   transition: 0.2s;
@@ -288,9 +277,10 @@ p {
   box-shadow: inset 0 0 0 1px var(--wine);
 }
 .button-light {
-  background: rgba(255, 249, 237, 0.14);
+  background: color-mix(in srgb, var(--palette-linen) 14%, transparent);
   color: var(--linen);
-  box-shadow: inset 0 0 0 1px rgba(255, 249, 237, 0.5);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--palette-linen) 50%, transparent);
 }
 .home-hero {
   position: relative;
@@ -307,8 +297,15 @@ p {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(rgba(33, 28, 25, 0.58), rgba(33, 28, 25, 0.68)),
-    radial-gradient(circle, transparent 25%, rgba(33, 28, 25, 0.45));
+    linear-gradient(
+      color-mix(in srgb, var(--palette-overlay) 58%, transparent),
+      color-mix(in srgb, var(--palette-overlay) 68%, transparent)
+    ),
+    radial-gradient(
+      circle,
+      transparent 25%,
+      color-mix(in srgb, var(--palette-overlay) 45%, transparent)
+    );
 }
 .hero-content {
   position: relative;
@@ -333,7 +330,7 @@ p {
   color: var(--gold);
 }
 .hero-content > p:not(.service-pill) {
-  color: rgba(255, 249, 237, 0.86);
+  color: color-mix(in srgb, var(--palette-linen) 86%, transparent);
   font-size: 1.2rem;
   max-width: 620px;
   margin: 0 auto 2rem;
@@ -341,10 +338,10 @@ p {
 .service-pill {
   display: inline-flex;
   padding: 0.55rem 1rem;
-  border: 1px solid rgba(243, 176, 0, 0.55);
+  border: 1px solid color-mix(in srgb, var(--palette-gold) 55%, transparent);
   border-radius: 99px;
   color: var(--linen);
-  background: rgba(60, 44, 37, 0.3);
+  background: color-mix(in srgb, var(--palette-charcoal-ink) 30%, transparent);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -363,7 +360,7 @@ p {
   background: var(--linen);
 }
 .dark {
-  background: var(--walnut);
+  background: var(--dark-section);
   color: var(--cream);
 }
 .dark h2,
@@ -409,7 +406,8 @@ p {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.7rem;
-  box-shadow: 0 2px 0 rgba(60, 44, 37, 0.02);
+  box-shadow: 0 2px 0
+    color-mix(in srgb, var(--palette-charcoal-ink) 2%, transparent);
 }
 .card > b {
   color: var(--maple);
@@ -433,7 +431,10 @@ p {
   flex-direction: column;
   justify-content: flex-end;
   background:
-    linear-gradient(rgba(33, 28, 25, 0.3), rgba(33, 28, 25, 0.75)),
+    linear-gradient(
+      color-mix(in srgb, var(--palette-overlay) 30%, transparent),
+      color-mix(in srgb, var(--palette-overlay) 75%, transparent)
+    ),
     url('/images/gathering.png') center/cover;
 }
 .featured h3 {
@@ -444,7 +445,8 @@ p {
   align-items: center;
   gap: 1.2rem;
   padding: 1.2rem 0;
-  border-bottom: 1px solid rgba(245, 232, 206, 0.15);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--palette-cream) 15%, transparent);
 }
 .sermon h3,
 .sermon p {
@@ -457,7 +459,7 @@ p {
   height: 2.8rem;
   border-radius: 50%;
   background: var(--gold);
-  color: var(--walnut);
+  color: var(--on-gold);
 }
 .gallery {
   display: grid;
@@ -511,7 +513,7 @@ p {
 }
 .form input:focus,
 .form textarea:focus {
-  outline: 3px solid rgba(243, 176, 0, 0.35);
+  outline: 3px solid color-mix(in srgb, var(--palette-gold) 35%, transparent);
   border-color: var(--gold);
 }
 .prayer-form {
@@ -522,13 +524,13 @@ p {
 .form-note {
   padding: 0.8rem;
   border-left: 3px solid var(--gold);
-  background: rgba(243, 176, 0, 0.13);
+  background: color-mix(in srgb, var(--palette-gold) 13%, transparent);
   color: var(--charcoal) !important;
   font-size: 0.9rem;
 }
 .page-hero {
   padding: 10rem 0 6rem;
-  background: var(--walnut);
+  background: var(--dark-section);
   position: relative;
   overflow: hidden;
 }
@@ -538,7 +540,7 @@ p {
   width: 500px;
   height: 500px;
   border-radius: 50%;
-  background: rgba(243, 176, 0, 0.08);
+  background: color-mix(in srgb, var(--palette-gold) 8%, transparent);
   right: -100px;
   top: -250px;
 }
@@ -546,7 +548,7 @@ p {
   font-size: clamp(3.8rem, 8vw, 6.5rem);
 }
 .page-hero .container > p:last-child {
-  color: rgba(245, 232, 206, 0.7);
+  color: color-mix(in srgb, var(--palette-cream) 70%, transparent);
   font-size: 1.15rem;
   max-width: 650px;
 }
@@ -572,8 +574,8 @@ p {
     45deg,
     var(--linen),
     var(--linen) 12px,
-    #f1e1c3 12px,
-    #f1e1c3 24px
+    var(--palette-sand) 12px,
+    var(--palette-sand) 24px
   );
   border: 1px solid var(--border);
 }
@@ -624,7 +626,7 @@ dd {
 .scripture {
   padding: 6rem 1rem;
   text-align: center;
-  background: var(--walnut);
+  background: var(--dark-section);
   color: var(--cream);
 }
 .scripture blockquote {
@@ -641,7 +643,7 @@ dd {
   padding-top: 4.5rem;
 }
 .auth-page aside {
-  background: var(--walnut);
+  background: var(--dark-section);
   padding: 4rem;
   display: flex;
   flex-direction: column;
@@ -691,7 +693,7 @@ dd {
   padding: 0.35rem;
 }
 .footer {
-  background: var(--walnut);
+  background: var(--dark-section);
   color: var(--cream);
   padding: 4rem 0 1.5rem;
 }
@@ -708,7 +710,7 @@ dd {
 }
 .footer p {
   max-width: 390px;
-  color: rgba(245, 232, 206, 0.62);
+  color: color-mix(in srgb, var(--palette-cream) 62%, transparent);
 }
 .footer b,
 .footer h2 {
@@ -719,12 +721,12 @@ dd {
 }
 .footer address {
   max-width: 24rem;
-  color: rgba(245, 232, 206, 0.62);
+  color: color-mix(in srgb, var(--palette-cream) 62%, transparent);
   font-size: 0.85rem;
   font-style: normal;
 }
 .footer a:not(.brand) {
-  color: rgba(245, 232, 206, 0.7);
+  color: color-mix(in srgb, var(--palette-cream) 70%, transparent);
 }
 .footer-socials {
   display: flex;
@@ -736,7 +738,7 @@ dd {
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
-  border: 1px solid rgba(245, 232, 206, 0.2);
+  border: 1px solid color-mix(in srgb, var(--palette-cream) 20%, transparent);
   border-radius: 50%;
   color: var(--cream);
   transition:
@@ -748,7 +750,7 @@ dd {
 .footer .footer-socials a:hover {
   border-color: var(--gold);
   background: var(--gold);
-  color: var(--walnut);
+  color: var(--on-gold);
   transform: translateY(-2px);
 }
 .footer-socials svg {
@@ -770,8 +772,9 @@ dd {
 .footer-bottom {
   margin-top: 3rem;
   padding-top: 1.5rem;
-  border-top: 1px solid rgba(245, 232, 206, 0.12);
-  color: rgba(245, 232, 206, 0.45);
+  border-top: 1px solid
+    color-mix(in srgb, var(--palette-cream) 12%, transparent);
+  color: color-mix(in srgb, var(--palette-cream) 45%, transparent);
   font-size: 0.8rem;
 }
 :focus-visible {
@@ -937,7 +940,7 @@ dd {
 
 .page-hero {
   padding: 8rem 0 4.25rem;
-  background: var(--dark-section, var(--walnut));
+  background: var(--dark-section);
 }
 .page-hero:after {
   width: 28rem;
@@ -969,8 +972,8 @@ dd {
 .hero-fade {
   background: linear-gradient(
     to bottom,
-    rgba(33, 28, 25, 0) 0%,
-    rgba(33, 28, 25, 0.1) 50%,
+    color-mix(in srgb, var(--palette-overlay) 0%, transparent) 0%,
+    color-mix(in srgb, var(--palette-overlay) 10%, transparent) 50%,
     color-mix(in srgb, var(--surface) 95%, transparent) 95%,
     var(--surface) 100%
   );
@@ -1023,7 +1026,7 @@ dd {
   font-weight: 600;
 }
 .breadcrumbs.on-dark {
-  color: rgba(245, 232, 206, 0.58);
+  color: color-mix(in srgb, var(--palette-cream) 58%, transparent);
 }
 .breadcrumbs.on-dark b {
   color: var(--cream);
@@ -1055,7 +1058,8 @@ dd {
   border-radius: 50%;
   background: var(--surface-raised);
   color: var(--ink);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 28px
+    color-mix(in srgb, var(--palette-black) 16%, transparent);
   cursor: pointer;
   transition:
     transform 0.25s ease,
@@ -1154,7 +1158,8 @@ dd {
 .file-card:hover {
   transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--file-color) 55%, var(--line));
-  box-shadow: 0 15px 34px rgba(33, 28, 25, 0.1);
+  box-shadow: 0 15px 34px
+    color-mix(in srgb, var(--palette-overlay) 10%, transparent);
 }
 .file-art {
   position: relative;
@@ -1189,7 +1194,7 @@ dd {
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
   background: var(--file-color);
-  color: #fff;
+  color: var(--palette-white);
   font-size: 0.58rem;
   letter-spacing: 0.08em;
 }
@@ -1283,7 +1288,7 @@ dd {
 }
 .calendar-days .calendar-date:hover {
   background: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
 }
 .calendar-days .calendar-event {
   display: block;
@@ -1482,7 +1487,7 @@ dd {
   border: 2px solid var(--surface);
   border-radius: 1rem;
   background: var(--maple);
-  color: #fff;
+  color: var(--palette-white);
   font-size: 0.55rem;
   font-style: normal;
 }
@@ -1495,7 +1500,8 @@ dd {
   border: 1px solid var(--line);
   border-radius: 0.85rem;
   background: var(--surface-raised);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 20px 55px
+    color-mix(in srgb, var(--palette-black) 18%, transparent);
   animation: popover-in 0.2s ease both;
 }
 .notification-popover header {
@@ -1705,8 +1711,8 @@ dd {
 .hero-fade {
   background: linear-gradient(
     to bottom,
-    rgba(33, 28, 25, 0) 0%,
-    rgba(33, 28, 25, 0.1) 50%,
+    color-mix(in srgb, var(--palette-overlay) 0%, transparent) 0%,
+    color-mix(in srgb, var(--palette-overlay) 10%, transparent) 50%,
     color-mix(in srgb, var(--surface) 95%, transparent) 95%,
     var(--surface) 100%
   ) !important;
@@ -1846,7 +1852,8 @@ dd {
   background: var(--surface-raised);
   color: var(--ink);
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 4px
+    color-mix(in srgb, var(--palette-black) 12%, transparent);
 }
 .member-menu > button img {
   width: 2.25rem;
@@ -1864,7 +1871,8 @@ dd {
   border: 1px solid var(--line);
   border-radius: 0.9rem;
   background: var(--surface-raised);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 18px 50px
+    color-mix(in srgb, var(--palette-black) 15%, transparent);
   animation: popover-in 0.2s ease both;
 }
 .member-menu-popover > div {
@@ -1927,7 +1935,7 @@ dd {
 .member-updates .panel-heading > span {
   padding: 0.2rem 0.65rem;
   border-radius: 99px;
-  background: rgba(243, 176, 0, 0.14);
+  background: color-mix(in srgb, var(--palette-gold) 14%, transparent);
   color: var(--maple);
   font-size: 0.68rem;
   font-weight: 700;
@@ -1948,7 +1956,7 @@ dd {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
-  background: rgba(243, 176, 0, 0.14);
+  background: color-mix(in srgb, var(--palette-gold) 14%, transparent);
   color: var(--maple);
   font-style: normal;
 }
@@ -2038,7 +2046,7 @@ dd {
   font-size: 2rem;
 }
 .member-resource-feature p {
-  color: rgba(245, 232, 206, 0.68);
+  color: color-mix(in srgb, var(--palette-cream) 68%, transparent);
 }
 .member-resource-feature b {
   margin-top: auto;
@@ -2380,7 +2388,7 @@ dd {
   margin: 1.5rem 0 1rem;
   padding: 0.55rem;
   border-radius: 0.75rem;
-  background: rgba(245, 232, 206, 0.06);
+  background: color-mix(in srgb, var(--palette-cream) 6%, transparent);
 }
 .pastor-profile-link img {
   width: 2.55rem;
@@ -2400,7 +2408,7 @@ dd {
   white-space: nowrap;
 }
 .pastor-profile-link small {
-  color: rgba(245, 232, 206, 0.45);
+  color: color-mix(in srgb, var(--palette-cream) 45%, transparent);
   font-size: 0.64rem;
 }
 .pastor-workspace aside nav {
@@ -2418,7 +2426,7 @@ dd {
   border: 0;
   border-radius: 0.65rem;
   background: transparent;
-  color: rgba(245, 232, 206, 0.6);
+  color: color-mix(in srgb, var(--palette-cream) 60%, transparent);
   font-size: 0.78rem;
   text-align: left;
   transition:
@@ -2432,7 +2440,7 @@ dd {
   color: var(--on-dark);
 }
 .pastor-workspace aside nav button.active {
-  background: rgba(243, 176, 0, 0.15);
+  background: color-mix(in srgb, var(--palette-gold) 15%, transparent);
   color: var(--gold);
   font-weight: 700;
 }
@@ -2445,9 +2453,10 @@ dd {
   margin-top: auto;
   padding: 1rem 0.75rem 0;
   border: 0;
-  border-top: 1px solid rgba(245, 232, 206, 0.1);
+  border-top: 1px solid
+    color-mix(in srgb, var(--palette-cream) 10%, transparent);
   background: transparent;
-  color: rgba(245, 232, 206, 0.38);
+  color: color-mix(in srgb, var(--palette-cream) 38%, transparent);
   font-size: 0.68rem;
   text-align: left;
 }
@@ -2616,7 +2625,7 @@ dd {
   font-size: 0.68rem;
 }
 .pastor-prayer-preview b.urgent {
-  color: #dc2626;
+  color: var(--palette-red);
 }
 .pastor-prayer-preview small {
   color: var(--ink-soft);
@@ -2683,7 +2692,7 @@ dd {
 }
 .pastor-calendar-grid button.selected {
   border-color: var(--gold);
-  background: rgba(243, 176, 0, 0.12);
+  background: color-mix(in srgb, var(--palette-gold) 12%, transparent);
 }
 .pastor-calendar-grid button > i {
   position: absolute;
@@ -2798,7 +2807,7 @@ dd {
   background: var(--surface-raised);
 }
 .pastor-prayer-list article.urgent {
-  border-color: rgba(220, 38, 38, 0.28);
+  border-color: color-mix(in srgb, var(--palette-red) 28%, transparent);
 }
 .pastor-prayer-list article > header {
   display: flex;
@@ -2815,8 +2824,8 @@ dd {
 .pastor-prayer-list article em {
   padding: 0.2rem 0.5rem;
   border-radius: 99px;
-  background: rgba(220, 38, 38, 0.1);
-  color: #dc2626;
+  background: color-mix(in srgb, var(--palette-red) 10%, transparent);
+  color: var(--palette-red);
   font-size: 0.62rem;
   font-style: normal;
 }
@@ -2824,13 +2833,13 @@ dd {
   padding: 0.4rem 0.7rem;
   border: 0;
   border-radius: 99px;
-  background: rgba(243, 176, 0, 0.12);
+  background: color-mix(in srgb, var(--palette-gold) 12%, transparent);
   color: var(--maple);
   font-size: 0.67rem;
 }
 .pastor-prayer-list article button.prayed {
-  background: rgba(22, 163, 74, 0.1);
-  color: #16a34a;
+  background: color-mix(in srgb, var(--palette-green) 10%, transparent);
+  color: var(--palette-green);
 }
 .pastor-appointment {
   display: grid;
@@ -2894,8 +2903,8 @@ dd {
   padding: 0.5rem 0.8rem;
   border: 0;
   border-radius: 99px;
-  background: #16a34a;
-  color: #fff;
+  background: var(--palette-green);
+  color: var(--palette-white);
   font-size: 0.68rem;
 }
 .pastor-publishing a {
@@ -2950,8 +2959,8 @@ dd {
   height: 7rem;
   background: linear-gradient(
     135deg,
-    rgba(243, 176, 0, 0.9),
-    rgba(185, 84, 40, 0.75)
+    color-mix(in srgb, var(--palette-gold) 90%, transparent),
+    color-mix(in srgb, var(--palette-maple) 75%, transparent)
   );
 }
 .profile-summary-copy {
@@ -2974,13 +2983,13 @@ dd {
   color: var(--gold);
 }
 .profile-summary p:not(.profile-role) {
-  color: rgba(245, 232, 206, 0.68);
+  color: color-mix(in srgb, var(--palette-cream) 68%, transparent);
   font-size: 0.82rem;
 }
 .profile-summary small {
   display: block;
   margin-top: 1.2rem;
-  color: rgba(245, 232, 206, 0.35);
+  color: color-mix(in srgb, var(--palette-cream) 35%, transparent);
   font-size: 0.62rem;
 }
 .profile-details {
@@ -3042,7 +3051,7 @@ dd {
 }
 .admin-reference-metrics article p {
   margin: 0.2rem 0 0;
-  color: #16a34a;
+  color: var(--palette-green);
   font-size: 0.68rem;
   font-weight: 700;
 }
@@ -3125,10 +3134,10 @@ dd {
   background: var(--gold);
 }
 .queue-dot.published {
-  background: #16a34a;
+  background: var(--palette-green);
 }
 .queue-dot.draft {
-  background: #3b82f6;
+  background: var(--palette-blue);
 }
 .queue-row em {
   color: var(--ink-soft);
@@ -3262,7 +3271,7 @@ dd {
     z-index: 50;
     display: block;
     border: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: color-mix(in srgb, var(--palette-black) 35%, transparent);
   }
   .pastor-workspace > main {
     padding: 5rem 1rem 2rem;
@@ -3316,36 +3325,6 @@ dd {
   }
 }
 
-/* Reference application system */
-:root {
-  --surface: #f8f5ef;
-  --surface-raised: #ffffff;
-  --ink: #3c2c25;
-  --ink-strong: #211c19;
-  --ink-mid: #4a3b34;
-  --ink-soft: #7a6a62;
-  --line: rgba(60, 44, 37, 0.12);
-  --dark-section: #3c2c25;
-  --on-dark: #f5e8ce;
-  --on-gold: #3c2c25;
-  --nav-surface: rgba(255, 255, 255, 0.9);
-  --nav-surface-solid: rgba(255, 255, 255, 0.97);
-}
-:root[data-theme='dark'] {
-  --surface: #151513;
-  --surface-raised: #1f1f1c;
-  --ink: #f5e8ce;
-  --ink-strong: #fff9ed;
-  --ink-mid: #d8d1c5;
-  --ink-soft: #9f9a91;
-  --line: rgba(245, 232, 206, 0.12);
-  --maple: #df8258;
-  --wine: #d38d86;
-  --olive: #b4b875;
-  --dark-section: #0e0e0d;
-  --nav-surface: rgba(21, 21, 19, 0.9);
-  --nav-surface-solid: rgba(21, 21, 19, 0.97);
-}
 html {
   background: var(--surface);
 }
@@ -3366,8 +3345,8 @@ body {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 999px;
-  border: 1px solid rgba(245, 232, 206, 0.2);
-  background: rgba(245, 232, 206, 0.08);
+  border: 1px solid color-mix(in srgb, var(--palette-cream) 20%, transparent);
+  background: color-mix(in srgb, var(--palette-cream) 8%, transparent);
   color: var(--cream);
   font-size: 1.1rem;
   cursor: pointer;
@@ -3395,7 +3374,8 @@ body {
   border-radius: 0.9rem;
   background: var(--surface-raised);
   color: var(--ink);
-  box-shadow: 0 14px 45px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 14px 45px
+    color-mix(in srgb, var(--palette-black) 16%, transparent);
 }
 .toast > span {
   display: grid;
@@ -3403,13 +3383,13 @@ body {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: rgba(22, 163, 74, 0.12);
-  color: #16a34a;
+  background: color-mix(in srgb, var(--palette-green) 12%, transparent);
+  color: var(--palette-green);
   font-weight: 700;
 }
 .toast.error > span {
-  background: rgba(220, 38, 38, 0.12);
-  color: #dc2626;
+  background: color-mix(in srgb, var(--palette-red) 12%, transparent);
+  color: var(--palette-red);
 }
 .toast button {
   border: 0;
@@ -3424,7 +3404,7 @@ body {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(15, 12, 10, 0.62);
+  background: color-mix(in srgb, var(--palette-black-warm) 62%, transparent);
   backdrop-filter: blur(5px);
 }
 .confirm-dialog {
@@ -3446,13 +3426,13 @@ body {
   margin-top: 1.5rem;
 }
 .button.danger {
-  background: #b42318;
-  color: #fff;
+  background: var(--palette-error);
+  color: var(--palette-white);
 }
 .text-danger {
   border: 0;
   background: transparent;
-  color: #dc2626;
+  color: var(--palette-red);
   font-weight: 650;
   cursor: pointer;
 }
@@ -3520,7 +3500,7 @@ body {
   height: 3.5rem;
   border-radius: 50%;
   background: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
   font-style: normal;
 }
 .detail-page {
@@ -3566,13 +3546,13 @@ body {
   aspect-ratio: 16/9;
   border-radius: 1.5rem;
   overflow: hidden;
-  background: #211c19;
+  background: var(--palette-charcoal);
 }
 .video-frame:after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--palette-black) 25%, transparent);
 }
 .video-frame button {
   position: absolute;
@@ -3584,7 +3564,7 @@ body {
   border: 0;
   border-radius: 50%;
   background: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
   font-size: 1.4rem;
 }
 .sermon-copy {
@@ -3613,8 +3593,8 @@ body {
 .legal-draft {
   padding: 1rem 1.2rem;
   border-radius: 0.75rem;
-  background: rgba(243, 176, 0, 0.12);
-  border: 1px solid rgba(243, 176, 0, 0.35);
+  background: color-mix(in srgb, var(--palette-gold) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--palette-gold) 35%, transparent);
 }
 .state-page,
 .auth-simple {
@@ -3688,10 +3668,10 @@ body {
 .role-switcher button.active {
   background: var(--gold);
   border-color: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
 }
 .form-error {
-  color: #b42318;
+  color: var(--palette-error);
   font-weight: 600;
 }
 .forgot-link {
@@ -3743,22 +3723,23 @@ body {
   gap: 0.75rem;
   padding: 0.75rem 0.8rem;
   border-radius: 0.75rem;
-  color: rgba(245, 232, 206, 0.65);
+  color: color-mix(in srgb, var(--palette-cream) 65%, transparent);
   font-size: 0.9rem;
 }
 .workspace aside nav a:hover {
-  background: rgba(243, 176, 0, 0.13);
+  background: color-mix(in srgb, var(--palette-gold) 13%, transparent);
   color: var(--gold);
 }
 .workspace aside nav a[aria-current='page'] {
-  background: rgba(243, 176, 0, 0.15);
+  background: color-mix(in srgb, var(--palette-gold) 15%, transparent);
   color: var(--gold);
   font-weight: 700;
 }
 .workspace-user {
   margin-top: auto;
   padding: 1rem 0.5rem 0;
-  border-top: 1px solid rgba(245, 232, 206, 0.1);
+  border-top: 1px solid
+    color-mix(in srgb, var(--palette-cream) 10%, transparent);
 }
 .workspace-user > a {
   display: flex;
@@ -3768,13 +3749,13 @@ body {
 }
 .workspace-user small {
   display: block;
-  color: rgba(245, 232, 206, 0.45);
+  color: color-mix(in srgb, var(--palette-cream) 45%, transparent);
 }
 .workspace-user button {
   margin-top: 1rem;
   border: 0;
   background: transparent;
-  color: rgba(245, 232, 206, 0.5);
+  color: color-mix(in srgb, var(--palette-cream) 50%, transparent);
 }
 .avatar {
   display: grid;
@@ -3783,7 +3764,7 @@ body {
   height: 2.4rem;
   border-radius: 50%;
   background: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
   font-weight: 700;
 }
 .workspace-content {
@@ -3875,7 +3856,7 @@ body {
 .status {
   padding: 0.35rem 0.6rem;
   border-radius: 999px;
-  background: rgba(111, 113, 63, 0.12);
+  background: color-mix(in srgb, var(--palette-olive) 12%, transparent);
   color: var(--olive);
   font-style: normal;
   font-size: 0.72rem;
@@ -3883,13 +3864,13 @@ body {
 }
 .status.draft,
 .status.scheduled {
-  background: rgba(243, 176, 0, 0.13);
-  color: #9a6c00;
+  background: color-mix(in srgb, var(--palette-gold) 13%, transparent);
+  color: var(--palette-gold-deep);
 }
 .status.archived,
 .status.suspended {
-  background: rgba(220, 38, 38, 0.1);
-  color: #c12727;
+  background: color-mix(in srgb, var(--palette-red) 10%, transparent);
+  color: var(--palette-red-deep);
 }
 .quick-actions {
   display: grid;
@@ -3920,7 +3901,7 @@ body {
 .cms-tabs button.active {
   background: var(--gold);
   border-color: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
 }
 .cms-form {
   display: grid;
@@ -3982,7 +3963,7 @@ body {
 }
 .item-list button.active {
   border-color: var(--gold);
-  background: rgba(243, 176, 0, 0.08);
+  background: color-mix(in srgb, var(--palette-gold) 8%, transparent);
 }
 .item-list small {
   display: block;
@@ -4094,7 +4075,7 @@ body {
 }
 .danger-zone {
   align-self: start;
-  border-color: rgba(220, 38, 38, 0.25);
+  border-color: color-mix(in srgb, var(--palette-red) 25%, transparent);
 }
 .member-feature {
   min-height: 18rem;
@@ -4187,7 +4168,7 @@ body {
   margin: auto;
   border-radius: 50%;
   background: var(--gold);
-  color: #211c19;
+  color: var(--palette-charcoal);
   font: 600 3rem var(--font-display);
 }
 .managed-contact {
@@ -4279,7 +4260,7 @@ body {
     inset: 0;
     z-index: 70;
     border: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: color-mix(in srgb, var(--palette-black) 50%, transparent);
   }
   .workspace-content {
     padding: 5rem 1.25rem 2rem;
@@ -4332,7 +4313,7 @@ body {
   border: 1.5px solid var(--border);
   border-radius: 0.75rem;
   background: var(--cream);
-  color: var(--walnut);
+  color: var(--charcoal);
   text-align: left;
   cursor: pointer;
 }
@@ -4426,18 +4407,18 @@ body {
   opacity: 1;
 }
 .hero-overlay {
-  background: rgba(33, 28, 25, 0.55);
+  background: color-mix(in srgb, var(--palette-overlay) 55%, transparent);
 }
 .hero-warmth {
-  background: rgba(60, 44, 37, 0.18);
+  background: color-mix(in srgb, var(--palette-charcoal-ink) 18%, transparent);
   mix-blend-mode: multiply;
 }
 .hero-fade {
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(33, 28, 25, 0.1) 50%,
-    rgba(245, 232, 206, 0.95) 95%,
+    color-mix(in srgb, var(--palette-overlay) 10%, transparent) 50%,
+    color-mix(in srgb, var(--palette-cream) 95%, transparent) 95%,
     var(--cream) 100%
   );
 }
@@ -4445,7 +4426,7 @@ body {
   background: radial-gradient(
     ellipse at center,
     transparent 45%,
-    rgba(33, 28, 25, 0.4) 100%
+    color-mix(in srgb, var(--palette-overlay) 40%, transparent) 100%
   );
 }
 .hero-dots {
@@ -4463,7 +4444,7 @@ body {
   padding: 0;
   border: 0;
   border-radius: 99px;
-  background: rgba(245, 232, 206, 0.35);
+  background: color-mix(in srgb, var(--palette-cream) 35%, transparent);
   transition: 0.3s;
 }
 .hero-dots button.active {
@@ -4489,14 +4470,16 @@ body {
   line-height: 0.88;
   letter-spacing: -0.025em;
   margin: 0 0 0.3rem;
-  text-shadow: 0 4px 40px rgba(33, 28, 25, 0.35);
+  text-shadow: 0 4px 40px
+    color-mix(in srgb, var(--palette-overlay) 35%, transparent);
   font-style: normal;
 }
 .hero-content .hero-gold {
   display: block;
   color: var(--gold);
   margin-top: 0.3rem;
-  text-shadow: 0 4px 40px rgba(243, 176, 0, 0.4);
+  text-shadow: 0 4px 40px
+    color-mix(in srgb, var(--palette-gold) 40%, transparent);
 }
 .hero-content h1 {
   margin-bottom: 2rem;
@@ -4505,7 +4488,7 @@ body {
   gap: 0.75rem;
   margin-bottom: 2.5rem;
   padding: 0.6rem 1.25rem;
-  background: rgba(245, 232, 206, 0.25);
+  background: color-mix(in srgb, var(--palette-cream) 25%, transparent);
   backdrop-filter: blur(8px);
 }
 .service-pill span {
@@ -4513,14 +4496,14 @@ body {
   height: 6px;
   border-radius: 50%;
   background: var(--gold);
-  box-shadow: 0 0 0 5px rgba(243, 176, 0, 0.15);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--palette-gold) 15%, transparent);
 }
 .international {
   display: flex;
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
-  color: rgba(245, 232, 206, 0.62);
+  color: color-mix(in srgb, var(--palette-cream) 62%, transparent);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -4530,19 +4513,21 @@ body {
   display: block;
   width: 7rem;
   height: 1px;
-  background: rgba(243, 176, 0, 0.45);
+  background: color-mix(in srgb, var(--palette-gold) 45%, transparent);
 }
 .hero-content .hero-tagline {
   margin: 0 auto 2.5rem;
-  color: rgba(245, 232, 206, 0.8);
+  color: color-mix(in srgb, var(--palette-cream) 80%, transparent);
   font-size: clamp(1rem, 2vw, 1.2rem);
   font-weight: 300;
   line-height: 1.7;
-  text-shadow: 0 2px 16px rgba(33, 28, 25, 0.4);
+  text-shadow: 0 2px 16px
+    color-mix(in srgb, var(--palette-overlay) 40%, transparent);
 }
 .hero-primary {
   padding-inline: 2rem;
-  box-shadow: 0 4px 24px rgba(243, 176, 0, 0.35);
+  box-shadow: 0 4px 24px
+    color-mix(in srgb, var(--palette-gold) 35%, transparent);
 }
 .button-light {
   backdrop-filter: blur(6px);
@@ -4555,7 +4540,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  color: rgba(245, 232, 206, 0.55);
+  color: color-mix(in srgb, var(--palette-cream) 55%, transparent);
   font-size: 0.6rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -4564,7 +4549,10 @@ body {
 .scroll-cue i {
   width: 1px;
   height: 2.5rem;
-  background: linear-gradient(var(--gold) 40%, rgba(245, 232, 206, 0.25) 40%);
+  background: linear-gradient(
+    var(--gold) 40%,
+    color-mix(in srgb, var(--palette-cream) 25%, transparent) 40%
+  );
 }
 .home-section {
   padding: 5rem 0;
@@ -4642,7 +4630,7 @@ body {
   margin-top: 1rem;
   padding: 0.2rem 0.65rem;
   border-radius: 99px;
-  background: rgba(111, 113, 63, 0.12);
+  background: color-mix(in srgb, var(--palette-olive) 12%, transparent);
   color: var(--olive);
   font-size: 0.7rem;
   font-weight: 600;
@@ -4657,7 +4645,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--walnut);
+  background: var(--dark-section);
 }
 .sermon-image {
   position: relative;
@@ -4674,7 +4662,7 @@ body {
   padding: 0.25rem 0.75rem;
   border-radius: 99px;
   background: var(--gold);
-  color: var(--walnut);
+  color: var(--on-gold);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -4690,7 +4678,7 @@ body {
   border: 0;
   border-radius: 50%;
   background: var(--gold);
-  color: var(--walnut);
+  color: var(--on-gold);
   transform: translate(-50%, -50%);
   cursor: pointer;
 }
@@ -4706,7 +4694,7 @@ body {
   font-size: 1.85rem;
 }
 .featured-copy > p:not(.eyebrow) {
-  color: rgba(245, 232, 206, 0.6);
+  color: color-mix(in srgb, var(--palette-cream) 60%, transparent);
   font-size: 0.85rem;
 }
 .sermon-grid {
@@ -4761,7 +4749,7 @@ body {
   bottom: 0.75rem;
   padding: 0.15rem 0.45rem;
   border-radius: 0.25rem;
-  background: rgba(255, 249, 237, 0.9);
+  background: color-mix(in srgb, var(--palette-linen) 90%, transparent);
   font-size: 0.7rem;
 }
 .sermon-card > div:last-child {
@@ -4813,7 +4801,8 @@ body {
 .prayer-section .prayer-form {
   border: 1.5px solid var(--border);
   background: var(--linen);
-  box-shadow: 0 4px 24px rgba(60, 44, 37, 0.07);
+  box-shadow: 0 4px 24px
+    color-mix(in srgb, var(--palette-charcoal-ink) 7%, transparent);
 }
 .resources-section {
   background: var(--wine);
@@ -4835,9 +4824,9 @@ body {
   display: flex;
   gap: 1rem;
   padding: 1.5rem;
-  border: 1px solid rgba(245, 232, 206, 0.15);
+  border: 1px solid color-mix(in srgb, var(--palette-cream) 15%, transparent);
   border-radius: 1rem;
-  background: rgba(255, 249, 237, 0.06);
+  background: color-mix(in srgb, var(--palette-linen) 6%, transparent);
 }
 .resource-card > span {
   display: grid;
@@ -4846,7 +4835,7 @@ body {
   width: 2.6rem;
   height: 2.6rem;
   border-radius: 0.7rem;
-  background: rgba(243, 176, 0, 0.12);
+  background: color-mix(in srgb, var(--palette-gold) 12%, transparent);
   color: var(--gold);
 }
 .resource-card > span svg {
@@ -4864,7 +4853,7 @@ body {
 }
 .resource-card p {
   margin: 0.4rem 0;
-  color: rgba(245, 232, 206, 0.58);
+  color: color-mix(in srgb, var(--palette-cream) 58%, transparent);
   font-size: 0.85rem;
 }
 .resource-card > b {
@@ -4876,7 +4865,7 @@ body {
 .home-cta {
   padding: 5rem 1rem;
   text-align: center;
-  background: var(--walnut);
+  background: var(--dark-section);
 }
 .home-cta h2 {
   color: var(--cream);
@@ -4885,7 +4874,7 @@ body {
 .home-cta p:not(.eyebrow) {
   max-width: 560px;
   margin: 0 auto 2rem;
-  color: rgba(245, 232, 206, 0.62);
+  color: color-mix(in srgb, var(--palette-cream) 62%, transparent);
 }
 .reveal {
   opacity: 0;
@@ -4955,8 +4944,8 @@ body:has(.auth-page) .auth-page {
   background: linear-gradient(
     90deg,
     var(--gold) 0 30%,
-    rgba(185, 84, 40, 0.4) 30% 65%,
-    rgba(113, 53, 47, 0.4) 65%
+    color-mix(in srgb, var(--palette-maple) 40%, transparent) 30% 65%,
+    color-mix(in srgb, var(--palette-wine) 40%, transparent) 65%
   );
 }
 .auth-verse-gallery {
@@ -4977,7 +4966,7 @@ body:has(.auth-page) .auth-page {
   padding: 0;
   border: 0;
   border-radius: 99px;
-  background: rgba(245, 232, 206, 0.3);
+  background: color-mix(in srgb, var(--palette-cream) 30%, transparent);
 }
 .auth-verse-gallery > div button.active {
   width: 1.6rem;
@@ -4999,7 +4988,7 @@ body:has(.auth-page) .auth-page {
   gap: 1.5rem;
 }
 .footer-legal span {
-  color: rgba(245, 232, 206, 0.3);
+  color: color-mix(in srgb, var(--palette-cream) 30%, transparent);
 }
 @media (max-width: 1024px) {
   .event-grid {
@@ -5116,7 +5105,7 @@ body:has(.auth-page) .auth-page {
 .page-hero .container > .reveal:last-child p {
   max-width: 36rem;
   margin: 0;
-  color: rgba(245, 232, 206, 0.7);
+  color: color-mix(in srgb, var(--palette-cream) 70%, transparent);
   font-size: 1.125rem;
   font-weight: 300;
   line-height: 1.7;
@@ -5189,7 +5178,7 @@ body:has(.auth-page) .auth-page {
   inset: 0;
   background: radial-gradient(
     circle at 70% 30%,
-    rgba(243, 176, 0, 0.12),
+    var(--dark-glow),
     transparent 55%
   );
 }
@@ -5215,7 +5204,7 @@ body:has(.auth-page) .auth-page {
 .reference-page-hero .container > .reveal:last-child p {
   max-width: 36rem;
   margin: 0;
-  color: rgba(245, 232, 206, 0.7);
+  color: color-mix(in srgb, var(--palette-cream) 70%, transparent);
   font-size: 1.125rem;
   font-weight: 300;
   line-height: 1.7;
@@ -5450,7 +5439,8 @@ body:has(.auth-page) .auth-page {
   z-index: 35;
   border-bottom: 1px solid var(--line);
   background: var(--surface-raised);
-  box-shadow: 0 2px 12px rgba(60, 44, 37, 0.06);
+  box-shadow: 0 2px 12px
+    color-mix(in srgb, var(--palette-charcoal-ink) 6%, transparent);
 }
 .reference-tabs .container {
   display: flex;
@@ -5501,7 +5491,7 @@ body:has(.auth-page) .auth-page {
   margin-bottom: 1.25rem;
   padding: 0.25rem 0.7rem;
   border-radius: 99px;
-  background: rgba(111, 113, 63, 0.12);
+  background: color-mix(in srgb, var(--palette-olive) 12%, transparent);
   color: var(--olive);
   font-size: 0.68rem;
   font-weight: 700;
@@ -5663,7 +5653,7 @@ body:has(.auth-page) .auth-page {
 }
 .scripture .scripture-quote {
   display: block;
-  color: rgba(243, 176, 0, 0.35);
+  color: color-mix(in srgb, var(--palette-gold) 35%, transparent);
   font: 400 3rem var(--font-display);
 }
 .scripture blockquote {
@@ -5865,21 +5855,21 @@ body:has(.auth-page) .auth-page {
   pointer-events: none;
   background: radial-gradient(
     circle at 70% 50%,
-    rgba(243, 176, 0, 0.1) 0%,
+    var(--dark-glow) 0%,
     transparent 55%
   );
 }
 .page-hero--next-steps:after {
   background: radial-gradient(
     ellipse at 70% 50%,
-    rgba(243, 176, 0, 0.12) 0%,
+    var(--dark-glow) 0%,
     transparent 60%
   );
 }
 .page-hero--give:after {
   background: radial-gradient(
     ellipse at 30% 50%,
-    rgba(243, 176, 0, 0.12) 0%,
+    var(--dark-glow) 0%,
     transparent 60%
   );
 }
@@ -5889,11 +5879,7 @@ body:has(.auth-page) .auth-page {
 }
 .home-cta {
   background:
-    radial-gradient(
-      circle at 50% 50%,
-      rgba(243, 176, 0, 0.1) 0%,
-      transparent 65%
-    ),
+    radial-gradient(circle at 50% 50%, var(--dark-glow) 0%, transparent 65%),
     var(--dark-section);
 }
 .scripture {
@@ -6037,7 +6023,7 @@ body:has(.auth-page) .auth-page {
 .sermon-player {
   width: 100%;
   max-height: 75vh;
-  background: #111;
+  background: var(--palette-near-black);
   border-radius: 1rem;
 }
 .media-unavailable {
@@ -6045,8 +6031,8 @@ body:has(.auth-page) .auth-page {
   z-index: 1;
   padding: 1rem;
   border-radius: 0.5rem;
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
+  background: color-mix(in srgb, var(--palette-black) 75%, transparent);
+  color: var(--palette-white);
 }
 button:disabled {
   opacity: 0.55;
@@ -6111,7 +6097,7 @@ button:disabled {
 }
 .cms-tabs a[aria-current='page'] {
   background: var(--gold);
-  color: #1b1a15;
+  color: var(--palette-ink-warm);
 }
 
 .public-event-calendar {
@@ -6245,7 +6231,7 @@ button:disabled {
 }
 .google-mark {
   font-family: Arial, sans-serif;
-  color: #4285f4;
+  color: var(--palette-google-blue);
   font-size: 1.4rem;
   font-weight: 700;
 }
@@ -6414,7 +6400,8 @@ button:disabled {
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 1.2rem;
-  box-shadow: 0 20px 80px #0004;
+  box-shadow: 0 20px 80px
+    color-mix(in srgb, var(--palette-black) 26.67%, transparent);
 }
 .feature-modal > header {
   display: flex;
@@ -6894,10 +6881,10 @@ button:disabled {
   display: grid;
   gap: 0.15rem;
   padding-left: 0.9rem;
-  border-left: 3px solid #2f7d4f;
+  border-left: 3px solid var(--palette-green-deep);
 }
 .sunday-status li.off {
-  border-left-color: #b42318;
+  border-left-color: var(--palette-error);
 }
 .sunday-status small {
   color: var(--ink-mid);
@@ -6920,7 +6907,7 @@ button:disabled {
 .calendar-filters button.active {
   background: var(--maple);
   border-color: var(--maple);
-  color: #fff;
+  color: var(--palette-white);
 }
 .pastor-calendar-grid button.today {
   font-weight: 700;

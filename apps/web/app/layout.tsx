@@ -48,7 +48,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('grace-theme');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}})()`,
+            __html: `(function(){var d=document.documentElement;d.dataset.sidebar='collapsed';try{if(localStorage.getItem('grace-sidebar-collapsed')==='false')d.dataset.sidebar='expanded'}catch(e){}try{var t=localStorage.getItem('grace-theme');d.dataset.theme=(t==='light'||t==='dark')?t:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}})()`,
           }}
         />
       </head>

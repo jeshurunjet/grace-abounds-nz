@@ -20,6 +20,8 @@ const links = [
 beforeEach(() => {
   state.role = 'pastor';
   state.path = '/admin/events';
+  window.localStorage.clear();
+  delete document.documentElement.dataset.sidebar;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
     addEventListener: vi.fn(),
@@ -46,10 +48,20 @@ describe('workspace navigation trial', () => {
       'href',
       href,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    // No saved preference: starts collapsed to the icon rail.
+    expect(document.documentElement.dataset.sidebar).toBe('collapsed');
     expect(container.firstChild).toHaveClass('workspace-collapsed');
-    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    const toggle = screen.getByRole('button', { name: 'Expand sidebar' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'workspace-navigation');
+    expect(toggle).toHaveAttribute('title', 'Expand sidebar');
+    expect(toggle.closest('header')).toHaveClass('workspace-topbar');
+    fireEvent.click(toggle);
+    expect(document.documentElement.dataset.sidebar).toBe('expanded');
     expect(container.firstChild).not.toHaveClass('workspace-collapsed');
+    expect(
+      screen.getByRole('button', { name: 'Collapse sidebar' }),
+    ).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link', { name: 'Open messages' })).toHaveAttribute(
       'href',
       '/members/messages',
@@ -57,6 +69,30 @@ describe('workspace navigation trial', () => {
     expect(
       screen.queryByRole('link', { name: 'Messages' }),
     ).not.toBeInTheDocument();
+  });
+  it('remembers an explicit choice across visits', () => {
+    const first = render(
+      <WorkspaceShell kind="Pastor" links={links}>
+        Page
+      </WorkspaceShell>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(window.localStorage.getItem('grace-sidebar-collapsed')).toBe(
+      'false',
+    );
+    first.unmount();
+    // A later page load: the pre-paint script reads the saved choice.
+    delete document.documentElement.dataset.sidebar;
+    const again = render(
+      <WorkspaceShell kind="Pastor" links={links}>
+        Page
+      </WorkspaceShell>,
+    );
+    expect(document.documentElement.dataset.sidebar).toBe('expanded');
+    expect(again.container.firstChild).not.toHaveClass('workspace-collapsed');
+    expect(
+      screen.getByRole('button', { name: 'Collapse sidebar' }),
+    ).toBeInTheDocument();
   });
   it('does not show a redundant floating shortcut on Messages', () => {
     state.path = '/members/messages';

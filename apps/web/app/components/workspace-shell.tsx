@@ -27,6 +27,9 @@ import Image from 'next/image';
 import { accountProfile } from '../lib/profiles';
 import { getRoleNavigation, isRouteActive } from '../lib/role-navigation';
 
+/** Stored desktop sidebar choice: 'true' = collapsed, 'false' = expanded. */
+export const SIDEBAR_KEY = 'grace-sidebar-collapsed';
+
 export type WorkspaceLink = { href: string; label: string; icon?: string };
 export function WorkspaceShell({
   kind,
@@ -38,7 +41,10 @@ export function WorkspaceShell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Desktop sidebar: collapsed unless the person chose to expand it. The
+  // pre-paint script in layout.tsx sets <html data-sidebar>, which the CSS
+  // uses, so there is no flash; this state drives the toggle's labels.
+  const [collapsed, setCollapsed] = useState(true);
   const [accountOpen, setAccountOpen] = useState(false);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -52,19 +58,26 @@ export function WorkspaceShell({
   const homeHref = getRoleNavigation(role).workspaceHref;
   const profile = accountProfile({ ...data?.user, role });
   useEffect(() => {
-    try {
-      setCollapsed(
-        window.localStorage.getItem('grace-sidebar-collapsed') === 'true',
-      );
-    } catch {
-      /* Navigation still works when browser storage is unavailable. */
+    const root = document.documentElement;
+    let state = root.dataset.sidebar;
+    if (state !== 'collapsed' && state !== 'expanded') {
+      state = 'collapsed';
+      try {
+        if (window.localStorage.getItem(SIDEBAR_KEY) === 'false')
+          state = 'expanded';
+      } catch {
+        /* Navigation still works when browser storage is unavailable. */
+      }
+      root.dataset.sidebar = state;
     }
+    setCollapsed(state === 'collapsed');
   }, []);
   function toggleSidebar() {
     const next = !collapsed;
     setCollapsed(next);
+    document.documentElement.dataset.sidebar = next ? 'collapsed' : 'expanded';
     try {
-      window.localStorage.setItem('grace-sidebar-collapsed', String(next));
+      window.localStorage.setItem(SIDEBAR_KEY, String(next));
     } catch {
       /* Optional preference only. */
     }
@@ -142,14 +155,31 @@ export function WorkspaceShell({
         <span>Menu</span>
       </button>
       <header className="workspace-topbar" inert={mobile && open}>
-        <Link
-          href={homeHref}
-          className="workspace-topbar-title"
-          aria-label="Workspace home"
-        >
-          <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
-          <strong>Grace Abounds International</strong>
-        </Link>
+        <div className="workspace-topbar-lead">
+          <button
+            type="button"
+            className="workspace-sidebar-toggle"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            aria-controls="workspace-navigation"
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} aria-hidden="true" />
+            )}
+          </button>
+          <Link
+            href={homeHref}
+            className="workspace-topbar-title"
+            aria-label="Workspace home"
+          >
+            <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
+            <strong>Grace Abounds International</strong>
+          </Link>
+        </div>
         <div className="workspace-account-controls">
           {pathname !== homeHref && (
             <Link
@@ -222,20 +252,6 @@ export function WorkspaceShell({
             <X size={20} />
           </button>
         </div>
-        <button
-          className="workspace-collapse-toggle"
-          onClick={toggleSidebar}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!collapsed}
-          aria-controls="workspace-navigation"
-        >
-          {collapsed ? (
-            <PanelLeftOpen size={20} />
-          ) : (
-            <PanelLeftClose size={20} />
-          )}
-          <span>Collapse sidebar</span>
-        </button>
         <nav id="workspace-navigation" aria-label="Workspace navigation">
           {links
             .filter((link) => link.href !== '/members/messages')

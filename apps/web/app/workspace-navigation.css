@@ -1,17 +1,32 @@
 /* Reversible navigation trial; shared by Member, Admin and Pastor workspaces. */
-.workspace .workspace-collapse-toggle {
+/* Subtle desktop sidebar toggle at the left of the top bar. */
+.workspace-topbar-lead {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 0.8rem;
-  margin-bottom: 0.75rem;
-  border: 1px solid rgba(245, 232, 206, 0.2);
-  border-radius: 0.75rem;
+  min-width: 0;
+}
+.workspace .workspace-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.6rem;
   background: transparent;
-  color: inherit;
+  color: var(--ink-soft);
   cursor: pointer;
-  font: inherit;
-  font-size: 0.8rem;
+}
+.workspace .workspace-sidebar-toggle:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+.workspace .workspace-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 .workspace > aside {
   overflow-y: auto;
@@ -49,34 +64,32 @@
   filter: brightness(1.15);
 }
 @media (min-width: 901px) {
-  .workspace.workspace-collapsed > aside {
+  :root[data-sidebar='collapsed'] .workspace > aside {
     width: 5rem;
     flex-basis: 5rem;
     padding-inline: 0.6rem;
   }
-  .workspace.workspace-collapsed .workspace-topbar {
+  :root[data-sidebar='collapsed'] .workspace .workspace-topbar {
     left: 5rem;
   }
-  .workspace.workspace-collapsed .workspace-brand {
+  :root[data-sidebar='collapsed'] .workspace .workspace-brand {
     padding: 0 0 1rem;
   }
-  .workspace.workspace-collapsed .workspace-brand .brand {
+  :root[data-sidebar='collapsed'] .workspace .workspace-brand .brand {
     justify-content: center;
   }
-  .workspace.workspace-collapsed .workspace-brand .brand > span,
-  .workspace.workspace-collapsed .workspace-brand > strong,
-  .workspace.workspace-collapsed .workspace-link-label,
-  .workspace.workspace-collapsed .workspace-nav-caption,
-  .workspace.workspace-collapsed .workspace-collapse-toggle > span {
+  :root[data-sidebar='collapsed'] .workspace .workspace-brand .brand > span,
+  :root[data-sidebar='collapsed'] .workspace .workspace-brand > strong,
+  :root[data-sidebar='collapsed'] .workspace .workspace-link-label,
+  :root[data-sidebar='collapsed'] .workspace .workspace-nav-caption {
     display: none;
   }
-  .workspace.workspace-collapsed aside nav a,
-  .workspace.workspace-collapsed .workspace-collapse-toggle {
+  :root[data-sidebar='collapsed'] .workspace aside nav a {
     justify-content: center;
   }
 }
 @media (max-width: 900px) {
-  .workspace .workspace-collapse-toggle {
+  .workspace .workspace-sidebar-toggle {
     display: none;
   }
   .workspace .workspace-message-fab {

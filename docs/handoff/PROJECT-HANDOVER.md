@@ -85,15 +85,15 @@ Baseline code limits: 10-minute expiry, 5 requests/hour per normalized email and
 
 Each slice includes its contracts, meaningful permission/data/failure tests, accurate frontend states and a short update here. Coded/verified/owner-accepted are separate statuses. Owner preview and Codex review occur at slice boundaries; do not repeat successful provider setup or unrelated full audits.
 
-| Phase | Scope                                                                                       | Status                                                                                                                                              |
-| ----- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                         |
-| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model. |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 accepted. **2A implemented (`49ea86f..5c97de0`); tests, lint and build pass; awaiting owner/Codex review.** 2B–2D not started. |
-| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                               |
-| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                            |
-| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                 |
-| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                             |
+| Phase | Scope                                                                                       | Status                                                                                                                                                                                 |
+| ----- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                            |
+| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                    |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 accepted. **2A complete at `fb2af2a` (Messages follow-up done; tests, lint and owner visual checks pass); awaiting brief closing checkpoint.** 2B–2D not started. |
+| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                  |
+| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                               |
+| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                    |
+| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                |
 
 ### Phase 2 — finish the CMS and shared content foundation
 
@@ -1306,3 +1306,59 @@ Scope: "2A. Small navigation/Home cleanup and reported visual defects" only. No 
 **Current next instruction:**
 
 > Owner: confirm the unconfirmed browser items. Codex: review `dfffdba..5c97de0` against 2A's exit criteria, and advise on the Messages shortcut (hide vs unavailable). Claude: wait for owner/Codex acceptance before starting Phase 2B. No merge, push or deployment.
+
+### Codex Phase 2A checkpoint — 13 November 2026, head `2b61c56`
+
+**Verdict:** core Home/navigation and narrow screenshot fixes pass source review; one agreed future-feature exposure remains before closing 2A. No application changes made by Codex and nothing pushed/merged/deployed in this checkpoint.
+
+Reviewed shared Home removal of For you/updates/latest sermon/Sunday/duplicate join blocks; member destinations retained; staff tools on Home and server redirect from Manage; legacy join/activity destinations; full-width workspace-only calendar; fixed campus labels; action grouping; profile contrast/height; login indicator cleanup. Public calendar remains separate in presentation, sharing the existing activity model. No new auth/API/DB/Google feature introduced. Existing browser-backed forms and activity management remain prototype limitations until their designated phases, not new delivered backend functions.
+
+**Fresh checks:** regular suite **71 passed across 20 files**, 76 DB tests skipped as designed. Acknowledged Claude/owner lint and stopped-server build evidence at `5c97de0`; did not repeat those checks or the unaffected database/provider suite. Owner's Home visual acceptance is recorded. Narrow-mobile, Locations cards/pills, login dots and Manage redirect were not explicitly confirmed; do not mark those visual checks passed from source/tests alone.
+
+**Follow-up:** Future F2 already requires hiding or clearly disabling the prototype chat; no new product choice is needed to use the simpler safe default. Claude should hide the floating Messages entry for now and make direct `/members/messages` visits show a concise unavailable/future-feature state rather than an editable local chat. Do not implement chat services, realtime or notifications. Add focused navigation/direct-route coverage. This is a deferred-feature UI change, not a new permission system.
+
+**Owner visual checklist after that small follow-up:** narrow-mobile Home calendar/navigation/member tools; Locations campus pills and group/study action spacing; sign-in verse dots; profile name/photo control; `/admin/manage` lands at staff tools for each staff role. Do not request another broad design review or repeat provider signup. Build only with the dev server stopped or isolated output.
+
+**Current Claude instruction:** Finish only the Messages unavailable-state follow-up and the remaining 2A visual checks, update this handover with actual evidence, then return for the brief closing checkpoint before Phase 2B. Do not change account permissions or add backend phases in this slice. Role tile wording can become People when Phase 4 implements the fixed-staff model; current roles/status APIs remain as previously recorded until that deliberate change. No merge, push or deployment without authorization.
+
+### Phase 2A closing — Claude, 13 November 2026, head `fb2af2a`
+
+This follows "Codex Phase 2A checkpoint". Only the requested follow-up was made, with no permission or backend changes.
+
+**Messages follow-up (`fb2af2a`, Future F2):**
+
+- The floating Messages shortcut is removed from every workspace screen, and Messages is no longer a sidebar link (`workspaceLinks()`).
+- A direct visit to `/members/messages` shows "Messaging isn’t available yet", the published church office email and phone (or a neutral note if none are published), and a "Back to Home" link.
+- The browser-only chat prototype is no longer rendered or used from this route. Its local records stay in browser storage, untouched, until Phase 4/F2.
+- Help no longer links to Messages, and its note says in-app messaging is planned.
+- No chat service, realtime or notification work.
+- Tests:
+  - `members/messages/page.test.tsx`: the unavailable heading, no textbox or send control, and the Home link.
+  - `workspace-shell.test.tsx`: no "Open messages" shortcut, including on the messages route itself.
+  - `staff-tools.test.ts`: no Messages entry in the sidebar.
+
+**Evidence (owner's Mac, 13 Nov):**
+
+- `pnpm test`: **21 files, 72 passed** (76 DB tests skipped as designed).
+- `pnpm lint`: ESLint `--max-warnings=0` and the full Prettier check pass.
+- `pnpm build` is not repeated: `fb2af2a` changes only one client page, the shell markup, a test and CSS, and the build at `5c97de0` passed. Run it with the stopped dev server if Codex wants a fresh build.
+- **Owner visual checklist:** the owner replied "done" to the six-item list with no issues reported. Recorded as passing:
+  1. narrow-mobile Home (compact calendar, member tools wrapping, menu);
+  2. public Locations campus pills and the Join / See dates action spacing;
+  3. sign-in verse dots with no extra bar;
+  4. profile name legibility and the visible Change photo control;
+  5. `/admin/manage` landing at Staff tools for Pastor and Admin;
+  6. `/members/messages` unavailable state with no Messages shortcut.
+
+**Remaining 2A limitations, unchanged from the checkpoint:**
+
+- The next-step panel is reachable only through public `?join=` links (2B retargets these).
+- The Sunday summary remains on the Calendar page and on public Locations.
+- Calendar chips are `aria-hidden`; titles are in the day detail list.
+- The unused `.kit-hub*` CSS remains.
+- Browser Back cannot be intercepted for a dirty panel.
+- Role tile wording stays "Members & roles" / "Member directory" until Phase 4.
+
+**Current next instruction:**
+
+> Codex: brief closing checkpoint of `2b61c56..fb2af2a` (Messages follow-up plus recorded visual evidence). Claude: on acceptance and owner go-ahead, start Phase 2B (structured collections and uniform saves) as written in the revised plan. No merge, push or deployment without authorization.

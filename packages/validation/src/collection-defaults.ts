@@ -1,6 +1,7 @@
 import type {
   LocationInput,
   NextStepInput,
+  SermonInput,
   TeamMemberInput,
 } from './collections.ts';
 
@@ -151,5 +152,114 @@ export const defaultTeam: TeamMemberInput[] = [
     bio: 'Lisa is passionate about raising the next generation and runs our Kids Church and Young Adults programmes.',
     image: portrait('1438761681033-6461ffad8d80'),
     status: 'published',
+  },
+];
+
+const wide = (id: string) =>
+  `https://images.unsplash.com/photo-${id}?w=1200&h=675&fit=crop&auto=format`;
+/**
+ * Sample sermons. content:seed adds the ones that were on the prototype site
+ * as awaiting Pastor approval: nothing is seeded as approved or public.
+ */
+export const defaultSermons: (SermonInput & {
+  slug: string;
+  published: boolean;
+})[] = [
+  {
+    slug: 'walking-in-the-spirit',
+    title: 'Walking in the Spirit',
+    series: 'Life in the Spirit',
+    speaker: 'Pastor Bartolome R. Sanchez',
+    date: '2026-10-04',
+    duration: '42 min',
+    image: wide('1507003211169-0a1dd7228f2d'),
+    summary:
+      'A practical message about living each day attentive to the leading of the Holy Spirit.',
+    mediaUrl: '',
+    published: true,
+  },
+  {
+    slug: 'the-grace-of-giving',
+    title: 'The Grace of Giving',
+    series: 'Generosity',
+    speaker: 'Pastor Sarah Keil',
+    date: '2026-09-28',
+    duration: '38 min',
+    image: wide('1478737270239-2f02b77fc618'),
+    summary: 'Discover generosity as an expression of worship and trust.',
+    mediaUrl: '',
+    published: true,
+  },
+  {
+    slug: 'rooted-and-built-up',
+    title: 'Rooted and Built Up',
+    series: 'Foundations',
+    speaker: 'Pastor Bartolome R. Sanchez',
+    date: '2026-09-21',
+    duration: '45 min',
+    image: wide('1504711434969-e33886168f5c'),
+    summary: 'Building a resilient life on the foundation of Jesus.',
+    mediaUrl: '',
+    published: false,
+  },
+  {
+    slug: 'a-hope-that-holds',
+    title: 'A Hope That Holds',
+    series: 'Living Hope',
+    speaker: 'Mereana Example',
+    date: '2026-09-14',
+    duration: '36 min',
+    image: wide('1529156069898-49953e39b3ac'),
+    summary: 'How the hope of Jesus steadies us in seasons of uncertainty.',
+    mediaUrl: '',
+    published: true,
+  },
+  {
+    slug: 'the-practice-of-peace',
+    title: 'The Practice of Peace',
+    series: 'The Way of Jesus',
+    speaker: 'Pastor Bartolome R. Sanchez',
+    date: '2026-09-07',
+    duration: '41 min',
+    image: wide('1492551557933-34265f7af79e'),
+    summary: 'Simple practices that make room for the peace of Christ.',
+    mediaUrl: '',
+    published: true,
+  },
+  {
+    slug: 'for-the-city',
+    title: 'For the City',
+    series: 'Faith in Action',
+    speaker: 'Wiremu Example',
+    date: '2026-08-31',
+    duration: '39 min',
+    image: wide('1517457373958-b7bdd4587205'),
+    summary: 'Joining God in the work of renewal wherever we live and serve.',
+    mediaUrl: '',
+    published: true,
+  },
+  {
+    slug: 'prayer-that-listens',
+    title: 'Prayer That Listens',
+    series: 'Teach Us to Pray',
+    speaker: 'Mereana Example',
+    date: '2026-08-24',
+    duration: '44 min',
+    image: wide('1438032005730-c779502df39b'),
+    summary: 'Learning to slow down, listen, and respond to God in prayer.',
+    mediaUrl: '',
+    published: false,
+  },
+  {
+    slug: 'welcome-home',
+    title: 'Welcome Home',
+    series: 'House of Grace',
+    speaker: 'Pastor Bartolome R. Sanchez',
+    date: '2026-08-17',
+    duration: '34 min',
+    image: wide('1507003211169-0a1dd7228f2d'),
+    summary: 'The open invitation of grace and the community it creates.',
+    mediaUrl: '',
+    published: true,
   },
 ];

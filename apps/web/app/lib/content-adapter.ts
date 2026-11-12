@@ -7,7 +7,7 @@ import {
   type PublicNextStep,
   type SiteSettings,
 } from '@grace-abounds/validation';
-import type { ContentState, SiteContent, TeamMember } from './content';
+import type { ContentState, Sermon, SiteContent, TeamMember } from './content';
 
 /*
  * Converts between the API's named content shapes and the shapes the
@@ -166,6 +166,14 @@ export function nextStepHref(step: Pick<PublicNextStep, 'title' | 'cta'>) {
   return `/members?join=${encodeURIComponent(target || step.title)}`;
 }
 
+const months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+/** 2026-10-04 → 4 Oct 2026 (the same on server and browser). */
+export function formatSermonDate(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  return year && month && day ? `${day} ${months[month - 1]} ${year}` : date;
+}
+const SERMON_FALLBACK_IMAGE = '/images/hero-6.jpg';
+
 /** Published database collections → the shapes existing components read. */
 export function collectionsToLegacy(
   collections: PublicCollections | undefined,
@@ -196,13 +204,33 @@ export function collectionsToLegacy(
       image: item.image,
       status: 'published',
     })),
+    // Pastor-approved sermons only; the API never sends anything else.
+    sermons: (collections?.sermons ?? []).map((item): Sermon => ({
+      id: item.id,
+      slug: item.slug,
+      title: item.title,
+      series: item.series,
+      speaker: item.speaker,
+      date: formatSermonDate(item.date),
+      duration: item.duration,
+      image: item.image || SERMON_FALLBACK_IMAGE,
+      summary: item.summary,
+      status: 'published',
+      progress: 100,
+      mediaUrl: item.mediaUrl,
+    })),
   };
 }
 
 export function toLegacy(
   bundle: PublicContentBundle | null,
   base: LegacyPages,
-): { site: SiteContent; pages: LegacyPages; team: TeamMember[] } {
+): {
+  site: SiteContent;
+  pages: LegacyPages;
+  team: TeamMember[];
+  sermons: Sermon[];
+} {
   let result = {
     site: { ...blankSite },
     pages: {
@@ -221,18 +249,20 @@ export function toLegacy(
       ) as LegacyPages['heroes'],
     } as LegacyPages,
   };
-  const { locations, steps, team } = collectionsToLegacy(bundle?.collections);
+  const { locations, steps, team, sermons } = collectionsToLegacy(
+    bundle?.collections,
+  );
   result.pages = {
     ...result.pages,
     locations,
     steps,
     resources: [],
   } as LegacyPages;
-  if (!bundle) return { ...result, team };
+  if (!bundle) return { ...result, team, sermons };
   result = mergePatch(result, siteToLegacy(bundle.site));
   for (const key of pageKeys)
     result = mergePatch(result, pageToLegacy(key, bundle.pages[key]));
-  return { ...result, team };
+  return { ...result, team, sermons };
 }
 
 const verses = (text: string) =>

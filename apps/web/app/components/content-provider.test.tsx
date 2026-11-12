@@ -23,6 +23,20 @@ const collections = {
     void _s;
     return { ...item, id: `team-${i}` };
   }),
+  sermons: [
+    {
+      id: 'sermon-1',
+      slug: 'walking-in-the-spirit',
+      title: 'Walking in the Spirit',
+      series: 'Life in the Spirit',
+      speaker: 'Pastor Example',
+      date: '2026-10-04',
+      duration: '42 min',
+      image: '',
+      summary: 'A practical message.',
+      mediaUrl: '',
+    },
+  ],
 } satisfies PublicCollections;
 const published: PublicContentBundle = {
   site: defaultSiteSettings,
@@ -77,12 +91,13 @@ describe('live website content', () => {
     await waitFor(() => expect(context.ready).toBe(true));
     expect(context.content.site.heroTitle).toBe('Grace');
   });
-  it('campuses, journeys and leadership come from the server, never browser storage', async () => {
+  it('campuses, journeys, leadership and sermons come from the server, never browser storage', async () => {
     localStorage.setItem(
       'grace-abounds-content-v4',
       JSON.stringify({
         pages: { locations: [], steps: [] },
         team: [{ id: 'old', name: 'Stale person' }],
+        sermons: [{ id: 'old', slug: 'stale', status: 'published' }],
       }),
     );
     renderProvider();
@@ -98,12 +113,23 @@ describe('live website content', () => {
     expect(context.content.team.map((t) => t.name)).toEqual(
       defaultTeam.map((t) => t.name),
     );
+    // Only Pastor-approved sermons from the server, shown with a fallback
+    // photo and a readable date.
+    expect(context.content.sermons).toEqual([
+      expect.objectContaining({
+        slug: 'walking-in-the-spirit',
+        date: '4 Oct 2026',
+        image: '/images/hero-6.jpg',
+        status: 'published',
+      }),
+    ]);
     // Nothing migrated is written back to browser storage.
     const stored = JSON.parse(
       localStorage.getItem('grace-abounds-content-v4') ?? '{}',
     );
     expect(stored).not.toHaveProperty('pages');
     expect(stored).not.toHaveProperty('team');
+    expect(stored).not.toHaveProperty('sermons');
   });
   it('shows no demo content when published content is unavailable', async () => {
     renderProvider(null);

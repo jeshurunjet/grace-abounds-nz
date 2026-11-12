@@ -29,6 +29,7 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { requireActor, requireRole } from '../lib/identity.js';
+import { publicSermons } from './sermons.js';
 
 /*
  * Phase 2B editorial collections. Every record saves on its own:
@@ -286,10 +287,11 @@ function collectionFor(
 /** Published campuses, journeys and leadership for the public bundle. */
 export async function publicCollections(): Promise<PublicCollections> {
   const published = { where: { status: 'PUBLISHED' }, ...ordered };
-  const [locations, steps, team] = await Promise.all([
+  const [locations, steps, team, sermons] = await Promise.all([
     delegate(prisma, 'location').findMany(published),
     delegate(prisma, 'nextStep').findMany(published),
     delegate(prisma, 'teamMember').findMany(published),
+    publicSermons(),
   ]);
   const strip = (def: Collection<never>, row: Row) => {
     const { status: _status, ...rest } = def.toApi(row);
@@ -300,6 +302,7 @@ export async function publicCollections(): Promise<PublicCollections> {
     locations: locations.map((row) => strip(collections.locations!, row)),
     steps: steps.map((row) => strip(collections['next-steps']!, row)),
     team: team.map((row) => strip(collections.team!, row)),
+    sermons,
   } as PublicCollections;
 }
 

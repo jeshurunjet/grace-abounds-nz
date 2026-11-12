@@ -346,6 +346,83 @@ model Resource {
   updatedById String?
 
   folder ResourceFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  asset  Asset?          @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@index([status, position])
+}
+
+enum AssetAccess {
+  PUBLIC
+  MEMBERS
+  PRIVATE
+}
+
+enum AssetStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+/// One stored file. Uploads arrive in Phase 2D; the model is defined now so
+/// resources and sermons refer to files by ID (one store, no copies). A file
+/// is never served until VERIFIED, and video access also needs an approved
+/// sermon.
+model Asset {
+  id          String      @id @default(cuid())
+  storageKey  String      @unique
+  fileName    String
+  contentType String
+  size        Int
+  access      AssetAccess @default(PRIVATE)
+  status      AssetStatus @default(PENDING)
+  ownerId     String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  resources Resource[]
+  sermons   Sermon[]   @relation("SermonMedia")
+}
+
+enum SermonReview {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Sermons & videos. Staff save a working copy; only the Pastor approves an
+/// exact saved version, which is copied to `live` (the public version). A
+/// later change needs approval again while `live` stays published.
+model Sermon {
+  id           String       @id @default(cuid())
+  slug         String       @unique
+  title        String
+  series       String       @default("")
+  speaker      String       @default("")
+  date         DateTime     @db.Date
+  duration     String       @default("")
+  image        String       @default("")
+  summary      String       @default("")
+  /// Direct https:// recording link until uploads exist.
+  mediaUrl     String       @default("")
+  mediaAssetId String?
+  review       SermonReview @default(DRAFT)
+  reviewNote   String       @default("")
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// The approved public fields; null when nothing is live.
+  live         Json?
+  liveVersion  Int?
+  approvedById String?
+  approvedAt   DateTime?
+  archivedAt   DateTime?
+  version      Int          @default(1)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  updatedById  String?
+
+  mediaAsset Asset? @relation("SermonMedia", fields: [mediaAssetId], references: [id], onDelete: Restrict)
+
+  @@index([review])
+  @@index([date])
 }

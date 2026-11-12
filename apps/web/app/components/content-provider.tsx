@@ -57,13 +57,20 @@ type ContentContextValue = {
  * Published settings, page sections and the Phase 2B collections (campuses,
  * Next steps, leadership) come from the server. Browser storage keeps only
  * the parts that have not moved to the database yet (activities, sermons,
- * member records); it never supplies site, pages or team.
+ * member records); it never supplies site, pages, team or sermons.
  */
 function localPart(content: ContentState) {
-  const { site: _site, pages: _pages, team: _team, ...rest } = content;
+  const {
+    site: _site,
+    pages: _pages,
+    team: _team,
+    sermons: _sermons,
+    ...rest
+  } = content;
   void _site;
   void _pages;
   void _team;
+  void _sermons;
   return rest;
 }
 // Treat any unsupported visibility value as an unpublished draft.
@@ -114,20 +121,21 @@ export function ContentProvider({
     if (loaded.current) {
       if (bundleKey === 'null') return;
       setHasPublished(true);
-      // A newer published bundle: replace the server-owned site, pages and
-      // leadership; other browser-kept data stays.
+      // A newer published bundle: replace the server-owned site, pages,
+      // leadership and sermons; other browser-kept data stays.
       setContent((current) => ({
         ...current,
         site: published.site,
         pages: published.pages,
         team: published.team,
+        sermons: published.sermons,
       }));
       return;
     }
     loaded.current = true;
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-      // Site, pages and leadership always come from the server; browser
+      // Site, pages, leadership and sermons always come from the server; browser
       // storage only supplies the parts that have not moved yet.
       const base: ContentState = {
         ...seedContent,
@@ -135,6 +143,7 @@ export function ContentProvider({
         site: published.site,
         pages: published.pages,
         team: published.team,
+        sermons: published.sermons,
       };
       setContent(normalizeRecords(base));
       localStorage.removeItem?.(LEGACY_EDITOR_KEY);

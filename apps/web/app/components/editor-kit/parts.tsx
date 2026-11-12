@@ -36,7 +36,7 @@ export function SectionCard({
   );
 }
 
-export type BadgeTone = 'success' | 'neutral';
+export type BadgeTone = 'success' | 'neutral' | 'pending' | 'danger';
 export function Badge({
   tone,
   children,

@@ -298,6 +298,14 @@
   background: var(--neutral-badge-bg);
   color: var(--ink-soft);
 }
+.kit-badge-pending {
+  background: var(--highlight);
+  color: var(--ink-strong);
+}
+.kit-badge-danger {
+  background: var(--neutral-badge-bg);
+  color: var(--danger-ink);
+}
 .kit-status {
   display: inline-flex;
   align-items: center;
@@ -850,4 +858,49 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--maple);
+}
+
+/* Sermons & videos: publishing state inside the side panel */
+.sermon-review {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.sermon-review-state {
+  margin: 0;
+}
+.sermon-review-state small {
+  color: var(--ink-soft);
+}
+.sermon-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sermon-review-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sermon-review-actions .kit-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.sermon-review-note {
+  display: grid;
+  gap: 0.5rem;
+}
+.sermon-preview {
+  width: 100%;
+  border-radius: var(--radius);
+  background: var(--dark-section);
+}
+.kit-search {
+  width: 100%;
+  margin-bottom: 0.75rem;
 }

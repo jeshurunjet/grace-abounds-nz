@@ -57,6 +57,8 @@ export function SermonGrid({ limit }: { limit?: number }) {
   const sermons = content.sermons
     .filter((item) => item.status === 'published')
     .slice(0, limit);
+  if (!sermons.length)
+    return <p className="form-note">New messages will appear here soon.</p>;
   return (
     <div className="reference-card-grid">
       {sermons.map((item, index) => (

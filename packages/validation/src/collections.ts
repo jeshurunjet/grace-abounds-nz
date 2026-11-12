@@ -29,6 +29,25 @@ const optionalLink = z
     'Use an https:// address or a site path starting with /.',
   );
 
+/** A direct, playable recording: an https:// link to one of these files. */
+export const mediaExtensions = ['mp4', 'm4v', 'webm', 'mp3', 'm4a'] as const;
+export const isMediaRef = (value: string) =>
+  /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?\/\S*\.(?:mp4|m4v|webm|mp3|m4a)(?:[?#]\S*)?$/i.test(
+    value,
+  );
+/**
+ * Links that play as video: recording files and the common video hosts.
+ * Library resources may not point at these, so a video can only reach
+ * members or the public through a Pastor-approved sermon.
+ */
+export const isVideoLink = (value: string) =>
+  /\.(?:mp4|m4v|webm|mov|mkv|avi|m3u8)(?:[?#]|$)/i.test(value) ||
+  /^https:\/\/(?:[a-z0-9-]+\.)*(?:youtube\.com|youtu\.be|vimeo\.com|facebook\.com\/[^\s]*\/videos|fb\.watch)(?:[/:?#]|$)/i.test(
+    value,
+  );
+export const VIDEO_LINK_MESSAGE =
+  'Videos are published through Sermons & videos, where the Pastor approves them.';
+
 export const contentStatuses = ['draft', 'published', 'archived'] as const;
 export type ContentStatusValue = (typeof contentStatuses)[number];
 const status = z.enum(contentStatuses);
@@ -92,7 +111,10 @@ export const resourceInputSchema = z
     title: required(160, 'a title'),
     description: text(600),
     type: text(40),
-    url: optionalLink,
+    url: optionalLink.refine(
+      (value) => !isVideoLink(value),
+      VIDEO_LINK_MESSAGE,
+    ),
     folderId: z.string().trim().min(1).max(40).nullable(),
     visibility: z.enum(resourceVisibilities),
     status,
@@ -105,6 +127,73 @@ export const folderInputSchema = z
     parentId: z.string().trim().min(1).max(40).nullable(),
   })
   .strict();
+
+/*
+ * Sermons & videos. Admin and Pastor prepare a sermon and Save it; Save never
+ * publishes. Only the Pastor approves an exact saved version for the public
+ * site and members, and any later change needs approval again (the approved
+ * version stays live meanwhile). The slug is set once, on create.
+ */
+export const sermonInputSchema = z
+  .object({
+    title: required(160, 'a title'),
+    series: text(120),
+    speaker: text(120),
+    date: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date.')
+      .refine(
+        (value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)),
+        'Choose a date.',
+      ),
+    duration: text(20),
+    image: optionalImage,
+    summary: text(2000),
+    mediaUrl: z
+      .string()
+      .trim()
+      .max(1000)
+      .refine(
+        (value) => value === '' || isMediaRef(value),
+        'Use an https:// link to an MP4, WebM, MP3 or M4A file.',
+      ),
+  })
+  .strict();
+export const sermonReviewStates = [
+  'draft',
+  'pending',
+  'approved',
+  'rejected',
+] as const;
+export type SermonReviewState = (typeof sermonReviewStates)[number];
+export const sermonRejectSchema = z
+  .object({ note: required(1000, 'a note for the editor') })
+  .strict();
+export type SermonInput = z.infer<typeof sermonInputSchema>;
+/** The public fields of a sermon, as approved by the Pastor. */
+export type PublicSermon = SermonInput & { id: string; slug: string };
+/** A sermon as staff see it: the working copy plus its review state. */
+export type StaffSermon = SermonInput & {
+  id: string;
+  slug: string;
+  review: SermonReviewState;
+  reviewNote: string;
+  archived: boolean;
+  /** The approved version currently live, if any. */
+  live: null | {
+    version: number;
+    approvedAt: string;
+    title: string;
+    mediaUrl: string;
+  };
+  /** True when the working copy differs from what is live. */
+  changedSinceApproval: boolean;
+  /** Ever approved: such a sermon is archived rather than deleted. */
+  everApproved: boolean;
+  version: number;
+  updatedAt: string;
+};
 
 export type LocationInput = z.infer<typeof locationInputSchema>;
 export type NextStepInput = z.infer<typeof nextStepInputSchema>;
@@ -133,4 +222,6 @@ export type PublicCollections = {
   locations: PublicLocation[];
   steps: PublicNextStep[];
   team: PublicTeamMember[];
+  /** Pastor-approved sermons, newest first. */
+  sermons?: PublicSermon[];
 };

@@ -275,7 +275,7 @@ const stepFields: FieldSpec[] = [
 ];
 
 export default function CmsPage() {
-  const { content, update, ready, storageError, retrySave, applyPublished } =
+  const { content, ready, storageError, retrySave, applyPublished } =
     useContent();
   const toast = useToast();
   const { data: session } = useSession();

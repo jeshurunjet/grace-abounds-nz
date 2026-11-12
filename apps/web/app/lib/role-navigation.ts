@@ -36,6 +36,9 @@ const MANAGE_ROUTES = [
   '/admin/sermons',
   '/admin/users',
   '/pastor/care',
+  // Staff open these from the hub too (members have them in the sidebar).
+  '/members/calendar',
+  '/members/gallery',
 ];
 export function isManageRoute(pathname: string) {
   return MANAGE_ROUTES.some(

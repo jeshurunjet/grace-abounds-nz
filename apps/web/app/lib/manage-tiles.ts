@@ -1,5 +1,7 @@
 import {
+  CalendarCog,
   CalendarDays,
+  FolderOpen,
   Globe,
   Heart,
   Users,
@@ -31,8 +33,22 @@ export function manageTiles(role: string): ManageTile[] {
       title: 'Activities',
       description:
         'Create and edit the services, groups, studies and teams that appear on the calendar.',
+      icon: CalendarCog,
+      tone: 'activities',
+    },
+    {
+      href: '/members/calendar',
+      title: 'Calendar',
+      description: 'See what’s on across the church, and book in.',
       icon: CalendarDays,
       tone: 'activities',
+    },
+    {
+      href: '/members/gallery',
+      title: 'Resources',
+      description: 'Sermon notes, group guides, bulletins and ministry files.',
+      icon: FolderOpen,
+      tone: 'website',
     },
     {
       href: '/admin/sermons',

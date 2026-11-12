@@ -7,12 +7,17 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
     { href: '/', label: 'Main website', icon: '⌂' },
     { href: '/members', label: 'Home', icon: '◈' },
     { href: '/members/messages', label: 'Messages', icon: '✉' },
-    { href: '/members/calendar', label: 'Calendar', icon: '□' },
-    { href: '/members/gallery', label: 'Resources', icon: '▧' },
   ];
-  // Staff tools live on the Manage hub (/admin/manage), one tile each.
+  // Owner decision: staff reach Calendar and Resources from the Manage hub
+  // (/admin/manage) with their tools; members, who have no Manage, keep
+  // them in the sidebar.
   if (role === 'pastor' || role === 'admin')
     links.push({ href: '/admin/manage', label: 'Manage', icon: '▦' });
+  else
+    links.push(
+      { href: '/members/calendar', label: 'Calendar', icon: '□' },
+      { href: '/members/gallery', label: 'Resources', icon: '▧' },
+    );
   links.push({ href: '/settings', label: 'Settings', icon: '⚙' });
   links.push({ href: '/help', label: 'Help', icon: '?' });
   return links;

@@ -4,25 +4,30 @@ import { workspaceLinks } from '../components/admin-shell';
 import { isManageRoute } from './role-navigation';
 
 describe('workspace navigation by role', () => {
-  it('keeps member destinations visible and gives staff one Manage entry', () => {
+  it('members keep Calendar and Resources in the sidebar; staff find them under Manage', () => {
     const labels = (role: string) => workspaceLinks(role).map((l) => l.label);
-    for (const role of ['member', 'admin', 'pastor']) {
+    for (const role of ['member', 'admin', 'pastor'])
       expect(labels(role)).toEqual(
         expect.arrayContaining([
           'Main website',
           'Home',
-          'Resources',
-          'Calendar',
+          'Messages',
           'Settings',
           'Help',
         ]),
       );
-      // Messages stays reachable through the labelled floating shortcut.
-      expect(labels(role)).toContain('Messages');
-    }
+    expect(labels('member')).toEqual(
+      expect.arrayContaining(['Calendar', 'Resources']),
+    );
     expect(labels('member')).not.toContain('Manage');
-    expect(labels('admin')).toContain('Manage');
-    expect(labels('pastor')).toContain('Manage');
+    for (const role of ['admin', 'pastor']) {
+      expect(labels(role)).toContain('Manage');
+      expect(labels(role)).not.toContain('Calendar');
+      const tiles = manageTiles(role).map((t) => t.href);
+      expect(tiles).toEqual(
+        expect.arrayContaining(['/members/calendar', '/members/gallery']),
+      );
+    }
   });
 
   it('shows each role only the tools it may use', () => {
@@ -30,12 +35,16 @@ describe('workspace navigation by role', () => {
     expect(titles('admin')).toEqual([
       'Website content',
       'Activities',
+      'Calendar',
+      'Resources',
       'Sermons',
       'Member directory',
     ]);
     expect(titles('pastor')).toEqual([
       'Website content',
       'Activities',
+      'Calendar',
+      'Resources',
       'Sermons',
       'Members & roles',
       'Pastoral care',
@@ -45,6 +54,6 @@ describe('workspace navigation by role', () => {
   it('keeps Manage highlighted inside its tools', () => {
     expect(isManageRoute('/admin/cms')).toBe(true);
     expect(isManageRoute('/pastor/care')).toBe(true);
-    expect(isManageRoute('/members/calendar')).toBe(false);
+    expect(isManageRoute('/members/messages')).toBe(false);
   });
 });

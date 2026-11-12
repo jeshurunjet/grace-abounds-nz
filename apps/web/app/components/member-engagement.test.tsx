@@ -39,9 +39,6 @@ describe('MemberEngagement', () => {
       screen.getByRole('button', { name: 'Submit interest' }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
-    expect(
-      screen.getByRole('link', { name: /Resource gallery/ }),
-    ).toHaveAttribute('href', '/members/gallery');
 
     expect(
       screen.getByRole('searchbox', { name: 'Search activities' }),

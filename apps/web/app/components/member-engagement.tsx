@@ -2,13 +2,7 @@
 
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import {
-  CalendarCheck,
-  FolderOpen,
-  Footprints,
-  Heart,
-  Users,
-} from 'lucide-react';
+import { CalendarCheck, Footprints, Heart, Users } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
@@ -212,18 +206,6 @@ export function MemberEngagement() {
               <small>{body}</small>
             </button>
           ))}
-          <Link
-            className="member-action-card kit-tile-website"
-            href="/members/gallery"
-          >
-            <span className="member-action-icon" aria-hidden="true">
-              <FolderOpen size={26} strokeWidth={1.7} />
-            </span>
-            <strong>Resource gallery</strong>
-            <small>
-              Sermon notes, group guides, bulletins and ministry files.
-            </small>
-          </Link>
         </div>
       </section>
 

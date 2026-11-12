@@ -346,7 +346,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
   // ---------- Members: the shared library (read-only) ----------
   app.get('/v1/member/library', async (request, reply) => {
     requireActor(request);
-    const [folders, resources] = await Promise.all([
+    const [folders, resources, sermons] = await Promise.all([
       delegate(prisma, 'resourceFolder').findMany(ordered),
       prisma.resource.findMany({
         // A sermon reference is listed only while that sermon is approved
@@ -361,6 +361,9 @@ export function registerCollectionRoutes(app: FastifyInstance) {
         include: { sermon: { select: { slug: true } } },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       }),
+      // Every Pastor-approved sermon appears in the library automatically;
+      // the library has no publication switch of its own for sermons.
+      publicSermons(),
     ]);
     reply.header('cache-control', 'private, no-store');
     return {
@@ -381,6 +384,14 @@ export function registerCollectionRoutes(app: FastifyInstance) {
             href: sermon ? `/sermons/${sermon.slug}` : row.url,
           };
         }),
+        sermons: sermons.map((item) => ({
+          id: item.id,
+          title: item.title,
+          speaker: item.speaker,
+          series: item.series,
+          date: item.date,
+          href: `/sermons/${item.slug}`,
+        })),
       },
     };
   });

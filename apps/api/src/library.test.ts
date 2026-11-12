@@ -85,6 +85,12 @@ describe.skipIf(!dbTestsEnabled)(
         title: string;
         href: string;
       }[];
+    const librarySermons = async (who: Who) =>
+      (
+        (await call('GET', '/v1/member/library', who)).json().data.sermons as {
+          href: string;
+        }[]
+      ).map((item) => item.href);
     async function liveSermon(admin: Who, pastor: Who, title = sermon.title) {
       const { id } = (
         await call('POST', '/v1/staff/sermons', admin, undefined, {
@@ -242,6 +248,7 @@ describe.skipIf(!dbTestsEnabled)(
       );
       expect(hidden.statusCode).toBe(201);
       expect(await library(member)).toEqual([]);
+      expect(await librarySermons(member)).toEqual([]);
 
       const liveId = await liveSermon(admin, pastor);
       await call('POST', '/v1/staff/resources', admin, undefined, {
@@ -256,9 +263,14 @@ describe.skipIf(!dbTestsEnabled)(
           href: '/sermons/walking-in-the-spirit',
         }),
       ]);
+      // Every approved sermon is also listed automatically.
+      expect(await librarySermons(member)).toEqual([
+        '/sermons/walking-in-the-spirit',
+      ]);
       // Unpublishing the sermon removes it from the library too.
       await call('POST', `/v1/staff/sermons/${liveId}/unpublish`, pastor, 3);
       expect(await library(member)).toEqual([]);
+      expect(await librarySermons(member)).toEqual([]);
 
       // A sermon listed in the library cannot be deleted from under it.
       const used = await call(

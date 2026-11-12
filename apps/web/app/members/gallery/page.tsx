@@ -11,14 +11,32 @@ import {
   type FieldSpec,
 } from '../../components/editor-kit/collection-section';
 import { api, errorMessage } from '../../lib/api-client';
+import { formatSermonDate } from '../../lib/content-adapter';
 
 type LibraryFolder = { id: string; name: string; parentId: string | null };
+/** A Pastor-approved sermon; the library lists every one automatically. */
+type LibrarySermon = {
+  id: string;
+  title: string;
+  speaker: string;
+  series: string;
+  date: string;
+  href: string;
+};
+type Library = {
+  folders: LibraryFolder[];
+  resources: LibraryResource[];
+  sermons?: LibrarySermon[];
+};
+/** The built-in Sermons folder (not a stored folder). */
+const SERMONS = '#sermons';
 type LibraryResource = {
   id: string;
   title: string;
   description: string;
   type: string;
   url: string;
+  sermonId?: string | null;
   /** Where the card opens: the link, or an approved sermon's page. */
   href: string;
   folderId: string | null;
@@ -52,10 +70,7 @@ export default function GalleryPage() {
   const staff = data?.user?.role === 'pastor' || data?.user?.role === 'admin';
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState<string | null>(null);
-  const [library, setLibrary] = useState<{
-    folders: LibraryFolder[];
-    resources: LibraryResource[];
-  } | null>(null);
+  const [library, setLibrary] = useState<Library | null>(null);
   const [error, setError] = useState('');
   const [folderOptions, setFolderOptions] = useState<[string, string][]>([]);
   const [sermonOptions, setSermonOptions] = useState<[string, string][]>([]);
@@ -76,13 +91,7 @@ export default function GalleryPage() {
   const load = useCallback(async () => {
     setError('');
     try {
-      setLibrary(
-        (
-          await api<{ folders: LibraryFolder[]; resources: LibraryResource[] }>(
-            '/member/library',
-          )
-        ).data,
-      );
+      setLibrary((await api<Library>('/member/library')).data);
     } catch (failure) {
       setError(errorMessage(failure));
     }
@@ -91,13 +100,21 @@ export default function GalleryPage() {
     void load();
   }, [load]);
 
+  const matches = (text: string) =>
+    text.toLowerCase().includes(query.trim().toLowerCase());
   const resources = (library?.resources ?? []).filter(
     (item) =>
+      folder !== SERMONS &&
       (folder === null || item.folderId === folder) &&
-      `${item.title} ${item.description}`
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
+      matches(`${item.title} ${item.description}`),
   );
+  const filed = new Set(resources.map((item) => item.sermonId));
+  const sermons = (library?.sermons ?? []).filter(
+    (item) =>
+      (folder === SERMONS || (folder === null && !filed.has(item.id))) &&
+      matches(`${item.title} ${item.speaker} ${item.series}`),
+  );
+  const shownCount = resources.length + sermons.length;
   const resourceFields: FieldSpec[] = [
     { key: 'title', label: 'Title', kind: 'text' },
     { key: 'description', label: 'Description', kind: 'long' },
@@ -115,9 +132,9 @@ export default function GalleryPage() {
     },
     {
       key: 'sermonId',
-      label: 'Or an approved sermon',
+      label: 'Or file an approved sermon here',
       kind: 'select',
-      hint: 'Shown to members only while the sermon is on the website.',
+      hint: 'Every approved sermon is already in the Gallery’s Sermons section. Use this to also place one in a folder. It shows only while the sermon is on the website.',
       options: [['', 'None'], ...sermonOptions],
     },
     {
@@ -186,7 +203,7 @@ export default function GalleryPage() {
             </button>
           </div>
         )}
-        {!!library?.folders.length && (
+        {!!(library?.folders.length || library?.sermons?.length) && (
           <div className="calendar-filters" role="group" aria-label="Folders">
             <button
               aria-pressed={folder === null}
@@ -195,6 +212,15 @@ export default function GalleryPage() {
             >
               All files
             </button>
+            {!!library.sermons?.length && (
+              <button
+                aria-pressed={folder === SERMONS}
+                className={folder === SERMONS ? 'active' : ''}
+                onClick={() => setFolder(SERMONS)}
+              >
+                Sermons
+              </button>
+            )}
             {library.folders.map((item) => (
               <button
                 key={item.id}
@@ -209,17 +235,42 @@ export default function GalleryPage() {
         )}
         <p className="resource-count">
           {library
-            ? `${resources.length} ${resources.length === 1 ? 'file' : 'files'}`
+            ? `${shownCount} ${shownCount === 1 ? 'file' : 'files'}`
             : 'Loading…'}
         </p>
         <div className="file-grid">
-          {library && !resources.length && (
+          {library && !shownCount && (
             <p>
               {query || folder
                 ? 'No resources match.'
                 : 'Resources will appear here when the church publishes them.'}
             </p>
           )}
+          {sermons.map((item) => (
+            <a
+              className="file-card"
+              key={item.id}
+              style={{ '--file-color': 'var(--palette-gold)' } as CSSProperties}
+              href={item.href}
+            >
+              <span className="file-art">
+                <svg aria-hidden="true" viewBox="0 0 56 68">
+                  <path d="M9 2h25l13 14v50H9z" />
+                  <path d="M34 2v15h13" />
+                  <path d="M23 30v18l14-9z" />
+                </svg>
+                <b>Sermon</b>
+              </span>
+              <span className="file-copy">
+                <strong>{item.title}</strong>
+                <small>
+                  {[item.speaker, formatSermonDate(item.date)]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </small>
+              </span>
+            </a>
+          ))}
           {resources.map((item) => (
             <a
               className="file-card"

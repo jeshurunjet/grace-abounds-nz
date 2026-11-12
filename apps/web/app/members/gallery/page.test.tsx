@@ -39,6 +39,16 @@ const library = {
       visibility: 'public',
     },
   ],
+  sermons: [
+    {
+      id: 'sm1',
+      title: 'Walking in the Spirit',
+      speaker: 'Pastor Example',
+      series: 'Life in the Spirit',
+      date: '2026-10-04',
+      href: '/sermons/walking-in-the-spirit',
+    },
+  ],
 };
 const calls: string[] = [];
 const json = (body: unknown) =>
@@ -67,7 +77,7 @@ describe('Gallery reads the library from the server', () => {
   it('members browse published resources by folder and never see management', async () => {
     render(<GalleryPage />);
     expect(await screen.findByText('Romans study guide')).toBeInTheDocument();
-    expect(screen.getByText('2 files')).toBeInTheDocument();
+    expect(screen.getByText('3 files')).toBeInTheDocument();
     expect(screen.getByText('Romans study guide').closest('a')).toHaveAttribute(
       'href',
       'https://example.org/romans.pdf',
@@ -81,6 +91,19 @@ describe('Gallery reads the library from the server', () => {
     expect(screen.queryByText('Welcome pack')).not.toBeInTheDocument();
     expect(screen.queryByText('Manage the library')).not.toBeInTheDocument();
     expect(calls.some((url) => url.includes('/staff/'))).toBe(false);
+  });
+
+  it('every approved sermon appears in a built-in Sermons section', async () => {
+    render(<GalleryPage />);
+    const card = (await screen.findByText('Walking in the Spirit')).closest(
+      'a',
+    );
+    expect(card).toHaveAttribute('href', '/sermons/walking-in-the-spirit');
+    expect(card).not.toHaveAttribute('target');
+    expect(screen.getByText('Pastor Example · 4 Oct 2026')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sermons' }));
+    expect(screen.getByText('1 file')).toBeInTheDocument();
+    expect(screen.queryByText('Romans study guide')).not.toBeInTheDocument();
   });
 
   it('Pastor and Admin also manage folders and resources in the same place', async () => {

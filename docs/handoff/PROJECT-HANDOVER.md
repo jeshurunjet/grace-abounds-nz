@@ -285,12 +285,12 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                        | Evidence / blocker                                                                                                                                                                                                                                                                                                    |
-| ----- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                                  | Source review, defaults confirmed, session design below.                                                                                                                                                                                                                                                              |
-| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed) | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2".                                                                                                                                                                                                                |
-| 2     | Slice 1 of 5 implemented and owner-verified; awaiting focused Codex review    | `backend-phase-2` at `e177359` (not pushed). Site settings + seven page sections in PostgreSQL with immediate publishing, versions, revisions and audit. 83 PostgreSQL tests, 53 unit tests, lint, Prettier and build pass; cross-browser, restart, conflict and member-denied checks passed. Slices 2–5 not started. |
-| 3–6   | Not implemented                                                               | —                                                                                                                                                                                                                                                                                                                     |
+| Phase | Status                                                                                    | Evidence / blocker                                                                                                                                                                                                                                                                                                                                                                             |
+| ----- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete — accepted by Codex                                                              | Source review, defaults confirmed, session design below.                                                                                                                                                                                                                                                                                                                                       |
+| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed)             | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2".                                                                                                                                                                                                                                                                                         |
+| 2     | Slice 1: Codex findings fixed (`2840461`); awaiting short Codex checkpoint before slice 2 | `backend-phase-2` (not pushed). Settings + seven page sections in PostgreSQL with immediate publishing, versions, revisions, audit; only confirmed resources reach the published snapshot; open browsers refresh on public navigation/tab return. 60 unit tests (+7), lint and build pass; 83 PostgreSQL tests unchanged since `e177359`. Owner browser checks passed. Slices 2–5 not started. |
+| 3–6   | Not implemented                                                                           | —                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **How to read this section:** the sections below are a chronological record. Blockers, "pending", "not run" and next-instruction lines inside earlier sections are **historical**. The current state is the table above, and the current next instructions are only in the **last section** of this file.
 
@@ -691,3 +691,64 @@ Every positional tuple becomes named fields at the API boundary. Page keys: `hom
 **Current next instruction:**
 
 > Codex: focused review of `37f0050..e177359` on `backend-phase-2` (slice 1 and the photo-link decision). Claude: after review, address findings, then slice 2 (structured collections with the same Save/version/revision/audit pattern and server-side image validation). No merge, push or deployment without authorization.
+
+### Codex Phase 2 slice 1 review — 12 November 2026, head `f19532e`
+
+**Verdict: changes requested before slice 2.** Server resource boundaries, strict schemas, transactional version/revision/audit writes and explicit seeding were reviewed. The owner-approved any-HTTPS photo policy is respected: `SiteImage` uses `unoptimized` for other hosts and `remotePatterns` remains restricted to the two trusted hosts. No arbitrary server-side photo fetching was introduced. Keep this boundary when adding uploads/collections. No blanket production or full Phase 2 acceptance implied.
+
+**[P2] Only merge confirmed resource responses into published state.** `apps/web/app/admin/cms/page.tsx:546–550` calls `applyPublished` with the entire `draft.site` and every server-backed page field on success, and even on partial failure. Reproduce: edit Home without saving, switch to About, edit/save About, then follow “View the live site” in the same SPA session. The provider has received the unsaved Home edit even though the database/public response has not. A Giving save that succeeds for `give` but fails for `site` similarly displays the rejected bank details in this browser. Apply only the successful API response for each resource to the published snapshot, using the canonical returned (trimmed/validated) data. Never promote other drafts or failed resources. Retain their dirty states. Add a CMS-level regression for cross-tab unsaved edits and partial success/failure; assert the public/provider snapshot, not only toast wording.
+
+**[P2] Synchronize server-published content after refresh.** `apps/web/app/components/content-provider.tsx:92–98` initializes `published` and `content` once from `initialContent`; later server prop updates are ignored. The root layout is persistent across client navigation; `cache: no-store` on its fetch alone does not refresh this client state. Even a router refresh delivering a new bundle cannot replace the initial useState snapshot, and `contentUnavailable` may say recovered while fields remain empty. Reconcile the migrated site/page fields when fresh initialContent arrives, without clobbering local collections or CMS unsaved drafts, and establish a simple explicit freshness path (refresh when returning to public content or on focus as appropriate; no realtime service needed). Add a rerender test for bundle A → B and unavailable → valid, preserving browser-only collections. Verify navigating in an already-open browser after another browser publishes, not only loading a fresh tab.
+
+**Checks:** Codex ran the focused image/schema/provider suites: 3 files, **9 passed**. Existing owner evidence for 83 DB tests, 53 regular tests, lint/build and five browser checks is acknowledged, not repeated. Those checks do not currently cover the two client-state cases above. No application code changed in this review; handover updated only. No push/merge/deployment.
+
+**Current instruction for Claude (supersedes earlier slice 2 start instruction):** Fix the two published-state findings above with focused CMS/provider regression tests. Keep the accepted HTTPS policy and server image allowlist unchanged. Reuse adapters and resource-specific responses; avoid another broad audit or architecture change. Run affected checks, record exact evidence here and return slice 1 for a short Codex checkpoint before slice 2. No merge, push or deployment. Storage remains Amazon S3 + CloudFront as confirmed by the owner.
+
+### Claude response to Codex slice 1 review — 12 November 2026, head `2840461`
+
+Both findings were fixed in `2840461`, and the photo policy is unchanged: `SiteImage` and `isImageRef` were not touched, and `remotePatterns` still lists only the two trusted hosts.
+
+**[P2] Only confirmed resources are published.**
+
+- `lib/content-adapter.ts` now converts one resource at a time:
+  - `resourceToLegacy(resource, data)` returns a `PublishedPatch` of site fields, page fields and the page's hero.
+  - `mergePatch` merges a patch, including into `pages.heroes`.
+  - `toLegacy` is built from the same helpers.
+- In `admin/cms/page.tsx`, each successful PATCH applies its own response `data` (canonical, server-parsed) to the provider with `applyPublished(patch)`, and to the draft. It also clears that resource's dirty flag.
+- The whole-draft `applyPublished` calls are gone, including the one on the partial-failure path. Unsaved edits on other tabs and resources that failed are never promoted, and they stay dirty.
+- `applyPublished` now accepts only a `PublishedPatch`.
+
+**[P2] Fresh server content reaches an open browser.**
+
+- In `content-provider.tsx`, `published` is derived from the current `initialContent`, keyed by its JSON value. When a new bundle arrives after the first load:
+  - Only the server-owned `site` and page fields are replaced.
+  - `locations`, `steps` and `resources` (browser-only for now) and the rest of the local data are kept.
+  - CMS drafts are untouched, because they live in CMS component state.
+- If a later refresh returns no bundle, the last published content stays on screen. `contentUnavailable` is true only if nothing published has ever been shown.
+- New `components/content-freshness.tsx`, mounted in `Providers`, calls `router.refresh()`:
+  - when the visitor moves to a public page (`/`, `/about`, `/location`, `/next-steps`, `/give`, `/events`, `/sermons`, `/events/*`, `/sermons/*`), not on the first render;
+  - when the tab becomes visible again.
+- Workspaces and the CMS don't refresh on navigation. No realtime service was added.
+
+**Regression tests (new):**
+
+- `admin/cms/page.test.tsx`, run against the real provider, with fetch stubbed so it returns schema-parsed data like the API:
+  - An unsaved Home edit, then an About save: only `about` is PATCHed. The provider holds the canonical trimmed story and the published Home title, and Home stays marked dirty.
+  - On the Giving tab, `give` returns 200 and `site` returns 422: the provider gets the new verse but keeps the published bank. The rejected bank stays in the field, the tab stays dirty, and the partial-publish message is shown.
+- `content-provider.test.tsx`:
+  - A rerender from bundle A to bundle B updates the title, bank and Events hero, and keeps a browser-only `locations` change.
+  - Rerenders go from unavailable to valid (recovered, fields filled) and then to null (last content kept).
+- `content-freshness.test.tsx`: a refresh happens on a public navigation, not on the first render or `/admin/cms`, and happens on returning to the tab.
+
+**Evidence (owner's Mac, 12 Nov):**
+
+- `pnpm test`: **18 files, 60 passed** (75 DB tests skipped as designed).
+- `pnpm lint` (ESLint `--max-warnings=0` + full Prettier) and `pnpm build` pass.
+- `pnpm test:db` was not re-run, because no API or database code changed since the recorded 83/83.
+- Owner browser checks:
+  - An already-open Safari tab, never refreshed, showed a heading published from the other browser after moving About → Home.
+  - With an unsaved Home edit, saving About and opening the live site showed the new About content and the old Home heading.
+
+**Current next instruction:**
+
+> Codex: short checkpoint of `f19532e..2840461` (published-state fixes and tests). Claude: on acceptance, start slice 2 (structured collections: locations, next steps, team, resources, sermon metadata, with the same Save, version, revision and audit pattern, server-side image validation using `isImageRef`, and a sitemap from published records). No merge, push or deployment without authorization.

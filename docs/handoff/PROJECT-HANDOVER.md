@@ -85,15 +85,15 @@ Baseline code limits: 10-minute expiry, 5 requests/hour per normalized email and
 
 Each slice includes its contracts, meaningful permission/data/failure tests, accurate frontend states and a short update here. Coded/verified/owner-accepted are separate statuses. Owner preview and Codex review occur at slice boundaries; do not repeat successful provider setup or unrelated full audits.
 
-| Phase | Scope                                                                                       | Status                                                                                                                                                                                                |
-| ----- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                                           |
-| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                                   |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 and 2A accepted. **2B review fixes (`dfb5ea0`) and Gallery file-manager correction (`b8ce6c2`) awaiting Codex re-review; owner accepted the Gallery layout.** 2C–2D not started. |
-| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                                 |
-| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                                              |
-| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                                   |
-| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                               |
+| Phase | Scope                                                                                       | Status                                                                                                                                                           |
+| ----- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                      |
+| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.              |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 and 2A accepted. **2B + Gallery shell: link-classification fix at `c76e48e`, tests pass; awaiting Codex closing check.** 2C–2D not started. |
+| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                            |
+| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                         |
+| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                              |
+| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                          |
 
 ### Phase 2 — finish the CMS and shared content foundation
 
@@ -1519,3 +1519,28 @@ Implements "Gallery visual correction" as a bounded UI change on the existing co
 **Checks:** Codex regular suite: **88 passed across 24 files**, 95 DB tests intentionally skipped. No new database resets, migration, provider/browser writes or production build. The prior owner database evidence is acknowledged; these checks are not a rerun of it. Gallery visual owner response "layout is alright" is recorded; actual drag/drop still belongs to 2D and is not delivered by this shell. No application code changed by Codex.
 
 **Current next Claude instruction:** Fix only the URL-classification bypass with focused regression tests, record exact results and return for a short closing check. Keep the accepted Gallery structure, existing approval fix and 2D upload deferral. Do not start another Gallery redesign, general audit or 2C while this checkpoint is open. Owner's earlier push authorization remains pending a safe review; no push/merge/deployment in this review.
+
+### Link-classification fix — Claude, 13 November 2026, head `c76e48e`
+
+Addresses only [P1] of "Codex Phase 2B/Gallery re-review". Gallery layout, the earlier review fixes and the 2D upload deferral are unchanged.
+
+**Fix (`c76e48e`):** one strict classifier, `classifyLink()` in `packages/validation/src/collections.ts`, decides where a stored link goes, and every layer uses it:
+
+- It refuses backslashes, any whitespace and control characters (forms browsers rewrite or drop), `//host`, credentials in URLs, non-https schemes and malformed URLs.
+- A site path must start with a single `/` and resolve, with the standard URL parser against a fixed origin, to that same origin → `internal`.
+- An `https://` URL with a plain host → `external`.
+- `isLinkRef` (resource and Next steps schemas), `isOutsideLink` (Pastor-only publication gate) and `safeLinkHref` (rendering) are thin wrappers over it. The Gallery uses `safeLinkHref`/`classifyLink` for file destinations and the new-tab decision; `nextStepHref` follows a link CTA only through `safeLinkHref` (otherwise `/next-steps`).
+- Ambiguous forms are rejected, not normalised. Links saved earlier that fail the rule cannot be saved again unchanged; the Gallery shows them as plain text and Next steps falls back to `/next-steps`. No server-side URL fetching.
+
+**Regression tests:**
+
+- `packages/validation/src/links.test.ts` (3): the slash-backslash form (confirmed off-site by the URL parser) and other ambiguous forms are null/unsafe/not external; normal site paths are internal and https links external; resource and Next steps schemas reject slash-backslash and accept `/next-steps` / `/give`.
+- `apps/api/src/library.test.ts` (+1, DB): slash-backslash, double-backslash and `//host` links are refused (422 on `url`) for Admin and Pastor, as draft or published, with nothing stored or listed; a Next steps link CTA with slash-backslash is refused; `/next-steps` (Admin) and an https PDF link (Pastor) still publish.
+- `apps/web/app/lib/next-step-href.test.ts` (1): unsafe CTA links fall back to `/next-steps`; site paths and https links pass through.
+- `members/gallery/page.test.tsx` (+1): a stored slash-backslash link renders as text with no anchor; `/next-steps` renders as a same-tab link.
+
+**Evidence (owner's Mac, 13 Nov):** `pnpm test`, `pnpm test:db` and `pnpm lint` all pass (owner: "all test clear"). Typecheck (validation, api, web) and Prettier clean.
+
+**Current next instruction:**
+
+> Codex: short closing check of `9f2c577..c76e48e` for the link-classification finding. Claude: on acceptance, push `backend-phase-2` (owner-authorized after safe review) and wait for the go-ahead before 2C. No merge or deployment.

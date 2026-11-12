@@ -1,41 +1,44 @@
 /*
- * Workspace sidebar in light mode: a light sidebar instead of the dark band
- * used elsewhere. No colour values here; colours come from theme.css.
+ * Workspace sidebar: same background as the page (light and dark mode),
+ * separated by a hairline. No colour values here; colours come from theme.css.
  */
 
-/* Sidebar: light surface instead of the large dark panel. */
-:root:not([data-theme='dark']) .workspace > aside {
-  background: var(--surface-raised);
+/* Sidebar matches the page background. */
+.workspace > aside {
+  background: var(--surface);
   color: var(--ink);
   border-right: 1px solid var(--line);
 }
-:root:not([data-theme='dark']) .workspace-brand .brand strong {
+.workspace-brand .brand strong {
   color: var(--ink);
 }
-:root:not([data-theme='dark']) .workspace-brand > strong,
-:root:not([data-theme='dark']) .workspace-nav-caption {
+.workspace-brand .brand strong.light + small {
+  color: var(--brand-subtitle);
+}
+.workspace-brand > strong,
+.workspace-nav-caption {
   color: var(--ink-soft);
 }
-:root:not([data-theme='dark']) .workspace aside nav a {
+.workspace aside nav a {
   color: var(--ink-mid);
 }
-:root:not([data-theme='dark']) .workspace aside nav a:hover {
+.workspace aside nav a:hover {
   background: var(--surface);
   color: var(--ink);
 }
-:root:not([data-theme='dark']) .workspace aside nav a[aria-current='page'] {
+.workspace aside nav a[aria-current='page'] {
   background: var(--active-bg);
   color: var(--ink);
   box-shadow: inset 3px 0 0 var(--active-bar);
 }
-:root:not([data-theme='dark']) .workspace-user {
+.workspace-user {
   border-top-color: var(--line);
 }
-:root:not([data-theme='dark']) .workspace-user > a {
+.workspace-user > a {
   color: var(--ink);
 }
-:root:not([data-theme='dark']) .workspace-user small,
-:root:not([data-theme='dark']) .workspace-user button {
+.workspace-user small,
+.workspace-user button {
   color: var(--ink-soft);
 }
 
@@ -49,7 +52,7 @@
 }
 
 /* Inline text links and form controls. */
-:root:not([data-theme='dark']) .workspace-content p a:not([class]) {
+.workspace-content p a:not([class]) {
   color: var(--maple);
   text-decoration: underline;
 }
@@ -60,7 +63,7 @@
 }
 
 /* Visible keyboard focus everywhere in the workspace. */
-:root:not([data-theme='dark']) .workspace :focus-visible {
+.workspace :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }

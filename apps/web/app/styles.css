@@ -7,7 +7,7 @@ html {
 }
 body {
   margin: 0;
-  background: var(--cream);
+  background: var(--surface-raised);
   color: var(--charcoal);
   font-family: var(--font-body), system-ui, sans-serif;
   line-height: 1.65;
@@ -125,7 +125,7 @@ p {
   color: var(--cream);
 }
 .brand small {
-  color: var(--gold);
+  color: var(--brand-subtitle);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -357,7 +357,7 @@ p {
   padding: clamp(4.5rem, 8vw, 7.5rem) 0;
 }
 .section.linen {
-  background: var(--linen);
+  background: var(--surface);
 }
 .dark {
   background: var(--dark-section);
@@ -402,7 +402,7 @@ p {
   grid-template-columns: repeat(4, 1fr);
 }
 .card {
-  background: var(--linen);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.7rem;
@@ -507,7 +507,7 @@ p {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 0.7rem;
-  background: var(--linen);
+  background: var(--surface);
   padding: 0.8rem 1rem;
   color: var(--charcoal);
 }
@@ -518,7 +518,7 @@ p {
 }
 .prayer-form {
   padding: 2rem;
-  background: var(--cream);
+  background: var(--surface-raised);
   border-radius: var(--radius);
 }
 .form-note {
@@ -559,10 +559,11 @@ p {
 }
 .contact {
   text-align: center;
-  background: var(--gold);
+  background: var(--band-accent);
+  color: var(--on-band-accent);
 }
 .contact .eyebrow {
-  color: var(--wine) !important;
+  color: var(--on-band-accent) !important;
 }
 .map-placeholder {
   min-height: 360px;
@@ -674,7 +675,7 @@ dd {
 .auth-card {
   padding: 2rem;
   margin: 2rem 0 1rem;
-  background: var(--linen);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -789,7 +790,7 @@ dd {
     display: none;
     position: absolute;
     inset: 4.5rem 0 auto;
-    background: var(--linen);
+    background: var(--surface);
     padding: 1.25rem;
     box-shadow: var(--shadow);
     align-items: stretch;
@@ -3662,7 +3663,7 @@ body {
   padding: 0.7rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
-  background: var(--cream);
+  background: var(--surface-raised);
   text-transform: capitalize;
 }
 .role-switcher button.active {
@@ -4312,7 +4313,7 @@ body {
   padding: 1.25rem;
   border: 1.5px solid var(--border);
   border-radius: 0.75rem;
-  background: var(--cream);
+  background: var(--surface-raised);
   color: var(--charcoal);
   text-align: left;
   cursor: pointer;
@@ -4345,7 +4346,7 @@ body {
   padding: 2rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--cream);
+  background: var(--surface-raised);
 }
 .path-card ol {
   display: grid;
@@ -4560,11 +4561,11 @@ body {
 }
 .events-section,
 .gallery-section {
-  background: var(--linen);
+  background: var(--surface);
 }
 .sermons-section,
 .prayer-section {
-  background: var(--cream);
+  background: var(--surface-raised);
 }
 .home-heading {
   display: flex;
@@ -4603,12 +4604,12 @@ body {
   padding: 1.5rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--cream);
+  background: var(--surface-raised);
   transition: 0.2s;
 }
 .event-card:hover {
   border-color: var(--gold);
-  background: var(--linen);
+  background: var(--surface);
   transform: translateY(-2px);
 }
 .event-card strong {
@@ -4707,7 +4708,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--linen);
+  background: var(--surface);
   transition: 0.2s;
 }
 .sermon-card:hover {
@@ -4800,7 +4801,7 @@ body {
 }
 .prayer-section .prayer-form {
   border: 1.5px solid var(--border);
-  background: var(--linen);
+  background: var(--surface);
   box-shadow: 0 4px 24px
     color-mix(in srgb, var(--palette-charcoal-ink) 7%, transparent);
 }
@@ -4917,7 +4918,7 @@ body:has(.auth-page) .auth-page {
   padding: 2rem;
   border: 1px solid var(--border);
   border-radius: 1rem;
-  background: var(--cream);
+  background: var(--surface-raised);
 }
 .impact-card strong {
   font: 400 3rem var(--font-display);
@@ -6998,4 +6999,24 @@ button:disabled {
 .connect-group-grid article small,
 .study-grid article small {
   display: block;
+}
+
+/* Accent band (Next Steps "Have Questions?"): gold in light mode, a dark card
+   in dark mode. Headings and buttons follow the band's own text colours, so
+   they never end up white-on-gold or gold-on-gold. */
+.section.contact h2,
+.section.contact p:not(.eyebrow) {
+  color: var(--on-band-accent);
+}
+.section.contact .button:not(.button-outline) {
+  background: var(--band-button-bg);
+  color: var(--band-button-text);
+}
+.section.contact .button-outline {
+  color: var(--on-band-accent);
+  box-shadow: inset 0 0 0 1px var(--on-band-accent);
+}
+/* The logo's subtitle on dark backgrounds (footer, sign-in panel). */
+.brand strong.light + small {
+  color: var(--gold-light);
 }

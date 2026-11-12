@@ -23,6 +23,7 @@
   --palette-logo-gold-tint: #fff8e1;
   --palette-gold-light: #f7c840;
   --palette-amber-dark: #7a4f00;
+  --palette-gold-text: #8f6200; /* gold-toned text on light backgrounds (5.4 / 5.0) */
 
   /* Neutrals */
   --palette-white: #ffffff;
@@ -45,6 +46,8 @@
   --palette-dark-ink-mid: #d5d8dc;
   --palette-dark-ink-soft: #9aa0a6;
   --palette-dark-accent: #f5c451;
+  --palette-dark-gold: #cc971d; /* softer gold fill for dark mode */
+  --palette-dark-gold-hover: #d9a21c;
 
   /* Status */
   --palette-error: #b42318;
@@ -117,6 +120,11 @@
   --slate: var(--palette-charcoal-new);
   --slate-deep: var(--palette-charcoal-deep);
   --slate-glow: color-mix(in srgb, var(--palette-slate-light) 22%, transparent);
+  --brand-subtitle: var(--palette-gold-text); /* logo "International" */
+  --band-accent: var(--palette-logo-gold); /* full-width accent band */
+  --on-band-accent: var(--palette-charcoal-new);
+  --band-button-bg: var(--palette-charcoal-new);
+  --band-button-text: var(--palette-white);
   --dark-section: var(--palette-charcoal-new); /* dark bands, footer */
   --dark-glow: var(--slate-glow);
   --on-dark: var(--palette-white); /* text on dark bands */
@@ -131,8 +139,15 @@
   --radius: 1.25rem;
 }
 
-/* 2b. Site tokens — dark mode */
+/*
+ * 2b. Site tokens — dark mode. Gold fills are softer here so they don't
+ * glare (label on gold 6.0, hover 6.9).
+ */
 :root[data-theme='dark'] {
+  --gold: var(--palette-dark-gold);
+  --gold-hover: var(--palette-dark-gold-hover);
+  --active-bg: color-mix(in srgb, var(--palette-logo-gold) 16%, transparent);
+  --active-bar: var(--palette-dark-gold);
   --surface: var(--palette-dark-surface);
   --surface-raised: var(--palette-dark-raised);
   --ink: var(--palette-white);
@@ -146,6 +161,11 @@
   --wine: var(--palette-dark-ink-mid);
   --olive: var(--palette-dark-ink-soft);
   --highlight: color-mix(in srgb, var(--palette-logo-gold) 14%, transparent);
+  --brand-subtitle: var(--palette-logo-gold);
+  --band-accent: var(--palette-dark-raised); /* no bright gold block */
+  --on-band-accent: var(--palette-white);
+  --band-button-bg: var(--palette-dark-gold);
+  --band-button-text: var(--palette-charcoal-new);
   --dark-section: var(--palette-dark-section);
   --dark-glow: color-mix(in srgb, var(--palette-slate-light) 10%, transparent);
   --nav-surface: color-mix(

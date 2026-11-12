@@ -203,7 +203,7 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
   }
   return (
     <section
-      className="panel pastor-calendar member-calendar public-event-calendar"
+      className={`panel pastor-calendar member-calendar ${member ? 'workspace-calendar' : 'public-event-calendar'}`}
       aria-label={member ? 'Your planner' : 'Church calendar'}
     >
       <header>
@@ -271,8 +271,34 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
               }
               onClick={() => setSelected(date)}
             >
-              {date ? +date.slice(8, 10) : ''}
+              {date ? (
+                <span className="calendar-day-number">
+                  {+date.slice(8, 10)}
+                </span>
+              ) : (
+                ''
+              )}
               {count > 0 && <i />}
+              {/* Workspace calendar: up to three titles per day, Google-style. */}
+              {member && date && (
+                <span className="calendar-day-items" aria-hidden="true">
+                  {forDay(date)
+                    .slice(0, 3)
+                    .map((item) => (
+                      <span
+                        key={item.key}
+                        className={`calendar-chip calendar-chip-${item.activity.kind}${item.cancelled ? ' cancelled' : ''}`}
+                      >
+                        {formatTime(item.startTime)} {item.activity.title}
+                      </span>
+                    ))}
+                  {count > Math.min(3, forDay(date).length) && (
+                    <span className="calendar-more">
+                      {count - Math.min(3, forDay(date).length)} more
+                    </span>
+                  )}
+                </span>
+              )}
             </button>
           );
         })}

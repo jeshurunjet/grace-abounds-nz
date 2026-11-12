@@ -500,28 +500,32 @@
 .member-modules {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  align-items: center;
 }
+/* Plain icon-and-label links separated by hairlines: no boxed buttons. */
 .member-modules a,
 .member-modules button {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  padding: 0.55rem 1rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-raised);
+  padding: 0.25rem 1rem;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   font: inherit;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
+.member-modules > * + * {
+  border-left: 1px solid var(--line);
+}
 .member-modules a:hover,
 .member-modules button:hover {
-  border-color: var(--gold);
-  background: var(--highlight);
+  color: var(--maple);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
 }
 .member-modules svg {
   color: var(--maple);
@@ -532,7 +536,11 @@
   scroll-margin-top: 6rem;
 }
 .staff-tools h2 {
-  margin: 0 0 1rem;
+  margin: 0 0 0.85rem;
+  font: 700 0.78rem var(--font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--maple);
 }
 .staff-tools .kit-tiles {
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
@@ -662,5 +670,142 @@
   }
   .kit-tile:hover {
     transform: none;
+  }
+}
+
+/* Workspace calendar: full width, Google-style month grid with titles. */
+.workspace-calendar {
+  min-height: auto;
+}
+.workspace-calendar header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.workspace-calendar .pastor-week {
+  gap: 1px;
+  margin: 1rem 0 0;
+}
+.workspace-calendar .pastor-week b {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.75rem;
+  text-align: left;
+}
+.workspace-calendar .pastor-calendar-grid {
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--line);
+}
+.workspace-calendar .pastor-calendar-grid button {
+  position: relative;
+  aspect-ratio: auto;
+  min-height: 7.5rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-raised);
+  text-align: left;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.workspace-calendar .pastor-calendar-grid button:disabled {
+  background: var(--surface);
+  cursor: default;
+}
+.workspace-calendar .pastor-calendar-grid button:hover:not(:disabled) {
+  background: var(--active-bg);
+}
+.workspace-calendar .pastor-calendar-grid button.today {
+  text-decoration: none;
+}
+.workspace-calendar .pastor-calendar-grid button.selected {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.workspace-calendar .pastor-calendar-grid button > i {
+  display: none;
+}
+.calendar-day-number {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  font-weight: 600;
+  color: var(--ink);
+}
+.workspace-calendar button.today .calendar-day-number {
+  background: var(--gold);
+  color: var(--on-gold);
+}
+.calendar-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.calendar-chip {
+  display: block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--tile-website-bg);
+  color: var(--tile-website-ink);
+}
+.calendar-chip-group {
+  background: var(--tile-activities-bg);
+  color: var(--tile-activities-ink);
+}
+.calendar-chip-study {
+  background: var(--tile-members-bg);
+  color: var(--tile-members-ink);
+}
+.calendar-chip-event {
+  background: var(--tile-sermons-bg);
+  color: var(--tile-sermons-ink);
+}
+.calendar-chip-ministry {
+  background: var(--tile-care-bg);
+  color: var(--tile-care-ink);
+}
+.calendar-chip.cancelled {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.calendar-more {
+  padding-left: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+@media (max-width: 760px) {
+  .workspace-calendar .pastor-calendar-grid button {
+    min-height: 3.2rem;
+    align-items: center;
+    padding: 0.25rem;
+  }
+  .calendar-day-number {
+    align-self: center;
+  }
+  .workspace-calendar .calendar-day-items {
+    display: none;
+  }
+  .workspace-calendar .pastor-calendar-grid button > i {
+    display: block;
+  }
+  .member-modules > * + * {
+    border-left: 0;
   }
 }

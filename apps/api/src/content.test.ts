@@ -52,9 +52,10 @@ describe.skipIf(!dbTestsEnabled)('website content API (PostgreSQL)', () => {
       headers,
       ...(body !== undefined && { payload: body as never }),
     });
+  // Ordinary content edit; the page heading (hero) is sent back unchanged.
   const editedHome = {
     ...defaultPages.home,
-    hero: { ...defaultPages.home.hero, title: 'Welcome home' },
+    verse: { ...defaultPages.home.verse, text: 'A new verse for this week.' },
   };
 
   it('reports unavailable content until it is set up', async () => {
@@ -115,8 +116,8 @@ describe.skipIf(!dbTestsEnabled)('website content API (PostgreSQL)', () => {
     expect(saved.json().version).toBe(2);
     expect(saved.headers.etag).toBe('"2"');
     expect(
-      (await call('GET', '/v1/public/pages/home')).json().data.hero.title,
-    ).toBe('Welcome home');
+      (await call('GET', '/v1/public/pages/home')).json().data.verse.text,
+    ).toBe('A new verse for this week.');
     const revision = await prisma.contentRevision.findUniqueOrThrow({
       where: {
         entityType_entityKey_version: {
@@ -179,19 +180,74 @@ describe.skipIf(!dbTestsEnabled)('website content API (PostgreSQL)', () => {
   it('two editors saving the same version: one wins, the other gets a conflict', async () => {
     await seedContent();
     const [a, b] = [await as('ADMIN'), await as('PASTOR')];
-    const save = (who: typeof a, title: string) =>
+    const save = (who: typeof a, text: string) =>
       call(
         'PATCH',
-        '/v1/staff/pages/events',
+        '/v1/staff/pages/give',
         { ...who.headers, 'if-match': '"1"' },
-        { hero: { ...defaultPages.events.hero, title } },
+        { ...defaultPages.give, verse: { ...defaultPages.give.verse, text } },
       );
     const results = await Promise.all([save(a, 'From A'), save(b, 'From B')]);
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 412]);
     expect(
       await prisma.contentRevision.count({
-        where: { entityType: 'page', entityKey: 'events' },
+        where: { entityType: 'page', entityKey: 'give' },
       }),
     ).toBe(1);
+  });
+
+  it('page headings are fixed for every staff role, with no side effects', async () => {
+    await seedContent();
+    for (const role of ['ADMIN', 'PASTOR'] as const) {
+      const staff = await as(role);
+      for (const [key, body] of [
+        [
+          'home',
+          {
+            ...defaultPages.home,
+            hero: { ...defaultPages.home.hero, title: 'A new heading' },
+          },
+        ],
+        [
+          'events',
+          { hero: { ...defaultPages.events.hero, copy: 'A new tagline' } },
+        ],
+      ] as const) {
+        const refused = await call(
+          'PATCH',
+          `/v1/staff/pages/${key}`,
+          { ...staff.headers, 'if-match': '"1"' },
+          body,
+        );
+        expect(refused.statusCode).toBe(422);
+        expect(refused.json().error.code).toBe('FIXED_CONTENT');
+        expect(Object.keys(refused.json().error.fieldErrors)).toEqual([
+          key === 'home' ? 'hero.title' : 'hero.copy',
+        ]);
+      }
+    }
+    for (const key of ['home', 'events'])
+      expect(
+        (await prisma.pageContent.findUniqueOrThrow({ where: { key } }))
+          .version,
+      ).toBe(1);
+    expect(await prisma.contentRevision.count()).toBe(0);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'content.page_published' },
+      }),
+    ).toBe(0);
+    // Unchanged headings in a full-document save are fine for both roles.
+    const pastor = await as('PASTOR');
+    expect(
+      (
+        await call(
+          'PATCH',
+          '/v1/staff/pages/events',
+          { ...pastor.headers, 'if-match': '"1"' },
+          { hero: { ...defaultPages.events.hero } },
+        )
+      ).statusCode,
+    ).toBe(200);
   });
 });

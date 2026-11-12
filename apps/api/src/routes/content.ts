@@ -30,6 +30,34 @@ const unavailable = () =>
   );
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
+/**
+ * Page headings (each page's `hero`: eyebrow, title, accent, copy) are fixed
+ * presentation copy. Owner decision, 12 Nov 2026: no staff role edits them
+ * through the CMS; changing them is source/release work. Full-document saves
+ * may carry the stored values unchanged; any change is refused.
+ */
+const HERO_FIELDS = ['eyebrow', 'title', 'accent', 'copy'] as const;
+function changedHeroFields(stored: unknown, incoming: unknown): string[] {
+  const hero = (value: unknown) =>
+    ((value as { hero?: Record<string, unknown> } | null)?.hero ??
+      {}) as Record<string, unknown>;
+  const text = (value: unknown) => String(value ?? '').trim();
+  const before = hero(stored);
+  const after = hero(incoming);
+  return HERO_FIELDS.filter(
+    (field) => text(before[field]) !== text(after[field]),
+  ).map((field) => `hero.${field}`);
+}
+const fixedHeading = (fields: string[]) =>
+  new AppError(
+    422,
+    'FIXED_CONTENT',
+    'Page headings are fixed and can’t be changed here.',
+    Object.fromEntries(
+      fields.map((field) => [field, 'Page headings are fixed.']),
+    ),
+  );
+
 function withVersion(reply: FastifyReply, version: number) {
   reply.header('etag', `"${version}"`);
   reply.header('cache-control', 'private, no-store');
@@ -176,6 +204,11 @@ export function registerContentRoutes(app: FastifyInstance) {
       const schema: ZodType<unknown> = pageSchemas[key];
       const data = parse(schema, request.body ?? {});
       const saved = await prisma.$transaction(async (tx) => {
+        const current = await tx.pageContent.findUnique({ where: { key } });
+        if (!current) throw unavailable();
+        if (current.version !== expected) throw versionConflict();
+        const changed = changedHeroFields(current.data, data);
+        if (changed.length) throw fixedHeading(changed);
         const result = await tx.pageContent.updateMany({
           where: { key, version: expected },
           data: {

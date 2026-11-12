@@ -1362,3 +1362,11 @@ This follows "Codex Phase 2A checkpoint". Only the requested follow-up was made,
 **Current next instruction:**
 
 > Codex: brief closing checkpoint of `2b61c56..fb2af2a` (Messages follow-up plus recorded visual evidence). Claude: on acceptance and owner go-ahead, start Phase 2B (structured collections and uniform saves) as written in the revised plan. No merge, push or deployment without authorization.
+
+### Codex Phase 2A closing verdict — 13 November 2026, head `5175cfb`
+
+**Accepted: Phase 2A is closed.** Focused review of `fb2af2a` confirms the floating/sidebar Messages entry is removed, the direct route is an unavailable page without local chat editing/sending, and Help no longer directs users into the prototype. No backend, permission or future-chat implementation added. No blocking finding identified in this closing diff.
+
+Codex reran the affected Messages page, workspace-shell and staff-tools tests: **9 passed across 3 files**; whitespace check passed. Acknowledged the owner/Claude recorded full 72-test suite, lint and six visual checks, without claiming an independent browser walkthrough. The prior stopped-server production build remains the build evidence; no fresh build required for this small reviewed follow-up, and none run. Existing documented limitations remain for their planned phases. Full Phase 2 and production launch remain incomplete.
+
+**Next:** with owner go-ahead, Claude starts Phase 2B from the current reviewed branch, following the active revised plan. Preserve the simplified Home, fixed headings, explicit Save behavior and server-confirmed resource isolation. Move structured collections to real resource-specific APIs/DB; include the agreed video approval boundary rather than retaining an Admin direct-publish bypass. Keep People/care permission work in Phase 4, S3 uploads in 2D and automation/Messenger in Future F1/F2. Update this sole handover with migrations, checks and evidence, then return for a focused slice review. No merge, push or deployment without authorization. Codex changed documentation only in this checkpoint.

@@ -559,6 +559,11 @@ p {
 }
 .contact {
   text-align: center;
+  background: var(--band-accent);
+  color: var(--on-band-accent);
+}
+.contact .eyebrow {
+  color: var(--on-band-accent) !important;
 }
 .map-placeholder {
   min-height: 360px;
@@ -6996,32 +7001,18 @@ button:disabled {
   display: block;
 }
 
-/* Accent band: add class="accent-band" to a full-width section. Gold in
-   light mode, a dark card in dark mode; colours come from the --band-*
-   tokens in theme.css. (:root raises specificity above section- and
-   dark-mode heading rules.) */
-:root .accent-band {
-  background: var(--band-accent);
+/* Accent band (Next Steps "Have Questions?"): gold in light mode, a dark card
+   in dark mode. Headings and buttons follow the band's own text colours, so
+   they never end up white-on-gold or gold-on-gold. */
+.section.contact h2,
+.section.contact p:not(.eyebrow) {
   color: var(--on-band-accent);
 }
-:root .accent-band :is(h1, h2, h3) {
-  color: var(--on-band-accent);
-}
-:root .accent-band p:not(.eyebrow) {
-  color: var(--band-text-soft);
-}
-:root .accent-band .eyebrow {
-  color: var(--band-eyebrow) !important;
-}
-:root .accent-band .button:not(.button-outline) {
+.section.contact .button:not(.button-outline) {
   background: var(--band-button-bg);
   color: var(--band-button-text);
 }
-:root .accent-band .button:not(.button-outline):hover {
-  background: var(--band-button-hover-bg);
-  color: var(--band-button-hover-text);
-}
-:root .accent-band .button-outline {
+.section.contact .button-outline {
   color: var(--on-band-accent);
   box-shadow: inset 0 0 0 1px var(--on-band-accent);
 }

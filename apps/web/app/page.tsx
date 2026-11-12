@@ -214,7 +214,7 @@ export default function Home() {
           <ManagedVerse placement="home" />
         </Reveal>
       </section>
-      <section className="home-cta accent-band">
+      <section className="home-cta">
         <div className="container">
           <p className="eyebrow gold">Your Next Step</p>
           <h2>There&apos;s a place for you here.</h2>

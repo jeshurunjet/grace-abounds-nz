@@ -15,7 +15,7 @@ export default function NextSteps() {
           </div>
         </Reveal>
       </section>
-      <section className="section contact accent-band">
+      <section className="section contact">
         <div className="container">
           <h2>Have Questions?</h2>
           <p>

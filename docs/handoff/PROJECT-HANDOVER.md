@@ -285,11 +285,12 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                                    | Evidence / blocker                                                                                                                                                                                                                                                               |
-| ----- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                                              | Source review, defaults confirmed, session design below.                                                                                                                                                                                                                         |
-| 1     | Codex final finding fixed (`ca0a20b`); all checks re-run; awaiting final Codex checkpoint | `backend-phase-1`. Credential writes checked at persistence. 77 PostgreSQL tests, 40 unit tests, ESLint, full Prettier check and build pass; owner browser re-check of Google sign-up/linking and passkey registration passed (12 Nov). Real Google and Resend accepted earlier. |
-| 2–6   | Not implemented                                                                           | Main remains a frontend prototype.                                                                                                                                                                                                                                               |
+| Phase | Status                                                                        | Evidence / blocker                                                                                                                                                                                                                                                                                                    |
+| ----- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete — accepted by Codex                                                  | Source review, defaults confirmed, session design below.                                                                                                                                                                                                                                                              |
+| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed) | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2".                                                                                                                                                                                                                |
+| 2     | Slice 1 of 5 implemented and owner-verified; awaiting focused Codex review    | `backend-phase-2` at `e177359` (not pushed). Site settings + seven page sections in PostgreSQL with immediate publishing, versions, revisions and audit. 83 PostgreSQL tests, 53 unit tests, lint, Prettier and build pass; cross-browser, restart, conflict and member-denied checks passed. Slices 2–5 not started. |
+| 3–6   | Not implemented                                                               | —                                                                                                                                                                                                                                                                                                                     |
 
 **How to read this section:** the sections below are a chronological record. Blockers, "pending", "not run" and next-instruction lines inside earlier sections are **historical**. The current state is the table above, and the current next instructions are only in the **last section** of this file.
 
@@ -642,3 +643,51 @@ Every positional tuple becomes named fields at the API boundary. Page keys: `hom
 **Slices:** (1) settings + seven pages, persistence, immediate publishing, revisions written; (2) structured collections — locations, next steps, team, resources, sermon metadata — and sitemap from published records; (3) revision history + audited restore; (4) cache tags + invalidation through the outbox; (5) verified uploads (images/avatars) once a storage provider is chosen. Each slice: migration, contracts, adapters, permissions, toasts and failure states, focused tests, handover update.
 
 **Storage decision (pending owner).** Current list prices (checked 12 Nov 2026; verify at provisioning): Cloudflare R2 Standard $0.015/GB-month, free egress, 10 GB/1M writes/10M reads free monthly. Amazon S3 Standard about $0.023–0.025/GB-month (Sydney/Auckland list price to confirm), plus CloudFront for delivery: 1 TB/month always free, then about $0.114/GB in AU/NZ; flat-rate CloudFront plans from $0/month (100 GB) or $15/month (50 TB). For a church posting one 45-minute sermon a week (about 1 GB of processed video, ~50–100 GB a year) and a few hundred GB of monthly viewing, both cost single-digit dollars a month; the differences are egress beyond 1 TB (R2 free) versus staying with the AWS account, IAM and region choice already planned (S3/CloudFront, possibly the Auckland region). DB/CMS slices 1–4 do not depend on this choice.
+
+### Phase 2 slice 1 — implementation and verification (Claude, 12 November 2026)
+
+**Owner decisions (12 Nov):** storage = **Amazon S3 + CloudFront** (not R2); this supersedes "Storage decision (pending owner)" above. CMS save model = **one Save button per tab**, publishing immediately ("Unsaved changes / Saving… / Published / Failed"). **Photo links:** until uploads exist, a photo may be any `https://` link or a `/images/…` path (owner accepted the trade-offs: the other site can break or block the photo and sees visitors' requests).
+
+**Commits on `backend-phase-2` (from `37f0050`):**
+
+| Commit    | What                                                                                                                                                                                                                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ba9ab78` | Inventory, contracts, slice plan, storage comparison (section above).                                                                                                                                                                                                                           |
+| `9276d1a` | Slice 1: shared Zod schemas + seed defaults (`packages/validation`); `SiteSettings`, `PageContent`, `ContentRevision`; `content:seed`; content API routes; server-fetched public bundle in the root layout; adapter to the existing components; CMS Save.                                       |
+| `f0c54aa` | `phase2_content` migration (owner-generated with `prisma migrate dev`).                                                                                                                                                                                                                         |
+| `2f87c73` | Next could not resolve `./content.js` in the workspace package: `.ts` relative imports (as `packages/database`), `rewriteRelativeImportExtensions` for the package build, package added to `transpilePackages`.                                                                                 |
+| `2db5b56` | Server image rule tightened to what the site could display (interim; superseded by the next commit).                                                                                                                                                                                            |
+| `7c79478` | Owner decision on photo links: one shared `isImageRef` (https or `/images/`) used by the API schema, CMS warnings and activities. `SiteImage` renders other hosts `unoptimized`, so the Next image server still fetches only from the configured hosts. CMS photo preview reports load failure. |
+| `e177359` | `SiteImage` passes `alt` explicitly (jsx-a11y lint).                                                                                                                                                                                                                                            |
+
+**What slice 1 does.**
+
+- `GET /v1/public/content` (site + 7 pages; 503 `CONTENT_UNAVAILABLE` if any row is missing), `/v1/public/site`, `/v1/public/pages/:pageKey` (404 unknown key). Published data only, no editor metadata, `no-store`.
+- `GET/PATCH /v1/staff/site` and `/v1/staff/pages/:pageKey`, Pastor/Admin only. PATCH requires `If-Match` (428 if missing, 412 `VERSION_CONFLICT` if stale), validates with the strict per-key schema (422 with `fieldErrors`), then in one transaction: conditional `updateMany` on the version, `ContentRevision` at the new version, `AuditEvent` (`content.site_published` / `content.page_published`). Response `{ data, version }`, ETag, `private, no-store`.
+- The root layout fetches the bundle server-side (`cache: 'no-store'`). If it fails, the provider exposes `contentUnavailable` and shows no demo content. Browser storage no longer supplies `site`/`pages`; it keeps only `locations`, `steps`, `resources`, `team` and the Phase 3/4 data until slice 2. The retired editor key is removed, never applied.
+- CMS: loads all eight resources with versions and saves only the dirty resources for the current tab. Toasts appear only after the server confirms. A stale save keeps the edits and offers "Load latest (discards your unsaved edits)". 422 errors are listed by field, partial publishes name what was and wasn't published, and a warning appears on leaving with unsaved changes. Browser-only collections are labelled as such.
+
+**Evidence (owner's Mac, 12 Nov).**
+
+- `pnpm test:db`: **10 files, 83 tests passed**. `apps/api/src/content.test.ts` covers 503 before seeding, public bundle without metadata, guest 401 / member 403 / Admin + Pastor allowed, save → version 2 + ETag + public update + revision with actor + audit row, 412/428/422 leave the version unchanged, and concurrent saves → exactly one 200 + one 412 with one revision.
+- `pnpm test`: **16 files, 53 passed** (75 DB tests skipped as designed). Covers the schema tests (https/`/images/` accepted; `http:`, `javascript:`, `data:`, other site paths and whitespace rejected), the `canOptimize` test and the provider tests (published content wins over stale localStorage, local collections persist, null bundle → unavailable).
+- `pnpm lint` (ESLint `--max-warnings=0` + full Prettier) and `pnpm build` pass. Typecheck of validation, database, api and web source also passes.
+- Owner browser checks:
+  - Edit + Save in the CMS → **Published**, live on the home page.
+  - Same content seen in **Safari and Firefox** (never used the CMS).
+  - Still there after stopping and restarting `pnpm dev`.
+  - Two tabs: the stale tab's Save is rejected with the conflict message, its edits are kept, and the public page shows the first save.
+  - A newly signed-up member cannot reach `/admin/cms`.
+  - An external https photo link saves and displays.
+
+**For Codex to check.**
+
+1. The image policy change (`7c79478`): hotlinked photos are a deliberate owner trade-off. Confirm that the `unoptimized` path and the unchanged `remotePatterns` keep the Next image optimiser from becoming an open fetcher. Profile avatars keep their own stricter `safeAvatar` host list.
+2. The public bundle is fetched per request with no caching until slice 4, which is acceptable for local development.
+3. `content-defaults.ts` holds placeholder bank details and is used only by `content:seed`, which refuses to run in production and never overwrites rows. It is never a runtime fallback.
+
+**Known limits (by plan, not defects):** locations, next steps, leadership, resources and sermon metadata are still browser-only (slice 2). There is no revision history UI or restore yet (slice 3), no cache tags (slice 4), and no uploads (slice 5, S3 + CloudFront; AWS provisioning will be guided step by step when reached). Phase 2 is **not** complete.
+
+**Current next instruction:**
+
+> Codex: focused review of `37f0050..e177359` on `backend-phase-2` (slice 1 and the photo-link decision). Claude: after review, address findings, then slice 2 (structured collections with the same Save/version/revision/audit pattern and server-side image validation). No merge, push or deployment without authorization.

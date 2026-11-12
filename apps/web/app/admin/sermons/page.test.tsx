@@ -247,4 +247,26 @@ describe('Sermons & videos', () => {
       ]),
     );
   });
+
+  it('a sermon without a recording cannot be sent or approved', async () => {
+    rows = [{ ...base, mediaUrl: '' }];
+    for (const [role, name] of [
+      ['admin', /Ask the Pastor to approve/],
+      ['pastor', /Approve and publish/],
+    ] as const) {
+      state.role = role;
+      const view = render(<SermonsPage />);
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Edit Walking in the Spirit',
+        }),
+      );
+      expect(within(panel()).getByRole('button', { name })).toBeDisabled();
+      expect(
+        within(panel()).getByText(/Add the recording link and Save/),
+      ).toBeInTheDocument();
+      view.unmount();
+    }
+    expect(calls).toEqual([]);
+  });
 });

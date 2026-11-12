@@ -289,6 +289,8 @@ export default function SermonsPage() {
       !current.archived &&
       current.review !== 'pending' &&
       (!live || current.changedSinceApproval);
+    // The server refuses approval without a saved recording; say so here.
+    const noRecording = !isMediaRef(current.mediaUrl);
     return (
       <section className="sermon-review" aria-label="Publishing">
         <p className="sermon-review-state">
@@ -314,17 +316,24 @@ export default function SermonsPage() {
             </small>
           )}
         </p>
-        {dirty && (
+        {dirty ? (
           <p className="kit-hint">
             Save your changes before sending or approving.
           </p>
+        ) : (
+          noRecording &&
+          !current.archived && (
+            <p className="kit-hint">
+              Add the recording link and Save before it can be approved.
+            </p>
+          )
         )}
         <div className="sermon-review-actions">
           {needsApproval && !isPastor && (
             <button
               type="button"
               className="button"
-              disabled={busy || dirty}
+              disabled={busy || dirty || noRecording}
               onClick={() => void step('submit')}
             >
               <Send aria-hidden="true" size={16} />
@@ -337,7 +346,7 @@ export default function SermonsPage() {
               <button
                 type="button"
                 className="button"
-                disabled={busy || dirty}
+                disabled={busy || dirty || noRecording}
                 onClick={() => void step('approve')}
               >
                 <CircleCheck aria-hidden="true" size={16} />

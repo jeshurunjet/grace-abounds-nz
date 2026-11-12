@@ -2,8 +2,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodType } from 'zod';
 import {
   folderInputSchema,
+  isOutsideLink,
   locationInputSchema,
   nextStepInputSchema,
+  PASTOR_LINK_MESSAGE,
   resourceInputSchema,
   teamMemberInputSchema,
   type ContentStatusValue,
@@ -28,7 +30,7 @@ import {
   requireVersion,
   versionConflict,
 } from '../lib/errors.js';
-import { requireActor, requireRole } from '../lib/identity.js';
+import { requireActor, requireRole, type Actor } from '../lib/identity.js';
 import { publicSermons } from './sermons.js';
 
 /*
@@ -57,7 +59,7 @@ type Delegate = {
   create(args: object): Promise<Row>;
   updateMany(args: object): Promise<{ count: number }>;
   update(args: object): Promise<Row>;
-  delete(args: object): Promise<Row>;
+  deleteMany(args: object): Promise<{ count: number }>;
   aggregate(args: object): Promise<{ _max: { position: number | null } }>;
 };
 type ModelName =
@@ -77,7 +79,12 @@ type Collection<I> = {
   schema: ZodType<I>;
   hasStatus: boolean;
   /** Database fields from validated input (key/derived fields on create). */
-  toData(input: I, tx: Tx, existing?: Row): Promise<Record<string, unknown>>;
+  toData(
+    input: I,
+    tx: Tx,
+    existing: Row | undefined,
+    actor: Actor,
+  ): Promise<Record<string, unknown>>;
   /** The record as the editor sees it (input shape plus `key` where used). */
   toApi(row: Row): Record<string, unknown>;
   /** A reason the record cannot be deleted, or null. */
@@ -205,13 +212,38 @@ const collections: Record<string, Collection<never>> = {
     noun: 'resource',
     schema: resourceInputSchema,
     hasStatus: true,
-    async toData(input: ResourceInput, tx) {
+    async toData(input: ResourceInput, tx, existing, actor) {
       await assertFolder(tx, input.folderId, 'folderId');
+      if (
+        input.sermonId &&
+        !(await tx.sermon.findUnique({ where: { id: input.sermonId } }))
+      )
+        throw new AppError(
+          422,
+          'VALIDATION_FAILED',
+          'Some fields need attention.',
+          { sermonId: 'That sermon no longer exists.' },
+        );
+      // A link to another website could serve anything, video included, so
+      // only the Pastor publishes one (see PASTOR_LINK_MESSAGE). Admin may
+      // keep a link the Pastor already published, unchanged.
+      const unchangedPublished =
+        existing?.status === 'PUBLISHED' && existing.url === input.url;
+      if (
+        input.status === 'published' &&
+        isOutsideLink(input.url) &&
+        actor.role !== Role.PASTOR &&
+        !unchangedPublished
+      )
+        throw new AppError(403, 'PASTOR_REVIEW_REQUIRED', PASTOR_LINK_MESSAGE, {
+          status: PASTOR_LINK_MESSAGE,
+        });
       return {
         title: input.title,
         description: input.description,
         type: input.type || 'Document',
         url: input.url,
+        sermonId: input.sermonId,
         folderId: input.folderId,
         visibility: input.visibility.toUpperCase(),
         status: toStatus(input.status),
@@ -222,6 +254,7 @@ const collections: Record<string, Collection<never>> = {
       description: row.description,
       type: row.type,
       url: row.url,
+      sermonId: row.sermonId ?? null,
       folderId: row.folderId,
       visibility: String(row.visibility).toLowerCase(),
       status: fromStatus(row.status),
@@ -315,9 +348,18 @@ export function registerCollectionRoutes(app: FastifyInstance) {
     requireActor(request);
     const [folders, resources] = await Promise.all([
       delegate(prisma, 'resourceFolder').findMany(ordered),
-      delegate(prisma, 'resource').findMany({
-        where: { status: 'PUBLISHED' },
-        ...ordered,
+      prisma.resource.findMany({
+        // A sermon reference is listed only while that sermon is approved
+        // and live; nothing else about a sermon reaches the library.
+        where: {
+          status: 'PUBLISHED',
+          OR: [
+            { sermonId: null },
+            { sermon: { liveVersion: { not: null }, archivedAt: null } },
+          ],
+        },
+        include: { sermon: { select: { slug: true } } },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       }),
     ]);
     reply.header('cache-control', 'private, no-store');
@@ -328,11 +370,16 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           name: row.name,
           parentId: row.parentId,
         })),
-        resources: resources.map((row) => {
-          const { status: _status, ...rest } =
-            collections.resources!.toApi(row);
+        resources: resources.map(({ sermon, ...row }) => {
+          const { status: _status, ...rest } = collections.resources!.toApi(
+            row as unknown as Row,
+          );
           void _status;
-          return { id: row.id, ...rest };
+          return {
+            id: row.id,
+            ...rest,
+            href: sermon ? `/sermons/${sermon.slug}` : row.url,
+          };
         }),
       },
     };
@@ -361,7 +408,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
         const max = await model.aggregate({ _max: { position: true } });
         const created = await model.create({
           data: {
-            ...(await def.toData(input, tx)),
+            ...(await def.toData(input, tx, undefined, actor)),
             position: (max._max.position ?? -1) + 1,
             updatedById: actor.id,
           },
@@ -444,7 +491,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
         });
         if (!existing) throw notFound('Record');
         if (existing.version !== expected) throw versionConflict();
-        const data = await def.toData(input, tx, existing);
+        const data = await def.toData(input, tx, existing, actor);
         const result = await model.updateMany({
           where: { id: existing.id, version: expected },
           data: { ...data, version: { increment: 1 }, updatedById: actor.id },
@@ -503,7 +550,29 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           );
         const blocked = await def.blockDelete?.(existing, tx);
         if (blocked) throw new AppError(409, 'IN_USE', blocked);
-        await model.delete({ where: { id: existing.id } });
+        // The checks above give a helpful reason; this conditional delete is
+        // what makes them hold. A save or publish that committed meanwhile
+        // changed the version (or status), so nothing is deleted.
+        let deleted: { count: number };
+        try {
+          deleted = await model.deleteMany({
+            where: {
+              id: existing.id,
+              version: expected,
+              ...(def.hasStatus && { status: { not: 'PUBLISHED' } }),
+            },
+          });
+        } catch (error) {
+          // Something now refers to it (e.g. a resource added to a folder).
+          if ((error as { code?: string }).code === 'P2003')
+            throw new AppError(
+              409,
+              'IN_USE',
+              'Something now uses this. Reload and try again.',
+            );
+          throw error;
+        }
+        if (deleted.count === 0) throw versionConflict();
         await recordAudit(tx, {
           actorId: actor.id,
           action: `content.${def.noun}_deleted`,

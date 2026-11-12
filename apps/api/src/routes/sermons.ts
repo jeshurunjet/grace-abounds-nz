@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  isMediaRef,
   sermonInputSchema,
   sermonRejectSchema,
   type PublicSermon,
@@ -103,14 +104,27 @@ const slugify = (value: string) =>
 const conflict = (code: string, message: string) =>
   new AppError(409, code, message);
 
-/** A connected upload must be verified before anyone can approve it. */
+/**
+ * A sermon goes to the Pastor, and is approved, only with a recording: a
+ * verified upload, or a supported https recording link. Metadata-only
+ * drafts can be saved but never published.
+ */
 async function assertMediaReady(tx: Tx, row: Sermon) {
-  if (!row.mediaAssetId) return;
-  const asset = await tx.asset.findUnique({ where: { id: row.mediaAssetId } });
-  if (asset?.status !== 'VERIFIED')
+  if (row.mediaAssetId) {
+    const asset = await tx.asset.findUnique({
+      where: { id: row.mediaAssetId },
+    });
+    if (asset?.status !== 'VERIFIED')
+      throw conflict(
+        'MEDIA_NOT_READY',
+        'The recording is still being checked. Try again when it is ready.',
+      );
+    return;
+  }
+  if (!isMediaRef(row.mediaUrl))
     throw conflict(
-      'MEDIA_NOT_READY',
-      'The recording is still being checked. Try again when it is ready.',
+      'RECORDING_REQUIRED',
+      'Add the recording link and Save before asking for approval.',
     );
 }
 
@@ -441,7 +455,33 @@ export function registerSermonRoutes(app: FastifyInstance) {
             'ARCHIVE_FIRST',
             'Sermons that have been on the website are archived first.',
           );
-        await tx.sermon.delete({ where: { id: existing.id } });
+        if (await tx.resource.count({ where: { sermonId: existing.id } }))
+          throw conflict(
+            'IN_USE',
+            'The library lists this sermon. Remove it from the library first.',
+          );
+        // The checks above explain the usual cases; this conditional delete
+        // makes them hold. An approval or save that committed meanwhile
+        // changed the version, so nothing is deleted.
+        let deleted: { count: number };
+        try {
+          deleted = await tx.sermon.deleteMany({
+            where: {
+              id: existing.id,
+              version: expected,
+              liveVersion: null,
+              OR: [{ archivedAt: { not: null } }, { approvedAt: null }],
+            },
+          });
+        } catch (error) {
+          if ((error as { code?: string }).code === 'P2003')
+            throw conflict(
+              'IN_USE',
+              'The library now lists this sermon. Reload and try again.',
+            );
+          throw error;
+        }
+        if (deleted.count === 0) throw versionConflict();
         await recordAudit(tx, {
           actorId: actor.id,
           action: 'content.sermon_deleted',

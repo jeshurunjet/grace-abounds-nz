@@ -19,6 +19,8 @@ type LibraryResource = {
   description: string;
   type: string;
   url: string;
+  /** Where the card opens: the link, or an approved sermon's page. */
+  href: string;
   folderId: string | null;
   visibility: 'public' | 'members';
 };
@@ -28,6 +30,7 @@ const resourceBlank = {
   description: '',
   type: 'Document',
   url: '',
+  sermonId: null,
   folderId: null,
   visibility: 'members',
   status: 'draft',
@@ -55,6 +58,20 @@ export default function GalleryPage() {
   } | null>(null);
   const [error, setError] = useState('');
   const [folderOptions, setFolderOptions] = useState<[string, string][]>([]);
+  const [sermonOptions, setSermonOptions] = useState<[string, string][]>([]);
+  // Staff can list an approved sermon in the library (by reference).
+  useEffect(() => {
+    if (!staff) return;
+    api<{ id: string; title: string; live: unknown }[]>('/staff/sermons')
+      .then(({ data: rows }) =>
+        setSermonOptions(
+          rows
+            .filter((row) => row.live)
+            .map((row) => [row.id, row.title] as [string, string]),
+        ),
+      )
+      .catch(() => setSermonOptions([]));
+  }, [staff]);
 
   const load = useCallback(async () => {
     setError('');
@@ -94,7 +111,14 @@ export default function GalleryPage() {
       key: 'url',
       label: 'Link',
       kind: 'text',
-      hint: 'An https:// address or a site path. File uploads are coming later.',
+      hint: 'A site path such as /next-steps, or an https:// link. Links to other websites are published by the Pastor. Videos go in Sermons & videos.',
+    },
+    {
+      key: 'sermonId',
+      label: 'Or an approved sermon',
+      kind: 'select',
+      hint: 'Shown to members only while the sermon is on the website.',
+      options: [['', 'None'], ...sermonOptions],
     },
     {
       key: 'folderId',
@@ -203,7 +227,7 @@ export default function GalleryPage() {
               style={
                 { '--file-color': 'var(--palette-maple)' } as CSSProperties
               }
-              href={safeHref(item.url)}
+              href={safeHref(item.href ?? item.url)}
               target="_blank"
               rel="noreferrer"
             >

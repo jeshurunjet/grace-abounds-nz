@@ -18,10 +18,14 @@ export default function Location() {
     'locations',
   );
   const [selected, setSelected] = useState(0);
-  const active = locations[selected] ?? locations[0]!;
-  const services = live.filter(
-    (item) => item.kind === 'service' && item.locationId === active.id,
-  );
+  // No published campus is a valid state (before the first is published, or
+  // after the last is archived): show that truthfully, never a fallback.
+  const active = locations[selected] ?? locations[0];
+  const services = active
+    ? live.filter(
+        (item) => item.kind === 'service' && item.locationId === active.id,
+      )
+    : [];
   /** One spaced action group per card: primary Join, secondary See dates. */
   const join = (item: Activity) => {
     const spots = spotsLeft(item, participations);
@@ -77,13 +81,19 @@ export default function Location() {
       </div>
       <section className="reference-section location-content">
         <div className="container">
-          {tab === 'locations' && (
+          {tab === 'locations' && !active && (
+            <p className="tab-intro">
+              Campus details will be published here soon. Contact the church
+              office for service times and directions.
+            </p>
+          )}
+          {tab === 'locations' && active && (
             <>
               <div className="location-pills">
                 {locations.map((location, index) => (
                   <button
-                    className={selected === index ? 'active' : ''}
-                    key={location.name}
+                    className={location === active ? 'active' : ''}
+                    key={location.id}
                     onClick={() => setSelected(index)}
                   >
                     {campusLabel(location.name)}
@@ -129,15 +139,17 @@ export default function Location() {
                     </div>
                   </div>
                 </Reveal>
-                <Reveal direction="left" delay={100}>
-                  <Image
-                    src={active.image}
-                    alt={active.name}
-                    width={700}
-                    height={400}
-                    priority
-                  />
-                </Reveal>
+                {active.image && (
+                  <Reveal direction="left" delay={100}>
+                    <Image
+                      src={active.image}
+                      alt={active.name}
+                      width={700}
+                      height={400}
+                      priority
+                    />
+                  </Reveal>
+                )}
               </div>
             </>
           )}

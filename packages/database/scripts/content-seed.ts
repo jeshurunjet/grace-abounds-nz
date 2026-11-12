@@ -105,11 +105,17 @@ await prisma.$transaction(async (tx) => {
     }
     created.push('team');
   }
-  // Sermons are never seeded as approved: the ones the prototype showed
-  // wait for the Pastor's approval, the rest stay drafts.
+  // Sermons are seeded as private drafts: they have no recordings, and only
+  // the Pastor approves a sermon once a recording is added.
   if ((await tx.sermon.count()) === 0) {
-    for (const { published, slug, date, ...item } of defaultSermons) {
-      const review = published ? ('PENDING' as const) : ('DRAFT' as const);
+    for (const {
+      published: _published,
+      slug,
+      date,
+      ...item
+    } of defaultSermons) {
+      void _published;
+      const review = 'DRAFT' as const;
       const row = await tx.sermon.create({
         data: { ...item, slug, date: new Date(`${date}T00:00:00Z`), review },
       });
@@ -120,7 +126,7 @@ await prisma.$transaction(async (tx) => {
         review: review.toLowerCase(),
       });
     }
-    created.push('sermons (awaiting Pastor approval)');
+    created.push('sermons (drafts)');
   }
 });
 console.log(

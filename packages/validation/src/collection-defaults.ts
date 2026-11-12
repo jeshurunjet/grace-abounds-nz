@@ -158,8 +158,9 @@ export const defaultTeam: TeamMemberInput[] = [
 const wide = (id: string) =>
   `https://images.unsplash.com/photo-${id}?w=1200&h=675&fit=crop&auto=format`;
 /**
- * Sample sermons. content:seed adds the ones that were on the prototype site
- * as awaiting Pastor approval: nothing is seeded as approved or public.
+ * Sample sermons (no recordings). content:seed adds them as private drafts;
+ * `published` marks the ones the prototype showed. Nothing is seeded as
+ * approved or public.
  */
 export const defaultSermons: (SermonInput & {
   slug: string;

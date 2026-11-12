@@ -344,9 +344,12 @@ model Resource {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   updatedById String?
+  /// An approved sermon shown in the library; listed only while it is live.
+  sermonId    String?
 
   folder ResourceFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
   asset  Asset?          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  sermon Sermon?         @relation(fields: [sermonId], references: [id], onDelete: Restrict)
 
   @@index([status, position])
 }
@@ -421,7 +424,8 @@ model Sermon {
   updatedAt    DateTime     @updatedAt
   updatedById  String?
 
-  mediaAsset Asset? @relation("SermonMedia", fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  mediaAsset Asset?    @relation("SermonMedia", fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  resources  Resource[]
 
   @@index([review])
   @@index([date])

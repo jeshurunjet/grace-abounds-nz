@@ -45,6 +45,17 @@ export const isVideoLink = (value: string) =>
   /^https:\/\/(?:[a-z0-9-]+\.)*(?:youtube\.com|youtu\.be|vimeo\.com|facebook\.com\/[^\s]*\/videos|fb\.watch)(?:[/:?#]|$)/i.test(
     value,
   );
+/*
+ * Library publication policy until uploads are verified (Phase 2D). A link's
+ * spelling cannot prove it is not a video, so it fails closed:
+ * - a site path (/…) or an approved sermon reference publishes normally;
+ * - a link to another website (https://…) is published by the Pastor only,
+ *   who opens it first. Admin saves it as a draft for the Pastor.
+ * Obvious video links are refused for everyone (use Sermons & videos).
+ */
+export const isOutsideLink = (value: string) => value.startsWith('https://');
+export const PASTOR_LINK_MESSAGE =
+  'Only the Pastor can publish a link to another website. Save it as a draft and ask the Pastor to check and publish it.';
 export const VIDEO_LINK_MESSAGE =
   'Videos are published through Sermons & videos, where the Pastor approves them.';
 
@@ -115,11 +126,21 @@ export const resourceInputSchema = z
       (value) => !isVideoLink(value),
       VIDEO_LINK_MESSAGE,
     ),
+    /** An approved sermon shown in the library (instead of a link). */
+    sermonId: z.string().trim().min(1).max(40).nullable().default(null),
     folderId: z.string().trim().min(1).max(40).nullable(),
     visibility: z.enum(resourceVisibilities),
     status,
   })
-  .strict();
+  .strict()
+  .superRefine((resource, context) => {
+    if (resource.sermonId && resource.url)
+      context.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: 'Choose a sermon or a link, not both.',
+      });
+  });
 
 export const folderInputSchema = z
   .object({

@@ -308,7 +308,7 @@ describe.skipIf(!dbTestsEnabled)(
       const base = {
         description: '',
         type: 'PDF',
-        url: 'https://example.org/file.pdf',
+        url: '/next-steps',
         folderId: null,
         visibility: 'members',
       };

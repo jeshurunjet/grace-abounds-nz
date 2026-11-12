@@ -7,7 +7,15 @@ export function NextStepsExplorer() {
   const { content } = useContent();
   const steps = content.pages.steps;
   const [active, setActive] = useState(0);
-  const current = (steps[active] ?? steps[0])!;
+  const current = steps[active] ?? steps[0];
+  // No published journey yet (or the last was archived): say so honestly.
+  if (!current)
+    return (
+      <p className="tab-intro">
+        Next steps will be published here soon. Contact the church office and we
+        will help you find your place.
+      </p>
+    );
   return (
     <>
       <Reveal>
@@ -21,7 +29,7 @@ export function NextStepsExplorer() {
               key={step.title}
               type="button"
               role="tab"
-              aria-selected={index === active}
+              aria-selected={step === current}
               aria-controls="step-panel"
               onClick={() => setActive(index)}
             >

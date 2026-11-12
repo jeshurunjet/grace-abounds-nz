@@ -338,5 +338,46 @@ describe.skipIf(!dbTestsEnabled)(
         );
       }
     });
+
+    it('a sermon without a recording can be saved but never sent for approval or approved', async () => {
+      const [admin, pastor] = [await as('ADMIN'), await as('PASTOR')];
+      const { id } = await create(admin, { ...sermon, mediaUrl: '' });
+      const submit = await act(admin, id, 'submit', 1);
+      expect(submit.statusCode).toBe(409);
+      expect(submit.json().error.code).toBe('RECORDING_REQUIRED');
+      // Even a request left pending without a recording (for example from
+      // an earlier seed) cannot be approved.
+      await prisma.sermon.update({
+        where: { id },
+        data: { review: 'PENDING' },
+      });
+      const approve = await act(pastor, id, 'approve', 1);
+      expect(approve.statusCode).toBe(409);
+      expect(approve.json().error.code).toBe('RECORDING_REQUIRED');
+      const row = await prisma.sermon.findUniqueOrThrow({ where: { id } });
+      expect([row.version, row.liveVersion, row.approvedAt, row.live]).toEqual([
+        1,
+        null,
+        null,
+        null,
+      ]);
+      expect(
+        await prisma.auditEvent.count({
+          where: {
+            entityId: id,
+            action: {
+              in: [
+                'content.sermon_approved',
+                'content.sermon_review_requested',
+              ],
+            },
+          },
+        }),
+      ).toBe(0);
+      expect(await publicSermons()).toEqual([]);
+      // Adding a recording makes it ready.
+      await call('PATCH', `/v1/staff/sermons/${id}`, admin, 1, sermon);
+      expect((await act(admin, id, 'submit', 2)).statusCode).toBe(200);
+    });
   },
 );

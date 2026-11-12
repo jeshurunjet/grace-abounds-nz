@@ -752,3 +752,76 @@ Both findings were fixed in `2840461`, and the photo policy is unchanged: `SiteI
 **Current next instruction:**
 
 > Codex: short checkpoint of `f19532e..2840461` (published-state fixes and tests). Claude: on acceptance, start slice 2 (structured collections: locations, next steps, team, resources, sermon metadata, with the same Save, version, revision and audit pattern, server-side image validation using `isImageRef`, and a sitemap from published records). No merge, push or deployment without authorization.
+
+### Workspace UI redesign — owner decision and plan (Claude, 12 November 2026)
+
+**Owner decision (12 Nov):** the signed-in workspace (Member, Admin and Pastor) gets one consistent, decluttered editor look. **This supersedes "No further UI redesign is planned for Phase 2"** in the Codex checkpoint above.
+
+The owner found the current CMS too complicated:
+
+- Admins could edit page headings and taglines.
+- Long expanded lists made pages very long.
+- Every staff page looked different.
+
+The plan was agreed through a clickable mockup (the owner's private "Staff Editor Mockup", four screens) and a decision sheet ("Staff Editor Redesign Plan").
+
+**Scope: UI only.** What each page does, the data and the API contracts stay the same. There is one exception: page headings and taglines become **Pastor-only**, and the API enforces this too (Admin gets 403 on those fields). The public website is not redesigned; it only stops showing Admin-edited headings.
+
+**Agreed design.**
+
+1. **Navigation:** a slim icon sidebar holding only Home, Manage (staff only) and Settings, collapsed by default as today. Messages moves out of the sidebar into the floating bottom-right button on every workspace screen.
+2. **Manage hub:** "Manage" opens a page of large tiles, each with a coloured top panel and a large icon. The tiles are Website content, Activities & calendar, Sermons, Members & roles and Pastoral care, each shown only to roles allowed to use it. Inside a tool, a "← Manage" link replaces the second menu.
+3. **One editor kit (shared components):**
+   - Page header: title, one line and the main action.
+   - Section card: icon and plain-English title.
+   - List row: photo or icon, name, one detail line, a Live/Draft badge and a single **Edit** button. A drag handle appears on hover.
+   - **Side panel** from the right (owner chose option A): the item's fields with Cancel and Save. **Remove sits inside the panel and asks for confirmation first.** The panel is full screen on phones.
+   - Fields: short text, long text, photo (thumbnail plus Change), link, date/time, choice and on/off.
+   - Feedback: save status ("Unsaved changes / Saving… / Published"), a sticky "Unsaved changes · Discard · Save and publish" bar for page fields, empty states, and a confirm dialog.
+4. **Website content:**
+   - Page tabs (Home, About, Locations, Next steps, Giving, Site details) shown as an underline row, with "View page".
+   - The Events and Sermons tabs are removed: they only held hero copy, and those items are managed in their own tools.
+   - Hero eyebrow, title and tagline go into a collapsed **"Advanced: page heading · Pastor only"** section that Admins never see.
+   - Lists (values, leadership, campuses, steps, giving areas, resources) use list rows and the side panel. Each item saves on its own, which fits the slice 2 per-record API.
+5. **Home:** welcome, a slim "This Sunday" strip, a calendar with day dots and a day list, Your updates, Latest sermon, and "For you" cards (Request an appointment, Prayer request and Take a next step open the side panel; Resource gallery is a link). The "Pastor/Admin tools" buttons are removed because the Manage hub replaces them.
+6. **Icons:** Lucide (`lucide-react` is already a dependency of `apps/web`; nothing to install).
+
+**Role visibility (permissions unchanged; the server stays the authority):**
+
+|                                | Member         | Admin                  | Pastor                    |
+| ------------------------------ | -------------- | ---------------------- | ------------------------- |
+| Sidebar                        | Home, Settings | Home, Manage, Settings | Home, Manage, Settings    |
+| Messages floater, Home         | ✓              | ✓                      | ✓                         |
+| Manage hub                     | —              | ✓                      | ✓                         |
+| Website content                | —              | ✓, no Advanced         | ✓, with Advanced headings |
+| Activities & calendar, Sermons | —              | ✓                      | ✓                         |
+| Members & roles                | —              | view only (as now)     | role changes (as now)     |
+| Pastoral care                  | —              | —                      | ✓                         |
+
+**Constraints for the build:**
+
+- Keep the accepted theme and the mobile drawer behaviour.
+- Every new colour goes into `theme.css` as a palette token plus a site token, with light and dark values; `theme.test.ts` must stay green. The mockup's tile tints (blue, purple, green, soft red) need new tokens.
+- Accessibility:
+  - real buttons and links, labelled icon buttons, `role="dialog"` with focus trapped and returned on close, and Escape to close the panel;
+  - text contrast of at least 4.5:1 in both themes;
+  - drag-to-reorder has a keyboard alternative (Move up/Move down inside the panel or the row menu).
+- Truthful toasts and the existing version, conflict and partial-failure behaviour are preserved.
+- Existing tests keep passing, and new component tests cover the panel, the confirm-before-remove step and role visibility.
+
+**Build order (small, reviewable commits, each with tests and owner browser checks):**
+
+| Step | Work                                                                                                                                                                         |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Editor kit components and theme tokens.                                                                                                                                      |
+| 2    | Slim sidebar, Manage hub and Messages floater for all roles.                                                                                                                 |
+| 3    | Website content rebuilt on the kit for the slice 1 data. Pastor-only headings: an API field rule with tests (Admin PATCH changing any hero field gets 403; Pastor succeeds). |
+| 4    | Slice 2 collections (locations, next steps, team, resources, sermon metadata) built directly as list rows + panel on per-record endpoints.                                   |
+| 5    | Activities & calendar, Sermons, Members & roles and Pastoral care moved onto the kit (UI only).                                                                              |
+| 6    | Home.                                                                                                                                                                        |
+
+Steps 3–4 continue Phase 2. Step 5 is UI-only work on Phase 3/4 screens whose data is still in the browser.
+
+**Current next instruction:**
+
+> Codex: (1) short checkpoint of `f19532e..2840461` (slice 1 published-state fixes), and (2) review this redesign plan for risks: role visibility, the Pastor-only heading rule, accessibility and the theme-token approach. Claude: after Codex's checkpoint, start build step 1. No merge, push or deployment without authorization.

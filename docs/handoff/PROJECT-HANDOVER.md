@@ -285,12 +285,12 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                                    | Evidence / blocker                                                                                                                                                                                                                                                                                                                                                                             |
-| ----- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Complete — accepted by Codex                                                              | Source review, defaults confirmed, session design below.                                                                                                                                                                                                                                                                                                                                       |
-| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed)             | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2".                                                                                                                                                                                                                                                                                         |
-| 2     | Slice 1: Codex findings fixed (`2840461`); awaiting short Codex checkpoint before slice 2 | `backend-phase-2` (not pushed). Settings + seven page sections in PostgreSQL with immediate publishing, versions, revisions, audit; only confirmed resources reach the published snapshot; open browsers refresh on public navigation/tab return. 60 unit tests (+7), lint and build pass; 83 PostgreSQL tests unchanged since `e177359`. Owner browser checks passed. Slices 2–5 not started. |
-| 3–6   | Not implemented                                                                           | —                                                                                                                                                                                                                                                                                                                                                                                              |
+| Phase | Status                                                                                                                                                                  | Evidence / blocker                                                                                                            |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Complete — accepted by Codex                                                                                                                                            | Source review, defaults confirmed, session design below.                                                                      |
+| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed)                                                                                           | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2".                        |
+| 2     | Slice 1 accepted by Codex. Bounded redesign (editor kit, fixed headings, Manage navigation) implemented and owner-approved; awaiting focused Codex review. Slice 2 next | `backend-phase-2` at `45a038f` (not pushed). 84 PostgreSQL tests, 67 unit tests, lint and build pass. Slices 2–5 not started. |
+| 3–6   | Not implemented                                                                                                                                                         | —                                                                                                                             |
 
 **How to read this section:** the sections below are a chronological record. Blockers, "pending", "not run" and next-instruction lines inside earlier sections are **historical**. The current state is the table above, and the current next instructions are only in the **last section** of this file.
 
@@ -825,3 +825,129 @@ Steps 3–4 continue Phase 2. Step 5 is UI-only work on Phase 3/4 screens whose 
 **Current next instruction:**
 
 > Codex: (1) short checkpoint of `f19532e..2840461` (slice 1 published-state fixes), and (2) review this redesign plan for risks: role visibility, the Pastor-only heading rule, accessibility and the theme-token approach. Claude: after Codex's checkpoint, start build step 1. No merge, push or deployment without authorization.
+
+### Owner-approved redesign refinements and Codex checkpoint — 12 November 2026
+
+**This section supersedes the earlier Pastor-only Advanced heading editor and build-order instructions.** The owner confirmed: page headings are fixed and not editable, and accepted Codex review suggestions 2–6. Claude should implement the bounded refinement below, then continue the existing backend phases. No second handover or redesign plan file.
+
+**Slice 1 checkpoint:** Codex reviewed `2840461`: saves now merge only confirmed canonical resource patches, and incoming server content reconciles into published state without replacing local collections/CMS drafts. Focused CMS/provider/freshness regression suites were run by Codex: **13 passed across 3 files**. Slice 1 may progress to slice 2; historical DB, build and browser evidence remains as recorded. This does not mark all Phase 2 complete.
+
+**1. Fixed page headings, for every role.** Remove the proposed "Advanced: page heading · Pastor only" editor entirely. Neither Admin nor Pastor can edit the public page hero identity/copy through the CMS. Treat the shared hero fields (`eyebrow`, `title`, `accent`, `copy`, including the tagline/introduction in that hero) as fixed presentation copy. This applies to Home and every existing public-page hero; map the exact existing fields before changing the editor. Also keep workspace/tool headings fixed. This does not freeze editable content-record titles (sermon title, resource name, event title), stories, body descriptions, verses or ordinary editorial text.
+
+Preserve the currently published heading text; do not reset it to seed placeholders, overwrite the database or silently change church copy. A destructive migration or new heading-management system is unnecessary. During this transition existing versioned documents may retain their stored hero fields: allow unchanged protected values in full-document saves, reject actual attempts to change them for **both** staff roles, and provide a clear error. Do not accept a role-based bypass or rely solely on hidden fields. Future fixed-copy changes are deliberate source/release work, outside the CMS. Tests: ordinary Admin/Pastor content saves still work with unchanged hero fields; altered protected fields are refused without revision/version/audit side effects. Document any existing page-intro field that is actually body content rather than a hero so it stays editable consistently.
+
+**2. No lost destinations.** Events and Sermons hero-only CMS tabs can disappear now that their hero copy is fixed. Their management tools retain all actual editorial operations. Any remaining editable non-heading page introduction belongs in the corresponding tool; do not strand a field by removing its tab. Include a short old-destination → new-destination mapping here. Preserve existing deep links or add appropriate redirects.
+
+**3. Save boundaries match the API.** Slice 2 relational collections use per-record endpoints/version checks and independent panel saves. Existing JSON page arrays (values, giving areas, image galleries) remain part of the page draft: a panel's action says "Apply to page" and closing it does not claim publication; the page-level "Save and publish" commits the versioned page. Clearly distinguish Cancel/discard of panel edits from discarding the entire page draft. No per-item publication claims unless an actual independent backend contract exists. Preserve server-confirmed toasts, partial failures, dirty-resource isolation and canonical response handling from slice 1.
+
+**4. Safe panel dismissal.** Define dirty-state behavior for Cancel, Escape, backdrop click, opening another record, changing tabs and route navigation. Offer Keep editing / Discard when an action would lose panel edits; no silent loss. A clean panel closes normally and returns focus to its trigger; Escape first closes the topmost confirmation dialog. Save/validation/network/version-conflict failures retain input with an inline recovery path. Prevent duplicate submissions while saving. Add focused keyboard, dismissal, failure and confirmation tests.
+
+**5. Discoverable member navigation.** A slim Home/Manage/Settings sidebar is acceptable only with clearly labelled, stable routes to Calendar, Resources, Messages, Help and the public website. Retain Calendar/Resources/Help as compact navigation items or a consistently accessible labelled secondary menu rather than burying them solely in Home cards. No hover-only access on touch screens. Member has no Manage entry; staff retain personal member features. Admin's read-only destination/tile is labelled **Member directory**; Pastor may have Members & roles. Pastor-only care remains inaccessible to Admin at the server boundary. Reuse the existing Messages shortcut with accessible labels; do not manufacture unread counts.
+
+**6. Bounded delivery and return to phases.** First build the shared editor kit, fixed-heading rule and minimal Manage navigation needed for Phase 2; then build slice 2 collections directly on that kit. Do not rebuild Activities, member administration or pastoral-care workflows while their data is still browser-only. Move those tools onto the kit when Phases 3/4 connect them to their real backend. Reuse current Home and the repaired calendar layout; defer the larger Home composition to the appropriate member-workspace phase unless a small navigation/accessibility correction is required now. This reduces repeated implementation and credit use.
+
+**Acceptance:** preserve the approved yellow/neutral light/dark theme and colour tokens; no public-site visual redesign. Editor kit/panel and navigation must work on desktop and narrow mobile with keyboard, visible focus, focus trapping/return and safe modal stacking. Maintain immediate publishing and version/ownership checks. Owner reviews the first usable editor before the kit is rolled across all Phase 2 collections. Run affected tests as slices complete; do not repeat provider/auth audits or full suites without relevant changes. End each slice by updating this file with real evidence and returning a focused diff for Codex review. No merge, push or deployment without authorization.
+
+**Current instruction to paste into Claude:**
+
+> Read "Owner-approved redesign refinements and Codex checkpoint" at the bottom of PROJECT-HANDOVER.md. The owner has approved these refinements: headings/hero taglines are fixed for everyone, not Pastor-editable; apply the other five review suggestions. Slice 1's published-state checkpoint passed. Implement the shared editor kit and bounded Phase 2 navigation/fixed-heading work, preserving current published copy and existing backend contracts. Keep per-page versus per-record save semantics explicit, protect dirty panel edits and keep member destinations discoverable. Show me the first usable editor before rolling it across collections. Then continue Phase 2 slice 2 and subsequent existing slices; defer Phase 3/4 screen rebuilds and the larger Home redesign to those phases. Keep the accepted theme, update this sole handover with checks and request focused Codex review at slice checkpoints. No merge, push or deployment.
+
+### Redesign checkpoint — Claude, 12 November 2026, head `45a038f`
+
+Implements "Owner-approved redesign refinements and Codex checkpoint". Owner review led to further UI-only refinements, all recorded below as owner decisions.
+
+**Commits (`ae13e6c..45a038f`):**
+
+| Commit    | Change                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| `26e83ef` | API: page headings fixed for every staff role                                                     |
+| `72cb51e` | Editor kit, Manage hub, Website content rebuilt on the kit                                        |
+| `4f92790` | Owner refinements: top bar, sidebar toggle, hub layout, icon-only Messages, Home "For you" panels |
+| `45a038f` | Owner decision: staff reach Calendar and Resources from Manage                                    |
+
+**1. Fixed headings (API, `routes/content.ts`).**
+
+- Every page's `hero` (`eyebrow`, `title`, `accent`, `copy`) is fixed copy. This covers the Home hero, including its tagline, and the location, next-steps, give, events and sermons heroes.
+- Inside the save transaction, the API reads the stored row and checks the version (412 if stale). It then compares the four hero fields, trimmed, and refuses any change with `422 FIXED_CONTENT` and per-field `fieldErrors`. This applies to Admin and Pastor alike, with no role bypass.
+- Unchanged stored values in full-document saves are accepted. Stored copy is untouched: there is no migration and no reseed.
+- Test `page headings are fixed for every staff role, with no side effects`:
+  - Admin and Pastor: an altered Home title and an altered Events tagline both give 422 with the right field.
+  - Versions stay at 1, there are zero revisions, and there are zero publish audits.
+  - A Pastor save with an unchanged hero gives 200.
+  - The existing tests now edit the verse rather than the heading.
+- **Still editable** (body content, not hero):
+  - About `intro` ("Intro paragraph") and `story` ("History")
+  - About values, office hours and years of ministry
+  - Home and Giving verses, Home photos and gallery, giving areas
+  - all Site details
+  - next-step records' own `heading`/`body` (record content)
+  - campus, leadership and resource records
+
+**2. No lost destinations.** Old → new:
+
+| Old location                                                                                                      | New location                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| CMS Events tab                                                                                                    | Removed; it held only hero copy, now fixed. Activities editing: Manage → **Activities** (`/admin/events`, unchanged route). |
+| CMS Sermons tab                                                                                                   | Removed (hero only). Sermon editing: Manage → **Sermons** (`/admin/sermons`).                                               |
+| CMS "Shared" tab                                                                                                  | Renamed **Site details**.                                                                                                   |
+| Sidebar: Website content, Activities & calendar, Manage sermons, Members & roles / Member activity, Pastoral care | Manage hub `/admin/manage`. All routes are unchanged, so deep links still work.                                             |
+| Locations tab                                                                                                     | Links to `/admin/events` for service times.                                                                                 |
+
+CMS tabs were never URL-addressed, so no redirects were needed.
+
+**3. Save boundaries.**
+
+- Page documents: fields edit the draft. List panels (values, giving areas, slideshow and gallery photos, sign-in verses) say **Apply to page**, with the note "Applies to this page’s draft. Select Save and publish to put it live."
+- A sticky bar offers **Discard** (confirmation: "Discard unsaved changes on this page?") or **Save and publish**. Discard restores each changed resource from the last confirmed server data.
+- Saving keeps slice 1's behaviour: canonical per-resource patches, dirty-resource isolation, partial-failure messages and conflict recovery.
+- Campuses, steps, leadership and resources still save in this browser, labelled "Save in this browser", until slice 2 gives them per-record endpoints.
+
+**4. Panel dismissal (`components/editor-kit/side-panel.tsx`, `use-layer.ts`).**
+
+- Cancel, Escape, the backdrop and the close button share one path. A clean panel closes and focus returns to its trigger. A dirty panel opens "Discard your changes?" (**Keep editing** / **Discard**).
+- Escape and Tab belong to the topmost layer only, so Escape closes the confirmation first.
+- Nothing closes while busy. `beforeunload` warns while a dirty panel is open.
+- Opening another record or changing tabs is impossible while the modal is open (the backdrop and trap prevent it). In-app link navigation is likewise blocked.
+- Known limit: the browser Back button cannot be intercepted in the App Router. `beforeunload` covers reload and closing the tab.
+- Remove sits inside the panel with a confirmation, and the last required photo cannot be removed.
+- Tests cover Escape order, Keep editing keeping input, Discard closing with focus returned, Apply-to-page without a PATCH, the page-level publish, and remove confirmation.
+
+**5. Navigation (owner decisions after review).**
+
+- **Top bar:** only notifications and the account menu. Removed as duplicates: the workspace title (the sidebar logo goes home), "Back to home" and "View website" (the sidebar has Main website).
+- **Sidebar:** the collapse toggle stays under the logo in both states.
+- **Messages:** an icon-only floating shortcut with `aria-label="Open messages"`.
+- **Member sidebar:** Main website, Home, Calendar, Resources, Settings, Help.
+- **Pastor/Admin sidebar:** Main website, Home, **Manage**, Settings, Help. **Owner decision:** staff reach Calendar and Resources as Manage tiles. Note for Codex: this differs from refinement 5's "compact navigation items" for staff. The owner chose it after review; members keep both in the sidebar.
+- **Manage hub:** centred, up to five tiles per row. The Activities tile was renamed from "Activities & calendar" so it isn't confused with the member Calendar.
+  - Admin tiles: Website content, Activities, Calendar, Resources, Sermons, **Member directory**.
+  - Pastor tiles: the same, but **Members & roles** instead of Member directory, plus **Pastoral care**.
+- Server rules are unchanged: Pastoral care stays Pastor-only at the server boundary.
+
+**6. Home (owner request, UI only).**
+
+- The owner asked for the mockup's Home changes now. **This differs from refinement 6's deferral, at the owner's request.**
+- The appointment, prayer and next-step forms keep their exact browser-only logic and toasts. They now open from "For you" cards in the shared side panel, with a dirty guard; `?join=` opens the next-step panel.
+- Removed: the Pastor/Admin tools box (Manage replaces it) and the large gallery block (Resources is reachable from the sidebar or Manage).
+- No backend or data change.
+
+**Theme.**
+
+- New palette and site tokens in `theme.css`, with light and dark values: `--success-*`, `--danger-ink`, `--scrim`, `--neutral-badge-bg`, and `--tile-*-bg/ink` for five tile tones.
+- `editor-kit.css` contains no colour literals, and `theme.test.ts` passes. The public site is unchanged.
+
+**Evidence (owner's Mac, 12 Nov):**
+
+- `pnpm test:db`: **84 passed**, including the new fixed-heading test.
+- `pnpm test`: **19 files, 67 passed** (76 DB tests skipped).
+- `pnpm lint` (ESLint `--max-warnings=0` + Prettier) and `pnpm build` (`/admin/manage` present) pass.
+- Owner browser review of the editor, panels, hub, sidebar and Home: approved ("it looks great").
+
+**Not done (per refinement 6):**
+
+- Activities, member administration and pastoral-care screens are not moved onto the kit; they stay as they are until their phases connect real data.
+- Drag-to-reorder is replaced by visible Move up/Move down buttons, which work on keyboard and touch.
+
+**Current next instruction:**
+
+> Codex: focused review of `ae13e6c..45a038f`: the fixed-heading rule, editor-kit dialog and focus behaviour, save boundaries, role navigation, and the two owner-decided departures (staff Calendar/Resources in Manage; Home panels now). Claude: continue with Phase 2 slice 2 (per-record collections on the kit). No merge, push or deployment without authorization.

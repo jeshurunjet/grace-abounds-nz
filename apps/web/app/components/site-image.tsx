@@ -19,8 +19,12 @@ export function canOptimize(src: ImageProps['src']): boolean {
  * the visitor's browser; the site's own image server only fetches from the
  * trusted hosts above, so it can't be used to fetch arbitrary addresses.
  */
-export default function SiteImage({ unoptimized, ...props }: ImageProps) {
+export default function SiteImage({ alt, unoptimized, ...props }: ImageProps) {
   return (
-    <Image {...props} unoptimized={unoptimized || !canOptimize(props.src)} />
+    <Image
+      {...props}
+      alt={alt}
+      unoptimized={unoptimized || !canOptimize(props.src)}
+    />
   );
 }

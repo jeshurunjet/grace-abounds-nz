@@ -1,4 +1,4 @@
-import type { PageContentMap, SiteSettings } from './content.js';
+import type { PageContentMap, SiteSettings } from './content.ts';
 
 /*
  * Development starting content, written to an EMPTY database by the explicit

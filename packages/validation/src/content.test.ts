@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPages, defaultSiteSettings } from './content-defaults.js';
-import { pageKeys, pageSchemas, siteSettingsSchema } from './content.js';
+import { defaultPages, defaultSiteSettings } from './content-defaults.ts';
+import { pageKeys, pageSchemas, siteSettingsSchema } from './content.ts';
 
 describe('content schemas', () => {
   it('accept the development defaults for every resource', () => {

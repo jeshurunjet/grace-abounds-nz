@@ -7,7 +7,7 @@ const rootEnv = resolve(process.cwd(), '../../.env');
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@grace-abounds/database'],
+  transpilePackages: ['@grace-abounds/database', '@grace-abounds/validation'],
   serverExternalPackages: ['@prisma/client'],
   images: {
     remotePatterns: [

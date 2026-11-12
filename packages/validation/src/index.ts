@@ -1,2 +1,2 @@
-export * from './content.js';
-export * from './content-defaults.js';
+export * from './content.ts';
+export * from './content-defaults.ts';

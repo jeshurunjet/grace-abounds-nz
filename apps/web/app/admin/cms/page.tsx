@@ -1,9 +1,23 @@
 'use client';
-import Image from '../../components/site-image';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
-  isImageRef,
+  ArrowLeft,
+  BookOpen,
+  Contact,
+  ExternalLink,
+  Footprints,
+  HandHeart,
+  Heart,
+  Images,
+  Landmark,
+  MapPin,
+  Plus,
+  Quote,
+  Trash,
+  Users,
+} from 'lucide-react';
+import {
   pageKeys,
   type PageContentMap,
   type PageKey,
@@ -12,6 +26,18 @@ import {
 import { AdminShell } from '../../components/admin-shell';
 import { useContent } from '../../components/content-provider';
 import { useToast } from '../../components/toast';
+import Image from '../../components/site-image';
+import { KitConfirm } from '../../components/editor-kit/confirm';
+import { SidePanel } from '../../components/editor-kit/side-panel';
+import {
+  KitPhoto,
+  KitText,
+  ListRow,
+  RowList,
+  SaveStatus,
+  SectionCard,
+  type SaveState,
+} from '../../components/editor-kit/parts';
 import { api, ApiError, errorMessage } from '../../lib/api-client';
 import type { ContentState, SiteContent } from '../../lib/content';
 import {
@@ -21,373 +47,70 @@ import {
   siteFromLegacy,
   toLegacy,
 } from '../../lib/content-adapter';
-import { validatePublicContent } from '../../lib/content-validation';
+import { isImageRef } from '@grace-abounds/validation';
 
-const labels: Record<string, string> = {
-  '/location': 'Locations',
-  '/next-steps': 'Next steps',
-  '/give': 'Giving',
-  '/events': 'Events',
-  '/sermons': 'Sermons',
-  heroImages: 'Hero slideshow images',
-  gallery: 'Community parallax gallery',
-  heroes: 'Page headings and introductions',
-  givingImpact: 'Giving impact',
-  memberHref: 'Member action URL',
-  path: 'Journey steps',
-  adminHref: 'Management URL',
-};
-function label(key: string) {
-  return (
-    labels[key] ??
-    key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
-  );
-}
-// Records stored as fixed-position tuples. Each position is a named field:
-// whole records can be added, removed and reordered, but never their fields.
-const tupleFields: Record<string, string[]> = {
-  values: ['Number', 'Value', 'Description'],
-  givingImpact: ['Percentage', 'Area', 'Description'],
-};
-// Collections the public site cannot render without at least one entry.
-const requiredCollections = new Set([
-  'heroImages',
-  'gallery',
-  'locations',
-  'steps',
-]);
-const hints: Record<string, string> = {
-  steps:
-    'Public Next steps journeys. Members can also request these from the member area.',
-  locations: 'Campus details. Service times come from Activities & calendar.',
-};
-// A new record starts blank and unpublished rather than copying another record.
-function blankFrom(template: unknown): unknown {
-  if (typeof template === 'string') return '';
-  if (typeof template === 'number') return 0;
-  if (Array.isArray(template)) return [];
-  if (template && typeof template === 'object')
-    return Object.fromEntries(
-      Object.entries(template).map(([key, entry]) => [
-        key,
-        key === 'id'
-          ? crypto.randomUUID()
-          : key === 'status'
-            ? 'draft'
-            : blankFrom(entry),
-      ]),
-    );
-  return '';
-}
-function TextField({
-  name,
-  value,
-  onChange,
-}: {
-  name: string;
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const multiline =
-    value.length > 100 ||
-    /story|copy|body|bio|summary|verses|opportunities|description/i.test(name);
-  // Photo fields preview the image and say so when it can't be loaded.
-  const [failed, setFailed] = useState('');
-  const preview = /image|gallery/i.test(name) && isImageRef(value);
-  return (
-    <label>
-      {label(name)}
-      {preview && failed !== value && (
-        <Image
-          className="cms-image-preview"
-          unoptimized
-          src={value}
-          alt="Content image preview"
-          width={320}
-          height={180}
-          onError={() => setFailed(value)}
-        />
-      )}
-      {preview && failed === value && (
-        <span className="form-note" role="alert">
-          This photo couldn’t be loaded. Check the link — some websites don’t
-          allow their photos to be shown on other sites.
-        </span>
-      )}
-      {multiline ? (
-        <textarea
-          rows={4}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      ) : (
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      )}
-    </label>
-  );
-}
-// The editor uses the same typed content tree as the public pages.
-function Fields({
-  value,
-  onChange,
-  name,
-}: {
-  value: unknown;
-  onChange: (next: unknown) => void;
-  name: string;
-}) {
-  if (
-    typeof value === 'string' &&
-    (name === 'memberOpportunities' || name === 'authVerses')
-  ) {
-    const keys =
-      name === 'memberOpportunities'
-        ? ['name', 'description', 'href']
-        : ['verse', 'reference'];
-    const items = value
-      .split('\n')
-      .filter(Boolean)
-      .map((line) =>
-        Object.fromEntries(
-          keys.map((key, index) => [key, line.split('|')[index] ?? '']),
-        ),
-      );
-    return (
-      <>
-        {hints[name] && <p className="form-note">{hints[name]}</p>}
-        <Fields
-          name={
-            name === 'memberOpportunities'
-              ? 'Member opportunities'
-              : 'Login verses'
-          }
-          value={items}
-          onChange={(next) =>
-            onChange(
-              (next as Record<string, string>[])
-                .map((item) => keys.map((key) => item[key] ?? '').join('|'))
-                .join('\n'),
-            )
-          }
-        />
-      </>
-    );
-  }
-  if (typeof value === 'number')
-    return (
-      <label>
-        {label(name)}
-        <input
-          type="number"
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-        />
-      </label>
-    );
-  if (typeof value === 'string') {
-    if (name === 'status')
-      return (
-        <label>
-          Visibility
-          <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          >
-            <option value="draft">Keep as draft</option>
-            <option value="published">Include on public website</option>
-            <option value="archived">Archive</option>
-          </select>
-        </label>
-      );
-    return <TextField name={name} value={value} onChange={onChange} />;
-  }
-  if (Array.isArray(value)) {
-    const shape = tupleFields[name];
-    const canRemove = !requiredCollections.has(name) || value.length > 1;
-    return (
-      <fieldset className="cms-collection">
-        <legend>{label(name)}</legend>
-        {hints[name] && <p className="form-note">{hints[name]}</p>}
-        {!value.length && (
-          <p className="form-note">
-            No items yet. Add one, or leave this section empty.
-          </p>
-        )}
-        {value.map((item, index) => (
-          <details key={index}>
-            <summary>
-              {(shape
-                ? (item as string[])[
-                    ['Number', 'Percentage'].includes(shape[0]!) ? 1 : 0
-                  ]
-                : typeof item === 'object'
-                  ? (item.title ?? item.name)
-                  : typeof item === 'string' && item.length < 60
-                    ? item
-                    : '') || `${label(name)} ${index + 1}`}
-            </summary>
-            {shape ? (
-              shape.map((field, position) => (
-                <div key={field} className="cms-field">
-                  <TextField
-                    name={field}
-                    value={String((item as string[])[position] ?? '')}
-                    onChange={(next) =>
-                      onChange(
-                        value.map((entry, i) =>
-                          i === index
-                            ? shape.map((_, p) =>
-                                p === position
-                                  ? next
-                                  : String((entry as string[])[p] ?? ''),
-                              )
-                            : entry,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-              ))
-            ) : (
-              <Fields
-                value={item}
-                name={typeof item === 'string' ? name : `Item ${index + 1}`}
-                onChange={(next) =>
-                  onChange(
-                    value.map((entry, i) => (i === index ? next : entry)),
-                  )
-                }
-              />
-            )}
-            <div className="form-actions">
-              {[-1, 1].map((direction) => (
-                <button
-                  type="button"
-                  className="button button-outline"
-                  disabled={
-                    index + direction < 0 || index + direction >= value.length
-                  }
-                  key={direction}
-                  onClick={() => {
-                    const next = [...value];
-                    [next[index], next[index + direction]] = [
-                      next[index + direction],
-                      next[index],
-                    ];
-                    onChange(next);
-                  }}
-                >
-                  {direction === -1 ? 'Move up' : 'Move down'}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="text-danger"
-              disabled={!canRemove}
-              title={canRemove ? undefined : 'At least one item is required.'}
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
-            >
-              Remove item
-            </button>
-          </details>
-        ))}
-        <button
-          type="button"
-          className="button button-outline"
-          onClick={() =>
-            onChange([
-              ...value,
-              shape
-                ? shape.map(() => '')
-                : !value.length && name === 'resources'
-                  ? {
-                      id: crypto.randomUUID(),
-                      title: 'New resource',
-                      type: 'PDF',
-                      url: '',
-                      description: '',
-                    }
-                  : !value.length && name === 'team'
-                    ? {
-                        id: crypto.randomUUID(),
-                        name: '',
-                        role: '',
-                        bio: '',
-                        image: '',
-                        status: 'draft',
-                      }
-                    : value.length
-                      ? blankFrom(value[value.length - 1])
-                      : '',
-            ])
-          }
-        >
-          Add item
-        </button>
-      </fieldset>
-    );
-  }
-  if (value && typeof value === 'object')
-    return (
-      <>
-        {Object.entries(value)
-          .filter(([key]) => !['id', 'adminHref'].includes(key))
-          .map(([key, entry]) => (
-            <div key={key} className="cms-field">
-              <Fields
-                name={key}
-                value={entry}
-                onChange={(next) => onChange({ ...value, [key]: next })}
-              />
-            </div>
-          ))}
-      </>
-    );
-  return null;
-}
+/*
+ * Website content editor, built on the shared editor kit.
+ *
+ * Page headings (each page's hero) are fixed and not shown here (owner
+ * decision, 12 Nov 2026); the API refuses changes to them.
+ *
+ * Two save boundaries, matching the API:
+ * - Page documents (fields and lists such as values or photos): edits go into
+ *   the page draft; list panels say "Apply to page"; the page-level
+ *   "Save and publish" commits each changed resource with If-Match.
+ * - Collections not yet in the database (campuses, steps, leadership,
+ *   resources) save in this browser until Phase 2 slice 2.
+ */
+
 const tabs = [
   'Home',
   'About',
   'Locations',
   'Next steps',
   'Giving',
-  'Events',
-  'Sermons',
-  'Shared',
+  'Site details',
 ] as const;
 type Tab = (typeof tabs)[number];
 type Resource = 'site' | PageKey;
 type Draft = { site: SiteContent; pages: ContentState['pages'] };
-type Versions = Partial<Record<Resource, number>>;
+type Pages = ContentState['pages'];
 
-/** Which saved resource each tab publishes. */
 const tabResources: Record<Tab, Resource[]> = {
   Home: ['home'],
   About: ['about'],
-  Locations: ['location'],
-  'Next steps': ['next-steps'],
+  Locations: [],
+  'Next steps': [],
   Giving: ['give', 'site'],
-  Events: ['events'],
-  Sermons: ['sermons'],
-  Shared: ['site'],
+  'Site details': ['site'],
 };
-/** Site fields that belong to a page document rather than shared settings. */
+const tabPath: Record<Tab, string> = {
+  Home: '/',
+  About: '/about',
+  Locations: '/location',
+  'Next steps': '/next-steps',
+  Giving: '/give',
+  'Site details': '/',
+};
+const resourceLabel: Record<Resource, string> = {
+  site: 'Site details',
+  home: 'Home',
+  about: 'About',
+  location: 'Locations',
+  'next-steps': 'Next steps',
+  give: 'Giving',
+  events: 'Events',
+  sermons: 'Sermons',
+};
+/** Site fields stored in a page document rather than shared settings. */
 const siteFieldPage: Partial<Record<keyof SiteContent, PageKey>> = {
-  heroEyebrow: 'home',
-  heroTitle: 'home',
-  heroAccent: 'home',
-  heroCopy: 'home',
   homeVerseText: 'home',
   homeVerseReference: 'home',
   story: 'about',
   givingVerseText: 'give',
   givingVerseReference: 'give',
 };
-const pageFieldPage: Partial<Record<keyof ContentState['pages'], PageKey>> = {
+const pageFieldPage: Partial<Record<keyof Pages, PageKey>> = {
   heroImages: 'home',
   gallery: 'home',
   aboutIntro: 'about',
@@ -398,21 +121,144 @@ const pageFieldPage: Partial<Record<keyof ContentState['pages'], PageKey>> = {
   values: 'about',
   givingImpact: 'give',
 };
-const heroPage: Record<string, PageKey> = {
-  '/location': 'location',
-  '/next-steps': 'next-steps',
-  '/give': 'give',
-  '/events': 'events',
-  '/sermons': 'sermons',
+
+// ---------- Page-document lists (edited in the panel, applied to the draft) ----------
+type DocList =
+  'heroImages' | 'gallery' | 'values' | 'givingImpact' | 'authVerses';
+type DocItem = string | string[];
+const docLists: Record<
+  DocList,
+  {
+    noun: string;
+    resource: Resource;
+    required?: boolean;
+    blank: DocItem;
+  }
+> = {
+  heroImages: {
+    noun: 'slideshow photo',
+    resource: 'home',
+    required: true,
+    blank: '',
+  },
+  gallery: {
+    noun: 'gallery photo',
+    resource: 'home',
+    required: true,
+    blank: '',
+  },
+  values: { noun: 'value', resource: 'about', blank: ['', '', ''] },
+  givingImpact: { noun: 'giving area', resource: 'give', blank: ['', '', ''] },
+  authVerses: { noun: 'sign-in verse', resource: 'site', blank: ['', ''] },
 };
-/** Collections still kept in this browser until Phase 2 slice 2. */
-const localPageFields = ['locations', 'steps', 'resources'] as const;
+const verseLines = (text: string) =>
+  text
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => {
+      const [verse = '', reference = ''] = line.split('|');
+      return [verse, reference];
+    });
+function readDocList(draft: Draft, list: DocList): DocItem[] {
+  if (list === 'authVerses') return verseLines(draft.site.authVerses);
+  return draft.pages[list] as DocItem[];
+}
+function writeDocList(draft: Draft, list: DocList, items: DocItem[]): Draft {
+  if (list === 'authVerses')
+    return {
+      ...draft,
+      site: {
+        ...draft.site,
+        authVerses: (items as string[][])
+          .map(([verse = '', reference = '']) => `${verse}|${reference}`)
+          .join('\n'),
+      },
+    };
+  return { ...draft, pages: { ...draft.pages, [list]: items } as Pages };
+}
+
+// ---------- Collections kept in this browser until slice 2 ----------
+type LocalList = 'locations' | 'steps' | 'resources' | 'team';
+const localLists: Record<
+  LocalList,
+  { noun: string; fields: [string, string][] }
+> = {
+  locations: {
+    noun: 'campus',
+    fields: [
+      ['name', 'Name'],
+      ['type', 'Kind of campus'],
+      ['address', 'Address'],
+      ['image', 'Photo'],
+    ],
+  },
+  steps: {
+    noun: 'step',
+    fields: [
+      ['title', 'Title'],
+      ['subtitle', 'Subtitle'],
+      ['heading', 'Card heading'],
+      ['body', 'Description'],
+      ['cta', 'Button label'],
+      ['path', 'Journey steps (one per line)'],
+    ],
+  },
+  resources: {
+    noun: 'resource',
+    fields: [
+      ['title', 'Title'],
+      ['type', 'Type'],
+      ['url', 'Link'],
+      ['description', 'Description'],
+    ],
+  },
+  team: {
+    noun: 'person',
+    fields: [
+      ['name', 'Name'],
+      ['role', 'Role'],
+      ['bio', 'Short bio'],
+      ['image', 'Photo'],
+      ['status', 'Visibility'],
+    ],
+  },
+};
+type Record_ = Record<string, unknown>;
 const LOCAL_NOTE =
   'Saved in this browser only until this list moves to the database in the next update.';
-const resourceLabel = (resource: Resource) =>
-  resource === 'site'
-    ? 'Shared settings'
-    : (labels[`/${resource}`] ?? resource);
+
+type PanelState =
+  | {
+      kind: 'doc';
+      list: DocList;
+      index: number | null;
+      value: DocItem;
+      original: DocItem;
+    }
+  | {
+      kind: 'local';
+      list: LocalList;
+      index: number | null;
+      value: Record_;
+      original: Record_;
+    };
+
+const initials = (name: string) =>
+  name
+    .replace(/^(Pastor|Rev\.)\s+/, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase();
+function thumb(src: unknown, fallback: string): ReactNode {
+  return typeof src === 'string' && isImageRef(src) ? (
+    <Image unoptimized src={src} alt="" width={88} height={88} />
+  ) : (
+    <span aria-hidden="true">{fallback}</span>
+  );
+}
 
 export default function CmsPage() {
   const { content, update, ready, storageError, retrySave, applyPublished } =
@@ -420,13 +266,21 @@ export default function CmsPage() {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('Home');
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [versions, setVersions] = useState<Versions>({});
+  const [confirmed, setConfirmed] = useState<
+    Partial<Record<Resource, unknown>>
+  >({});
+  const [versions, setVersions] = useState<Partial<Record<Resource, number>>>(
+    {},
+  );
   const [dirty, setDirty] = useState<Set<Resource>>(new Set());
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [conflict, setConflict] = useState(false);
+  const [panel, setPanel] = useState<PanelState | null>(null);
+  const [confirm, setConfirm] = useState<null | 'remove' | 'discard'>(null);
 
   /** Loads the latest published content and versions (staff only). */
   const load = useCallback(async () => {
@@ -444,8 +298,8 @@ export default function CmsPage() {
           pageKeys.map((key, i) => [key, pages[i]!.data]),
         ),
       } as { site: SiteSettings; pages: PageContentMap };
-      const legacy = toLegacy(bundle, content.pages);
-      setDraft(legacy);
+      setDraft(toLegacy(bundle, content.pages));
+      setConfirmed({ site: site.data, ...bundle.pages });
       setVersions({
         site: site.version,
         ...Object.fromEntries(
@@ -472,43 +326,32 @@ export default function CmsPage() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  const markDirty = (resource: Resource) =>
+  const markDirty = (resource: Resource) => {
+    setJustSaved(false);
     setDirty((current) => new Set(current).add(resource));
-  const editSite = (key: keyof SiteContent, next: unknown) => {
+  };
+  const editSite = (key: keyof SiteContent) => (next: string) => {
     setDraft(
       (current) =>
         current && { ...current, site: { ...current.site, [key]: next } },
     );
     markDirty(siteFieldPage[key] ?? 'site');
   };
-  const editPage = (key: keyof ContentState['pages'], next: unknown) => {
+  const editPage = (key: keyof Pages) => (next: string) => {
     setDraft(
       (current) =>
         current && {
           ...current,
-          pages: { ...current.pages, [key]: next } as Draft['pages'],
+          pages: { ...current.pages, [key]: next } as Pages,
         },
     );
     const page = pageFieldPage[key];
     if (page) markDirty(page);
   };
-  const editHero = (route: string, next: unknown) => {
-    setDraft(
-      (current) =>
-        current && {
-          ...current,
-          pages: {
-            ...current.pages,
-            heroes: { ...current.pages.heroes, [route]: next },
-          } as Draft['pages'],
-        },
-    );
-    markDirty(heroPage[route]!);
-  };
 
   const pending = tabResources[tab].filter((resource) => dirty.has(resource));
   async function save() {
-    if (!draft || pending.length === 0) return;
+    if (!draft || pending.length === 0 || saving) return;
     setSaving(true);
     setSaveError('');
     setFieldErrors([]);
@@ -528,18 +371,20 @@ export default function CmsPage() {
           },
         );
         // Only this confirmed resource becomes published, using the server's
-        // canonical (trimmed, validated) data. Other drafts stay unsaved.
+        // canonical data. Other drafts stay unsaved.
         const patch = resourceToLegacy(resource, result.data);
         applyPublished(patch);
         setDraft((current) => current && mergePatch(current, patch));
+        setConfirmed((current) => ({ ...current, [resource]: result.data }));
         setVersions((current) => ({ ...current, [resource]: result.version }));
         setDirty((current) => {
           const next = new Set(current);
           next.delete(resource);
           return next;
         });
-        published.push(resourceLabel(resource));
+        published.push(resourceLabel[resource]);
       }
+      setJustSaved(true);
       toast.push(`${published.join(' and ')} published.`, 'success');
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === 'VERSION_CONFLICT') {
@@ -562,171 +407,660 @@ export default function CmsPage() {
       setSaving(false);
     }
   }
+  /** Puts this tab's changed resources back to their last published version. */
+  function discardPage() {
+    setDraft((current) => {
+      if (!current) return current;
+      return pending.reduce(
+        (next, resource) =>
+          confirmed[resource] === undefined
+            ? next
+            : mergePatch(
+                next,
+                resourceToLegacy(resource, confirmed[resource] as SiteSettings),
+              ),
+        current,
+      );
+    });
+    setDirty((current) => {
+      const next = new Set(current);
+      pending.forEach((resource) => next.delete(resource));
+      return next;
+    });
+    setSaveError('');
+    setFieldErrors([]);
+  }
 
+  // ---------- Panels ----------
+  const panelDirty =
+    !!panel && JSON.stringify(panel.value) !== JSON.stringify(panel.original);
+  const openDoc = (list: DocList, index: number | null) => {
+    if (!draft) return;
+    const items = readDocList(draft, list);
+    const value = index === null ? docLists[list].blank : items[index]!;
+    setPanel({ kind: 'doc', list, index, value, original: value });
+  };
+  const moveDoc = (list: DocList, index: number, delta: number) => {
+    if (!draft) return;
+    const items = [...readDocList(draft, list)];
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    [items[index], items[target]] = [items[target]!, items[index]!];
+    setDraft(writeDocList(draft, list, items));
+    markDirty(docLists[list].resource);
+  };
+  const localItems = (list: LocalList): Record_[] =>
+    (list === 'team'
+      ? content.team
+      : content.pages[list]) as unknown as Record_[];
+  const openLocal = (list: LocalList, index: number | null) => {
+    const items = localItems(list);
+    const blank: Record_ = Object.fromEntries(
+      localLists[list].fields.map(([key]) => [
+        key,
+        key === 'path' ? [] : key === 'status' ? 'draft' : '',
+      ]),
+    );
+    const value =
+      index === null
+        ? { ...blank, id: crypto.randomUUID() }
+        : { ...items[index]! };
+    setPanel({ kind: 'local', list, index, value, original: value });
+  };
+  const writeLocal = (list: LocalList, items: Record_[]) =>
+    update((state) =>
+      list === 'team'
+        ? { ...state, team: items as unknown as ContentState['team'] }
+        : ({
+            ...state,
+            pages: { ...state.pages, [list]: items },
+          } as ContentState),
+    );
+  const moveLocal = (list: LocalList, index: number, delta: number) => {
+    const items = [...localItems(list)];
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    [items[index], items[target]] = [items[target]!, items[index]!];
+    void writeLocal(list, items);
+  };
+  async function applyPanel() {
+    if (!panel || !draft) return;
+    if (panel.kind === 'doc') {
+      const items = [...readDocList(draft, panel.list)];
+      if (panel.index === null) items.push(panel.value);
+      else items[panel.index] = panel.value;
+      setDraft(writeDocList(draft, panel.list, items));
+      markDirty(docLists[panel.list].resource);
+      setPanel(null);
+      return;
+    }
+    const items = [...localItems(panel.list)];
+    if (panel.index === null) items.push(panel.value);
+    else items[panel.index] = panel.value;
+    if (await writeLocal(panel.list, items)) setPanel(null);
+  }
+  async function removeFromPanel() {
+    if (!panel || panel.index === null || !draft) return;
+    if (panel.kind === 'doc') {
+      const items = readDocList(draft, panel.list).filter(
+        (_, i) => i !== panel.index,
+      );
+      setDraft(writeDocList(draft, panel.list, items));
+      markDirty(docLists[panel.list].resource);
+      setPanel(null);
+    } else {
+      const items = localItems(panel.list).filter((_, i) => i !== panel.index);
+      if (await writeLocal(panel.list, items)) setPanel(null);
+    }
+    setConfirm(null);
+  }
+  const canRemove =
+    !!panel &&
+    panel.index !== null &&
+    !(
+      panel.kind === 'doc' &&
+      docLists[panel.list].required &&
+      draft &&
+      readDocList(draft, panel.list).length <= 1
+    );
+
+  // ---------- Rendering helpers ----------
   const view = draft ?? { site: content.site, pages: content.pages };
-  const warnings = validatePublicContent({ ...content, ...view });
-  const status = saving
-    ? 'Saving…'
+  const saveState: SaveState = saving
+    ? 'saving'
     : pending.length
-      ? 'Unsaved changes'
-      : draft
-        ? 'Published'
-        : 'Loading…';
-  const siteKeys: Record<Tab, (keyof ContentState['site'])[]> = {
-    Home: [
-      'heroEyebrow',
-      'heroTitle',
-      'heroAccent',
-      'heroCopy',
-      'homeVerseText',
-      'homeVerseReference',
-    ],
-    About: ['story'],
-    Locations: [],
-    'Next steps': [],
-    Giving: [
-      'givingVerseText',
-      'givingVerseReference',
-      'givingAccount',
-      'givingBank',
-      'givingNumber',
-    ],
-    Events: [],
-    Sermons: [],
-    Shared: [
-      'contactEmail',
-      'contactPhone',
-      'contactAddress',
-      'footerAddress',
-      'facebookUrl',
-      'instagramUrl',
-      'youtubeUrl',
-      'authVerses',
-    ],
-  };
-  const pageKeysByTab: Record<Tab, (keyof ContentState['pages'])[]> = {
-    Home: ['heroImages', 'gallery'],
-    About: [
-      'aboutIntro',
-      'aboutHeroImage',
-      'aboutImage',
-      'ministryYears',
-      'values',
-      'officeHours',
-    ],
-    Locations: ['locations'],
-    'Next steps': ['steps'],
-    Giving: ['givingImpact'],
-    Events: [],
-    Sermons: [],
-    Shared: ['resources'],
-  };
-  const heroKey = (
-    {
-      Locations: '/location',
-      'Next steps': '/next-steps',
-      Giving: '/give',
-      Events: '/events',
-      Sermons: '/sermons',
-    } as const
-  )[tab as 'Locations' | 'Next steps' | 'Giving' | 'Events' | 'Sermons'];
-  const isLocal = (key: keyof ContentState['pages']) =>
-    (localPageFields as readonly string[]).includes(key);
+      ? 'dirty'
+      : saveError
+        ? 'failed'
+        : justSaved
+          ? 'saved'
+          : 'clean';
+  const disabled = !draft || saving;
+
+  function docSection(
+    list: DocList,
+    icon: typeof Images,
+    title: string,
+    description: string,
+  ) {
+    const items = draft ? readDocList(draft, list) : [];
+    const { noun } = docLists[list];
+    const photo = list === 'heroImages' || list === 'gallery';
+    return (
+      <SectionCard
+        icon={icon}
+        title={title}
+        description={description}
+        action={
+          <button
+            type="button"
+            className="kit-add"
+            disabled={disabled}
+            onClick={() => openDoc(list, null)}
+          >
+            <Plus aria-hidden="true" size={16} />
+            Add {noun}
+          </button>
+        }
+      >
+        <RowList empty={`No ${noun}s yet.`}>
+          {items.map((item, index) => {
+            const parts = Array.isArray(item) ? item : [item];
+            const name = photo
+              ? `${list === 'heroImages' ? 'Slideshow' : 'Gallery'} photo ${index + 1}`
+              : list === 'authVerses'
+                ? parts[1] || `Verse ${index + 1}`
+                : parts[1] || `${noun} ${index + 1}`;
+            return (
+              <ListRow
+                key={`${list}-${index}`}
+                media={
+                  photo ? (
+                    thumb(item, '')
+                  ) : list === 'authVerses' ? (
+                    <Quote aria-hidden="true" size={18} />
+                  ) : (
+                    parts[0]
+                  )
+                }
+                title={name}
+                detail={
+                  photo
+                    ? String(item)
+                    : list === 'authVerses'
+                      ? parts[0]
+                      : parts[2]
+                }
+                editLabel={`Edit ${name}`}
+                onEdit={() => openDoc(list, index)}
+                onMoveUp={
+                  index > 0 && !disabled
+                    ? () => moveDoc(list, index, -1)
+                    : undefined
+                }
+                onMoveDown={
+                  index < items.length - 1 && !disabled
+                    ? () => moveDoc(list, index, 1)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </RowList>
+      </SectionCard>
+    );
+  }
+  function localSection(
+    list: LocalList,
+    icon: typeof Images,
+    title: string,
+    description: string,
+  ) {
+    const items = localItems(list);
+    const { noun } = localLists[list];
+    return (
+      <SectionCard
+        icon={icon}
+        title={title}
+        description={description}
+        action={
+          <button
+            type="button"
+            className="kit-add"
+            disabled={!ready}
+            onClick={() => openLocal(list, null)}
+          >
+            <Plus aria-hidden="true" size={16} />
+            Add {noun}
+          </button>
+        }
+      >
+        <p className="kit-note">{LOCAL_NOTE}</p>
+        <RowList empty={`No ${noun}s yet.`}>
+          {items.map((item, index) => {
+            const name =
+              String(item.name ?? item.title ?? `${noun} ${index + 1}`) ||
+              `${noun} ${index + 1}`;
+            const status = item.status as string | undefined;
+            return (
+              <ListRow
+                key={String(item.id ?? index)}
+                media={thumb(item.image, initials(name) || '•')}
+                title={name}
+                detail={String(
+                  item.role ?? item.address ?? item.subtitle ?? item.type ?? '',
+                )}
+                badge={
+                  status
+                    ? status === 'published'
+                      ? { tone: 'success', label: 'Live' }
+                      : {
+                          tone: 'neutral',
+                          label: status === 'archived' ? 'Archived' : 'Draft',
+                        }
+                    : undefined
+                }
+                editLabel={`Edit ${name}`}
+                onEdit={() => openLocal(list, index)}
+                onMoveUp={
+                  index > 0 ? () => moveLocal(list, index, -1) : undefined
+                }
+                onMoveDown={
+                  index < items.length - 1
+                    ? () => moveLocal(list, index, 1)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </RowList>
+      </SectionCard>
+    );
+  }
+
+  function panelFields() {
+    if (!panel) return null;
+    const set = (value: DocItem | Record_) =>
+      setPanel((current) => current && ({ ...current, value } as PanelState));
+    if (panel.kind === 'doc') {
+      if (typeof panel.value === 'string')
+        return (
+          <KitPhoto
+            label="Photo link"
+            value={panel.value}
+            onChange={(next) => set(next)}
+          />
+        );
+      const tuple = panel.value;
+      const labels =
+        panel.list === 'values'
+          ? ['Number', 'Value', 'Description']
+          : panel.list === 'givingImpact'
+            ? ['Percentage', 'Area', 'Description']
+            : ['Verse', 'Reference'];
+      return labels.map((label, position) => (
+        <KitText
+          key={label}
+          label={label}
+          multiline={label === 'Description' || label === 'Verse'}
+          rows={3}
+          value={tuple[position] ?? ''}
+          onChange={(next) =>
+            set(tuple.map((part, i) => (i === position ? next : part)))
+          }
+        />
+      ));
+    }
+    const value = panel.value;
+    return localLists[panel.list].fields.map(([key, label]) => {
+      if (key === 'image')
+        return (
+          <KitPhoto
+            key={key}
+            label={label}
+            value={String(value[key] ?? '')}
+            onChange={(next) => set({ ...value, [key]: next })}
+          />
+        );
+      if (key === 'status')
+        return (
+          <div className="kit-field" key={key}>
+            <label htmlFor="panel-status">{label}</label>
+            <select
+              id="panel-status"
+              value={String(value[key] ?? 'draft')}
+              onChange={(event) => set({ ...value, [key]: event.target.value })}
+            >
+              <option value="draft">Keep as draft</option>
+              <option value="published">Show on website</option>
+              <option value="archived">Archive</option>
+            </select>
+          </div>
+        );
+      if (key === 'path')
+        return (
+          <KitText
+            key={key}
+            label={label}
+            multiline
+            rows={5}
+            value={((value[key] as string[]) ?? []).join('\n')}
+            onChange={(next) => set({ ...value, [key]: next.split('\n') })}
+          />
+        );
+      return (
+        <KitText
+          key={key}
+          label={label}
+          multiline={key === 'body' || key === 'bio' || key === 'description'}
+          value={String(value[key] ?? '')}
+          onChange={(next) => set({ ...value, [key]: next })}
+        />
+      );
+    });
+  }
+  const panelNoun = panel
+    ? panel.kind === 'doc'
+      ? docLists[panel.list].noun
+      : localLists[panel.list].noun
+    : '';
+  const panelTitle = panel
+    ? `${panel.index === null ? 'Add' : 'Edit'} ${panelNoun}`
+    : '';
+
   return (
     <AdminShell>
-      <header className="workspace-header">
-        <p className="eyebrow">Public website</p>
-        <h1>Website content</h1>
-        <p>
-          Manage all seven public pages. Changes go live on the website when you
-          select Save. <Link href="/">View the live site</Link>
-        </p>
-      </header>
-      {loadError && (
-        <div className="publishing-errors" role="alert">
-          <p>Website content couldn’t be loaded. {loadError}</p>
-          <button className="button button-outline" onClick={() => void load()}>
-            Try again
-          </button>
-        </div>
-      )}
-      {storageError && (
-        <div className="publishing-errors" role="alert">
-          <p>{storageError}</p>
-          <button className="button button-outline" onClick={retrySave}>
-            Retry save
-          </button>
-        </div>
-      )}
-      {warnings.length > 0 && (
-        <div className="publishing-errors" role="status">
-          <strong>Check these before visitors see them</strong>
-          <ul>
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="cms-workbench">
-        <aside className="cms-page-list" aria-label="Public pages">
-          <p className="eyebrow">Public pages</p>
+      <div className="kit-page">
+        <Link className="kit-back" href="/admin/manage">
+          <ArrowLeft aria-hidden="true" size={16} />
+          Manage
+        </Link>
+        <header className="kit-page-head">
+          <h1>Website content</h1>
+          <SaveStatus state={saveState} />
+        </header>
+        {loadError && (
+          <div className="publishing-errors" role="alert">
+            <p>Website content couldn’t be loaded. {loadError}</p>
+            <button
+              className="button button-outline"
+              onClick={() => void load()}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        {storageError && (
+          <div className="publishing-errors" role="alert">
+            <p>{storageError}</p>
+            <button className="button button-outline" onClick={retrySave}>
+              Retry save
+            </button>
+          </div>
+        )}
+        <div className="kit-tabs" role="tablist" aria-label="Public pages">
           {tabs.map((item) => (
             <button
               key={item}
+              type="button"
+              role="tab"
+              aria-selected={tab === item}
               onClick={() => setTab(item)}
-              aria-pressed={tab === item}
-              className={tab === item ? 'active' : ''}
             >
               {item}
               {tabResources[item].some((resource) => dirty.has(resource)) &&
                 ' •'}
             </button>
           ))}
-          <p className="form-note">
-            Saving publishes immediately. Member activity stays private.
-          </p>
-        </aside>
-        <section className="panel cms-form">
-          <h2>{tab}</h2>
-          <fieldset disabled={!draft || saving} className="cms-fields">
-            {siteKeys[tab].map((key) => (
-              <Fields
-                key={key}
-                name={key}
-                value={view.site[key]}
-                onChange={(next) => editSite(key, next)}
-              />
-            ))}
-            {heroKey && (
-              <Fields
-                name="Page introduction"
-                value={view.pages.heroes[heroKey]}
-                onChange={(next) => editHero(heroKey, next)}
-              />
-            )}
-            {pageKeysByTab[tab]
-              .filter((key) => !isLocal(key))
-              .map((key) => (
-                <Fields
-                  key={key}
-                  name={key}
-                  value={view.pages[key]}
-                  onChange={(next) => editPage(key, next)}
+          <Link className="kit-tabs-end" href={tabPath[tab]}>
+            View page
+            <ExternalLink aria-hidden="true" size={14} />
+          </Link>
+        </div>
+
+        <div role="tabpanel" aria-label={tab} className="kit-page">
+          {tab === 'Home' && (
+            <>
+              <SectionCard
+                icon={BookOpen}
+                title="Featured verse"
+                description="Shown on the home page."
+              >
+                <KitText
+                  label="Verse text"
+                  multiline
+                  rows={3}
+                  value={view.site.homeVerseText}
+                  onChange={editSite('homeVerseText')}
                 />
-              ))}
-          </fieldset>
-          <div className="form-actions">
-            <button
-              className="button"
-              disabled={!draft || saving || pending.length === 0 || conflict}
-              onClick={() => void save()}
-            >
-              {saving ? 'Saving…' : 'Save and publish'}
-            </button>
-            <span className="form-note" role="status" aria-live="polite">
-              {status}
-            </span>
+                <KitText
+                  label="Reference"
+                  value={view.site.homeVerseReference}
+                  onChange={editSite('homeVerseReference')}
+                />
+              </SectionCard>
+              {docSection(
+                'heroImages',
+                Images,
+                'Slideshow photos',
+                'The photos behind the home page heading, in order.',
+              )}
+              {docSection(
+                'gallery',
+                Images,
+                'Community gallery',
+                'The photo strip further down the home page.',
+              )}
+            </>
+          )}
+          {tab === 'About' && (
+            <>
+              <SectionCard
+                icon={BookOpen}
+                title="Our story"
+                description="The welcome paragraph and the longer history."
+              >
+                <KitText
+                  label="Intro paragraph"
+                  multiline
+                  rows={3}
+                  value={view.pages.aboutIntro}
+                  onChange={editPage('aboutIntro')}
+                />
+                <KitText
+                  label="History"
+                  multiline
+                  rows={6}
+                  value={view.site.story}
+                  onChange={editSite('story')}
+                />
+              </SectionCard>
+              <SectionCard icon={Images} title="Photos">
+                <KitPhoto
+                  label="Banner photo"
+                  value={view.pages.aboutHeroImage}
+                  onChange={editPage('aboutHeroImage')}
+                />
+                <KitPhoto
+                  label="Story photo"
+                  value={view.pages.aboutImage}
+                  onChange={editPage('aboutImage')}
+                />
+              </SectionCard>
+              {docSection(
+                'values',
+                Heart,
+                'Our values',
+                'Shown as numbered cards.',
+              )}
+              <SectionCard icon={Contact} title="Quick facts">
+                <div className="kit-grid">
+                  <KitText
+                    label="Office hours"
+                    value={view.pages.officeHours}
+                    onChange={editPage('officeHours')}
+                  />
+                  <KitText
+                    label="Years of ministry"
+                    value={view.pages.ministryYears}
+                    onChange={editPage('ministryYears')}
+                  />
+                </div>
+              </SectionCard>
+              {localSection(
+                'team',
+                Users,
+                'Leadership team',
+                'People shown on the About page.',
+              )}
+            </>
+          )}
+          {tab === 'Locations' && (
+            <>
+              {localSection(
+                'locations',
+                MapPin,
+                'Campuses',
+                'Campus details. Service times come from Activities & calendar.',
+              )}
+              <p className="kit-empty">
+                <Link href="/admin/events">
+                  Manage services, groups and events
+                </Link>
+              </p>
+            </>
+          )}
+          {tab === 'Next steps' &&
+            localSection(
+              'steps',
+              Footprints,
+              'Next steps',
+              'Journeys shown on the Next steps page. Members can also request these.',
+            )}
+          {tab === 'Giving' && (
+            <>
+              <SectionCard icon={BookOpen} title="Giving verse">
+                <KitText
+                  label="Verse text"
+                  multiline
+                  rows={3}
+                  value={view.site.givingVerseText}
+                  onChange={editSite('givingVerseText')}
+                />
+                <KitText
+                  label="Reference"
+                  value={view.site.givingVerseReference}
+                  onChange={editSite('givingVerseReference')}
+                />
+              </SectionCard>
+              {docSection(
+                'givingImpact',
+                HandHeart,
+                'Where giving goes',
+                'Areas and percentages shown on the Giving page.',
+              )}
+              <SectionCard
+                icon={Landmark}
+                title="Bank details"
+                description="Shared with the rest of the site."
+              >
+                <div className="kit-grid">
+                  <KitText
+                    label="Account name"
+                    value={view.site.givingAccount}
+                    onChange={editSite('givingAccount')}
+                  />
+                  <KitText
+                    label="Bank"
+                    value={view.site.givingBank}
+                    onChange={editSite('givingBank')}
+                  />
+                  <KitText
+                    label="Account number"
+                    value={view.site.givingNumber}
+                    onChange={editSite('givingNumber')}
+                  />
+                </div>
+              </SectionCard>
+            </>
+          )}
+          {tab === 'Site details' && (
+            <>
+              <SectionCard
+                icon={Contact}
+                title="Contact details"
+                description="Used in the footer and contact links."
+              >
+                <div className="kit-grid">
+                  <KitText
+                    label="Email"
+                    value={view.site.contactEmail}
+                    onChange={editSite('contactEmail')}
+                  />
+                  <KitText
+                    label="Phone"
+                    value={view.site.contactPhone}
+                    onChange={editSite('contactPhone')}
+                  />
+                </div>
+                <KitText
+                  label="Address"
+                  value={view.site.contactAddress}
+                  onChange={editSite('contactAddress')}
+                />
+                <KitText
+                  label="Footer address"
+                  value={view.site.footerAddress}
+                  onChange={editSite('footerAddress')}
+                />
+              </SectionCard>
+              <SectionCard
+                icon={ExternalLink}
+                title="Social links"
+                description="Full https:// addresses, or leave blank."
+              >
+                <KitText
+                  label="Facebook"
+                  value={view.site.facebookUrl}
+                  onChange={editSite('facebookUrl')}
+                />
+                <KitText
+                  label="Instagram"
+                  value={view.site.instagramUrl}
+                  onChange={editSite('instagramUrl')}
+                />
+                <KitText
+                  label="YouTube"
+                  value={view.site.youtubeUrl}
+                  onChange={editSite('youtubeUrl')}
+                />
+              </SectionCard>
+              {docSection(
+                'authVerses',
+                Quote,
+                'Sign-in verses',
+                'One is shown on the sign-in page.',
+              )}
+              {localSection(
+                'resources',
+                BookOpen,
+                'Resources',
+                'Links shared with members.',
+              )}
+            </>
+          )}
+        </div>
+
+        {saveError && (
+          <div className="publishing-errors" role="alert">
+            <p>{saveError}</p>
+            {fieldErrors.length > 0 && (
+              <ul>
+                {fieldErrors.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
             {conflict && (
               <button
                 className="button button-outline"
@@ -736,66 +1070,107 @@ export default function CmsPage() {
               </button>
             )}
           </div>
-          {saveError && (
-            <div className="publishing-errors" role="alert">
-              <p>{saveError}</p>
-              {fieldErrors.length > 0 && (
-                <ul>
-                  {fieldErrors.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {/* Collections not yet in the database: unchanged behaviour. */}
-          <fieldset disabled={!ready} className="cms-fields">
-            {pageKeysByTab[tab].filter(isLocal).map((key) => (
-              <div key={key}>
-                <p className="form-note">{LOCAL_NOTE}</p>
-                <Fields
-                  name={key}
-                  value={content.pages[key]}
-                  onChange={(next) =>
-                    update(
-                      (state) =>
-                        ({
-                          ...state,
-                          pages: { ...state.pages, [key]: next },
-                        }) as ContentState,
-                    )
-                  }
-                />
-              </div>
-            ))}
-            {tab === 'About' && (
-              <div>
-                <p className="form-note">{LOCAL_NOTE}</p>
-                <Fields
-                  name="Leadership profiles"
-                  value={content.team}
-                  onChange={(next) =>
-                    update((state) => ({
-                      ...state,
-                      team: next as ContentState['team'],
-                    }))
-                  }
-                />
-              </div>
-            )}
-          </fieldset>
-          {(tab === 'Events' || tab === 'Locations') && (
-            <Link className="button" href="/admin/events">
-              Manage services, groups, studies and events
-            </Link>
-          )}
-          {tab === 'Sermons' && (
-            <Link className="button" href="/admin/sermons">
-              Manage sermon library
-            </Link>
-          )}
-        </section>
+        )}
+
+        {pending.length > 0 && (
+          <div className="kit-savebar">
+            <span>Unsaved changes on this page</span>
+            <button
+              type="button"
+              className="button button-outline"
+              disabled={saving}
+              onClick={() => setConfirm('discard')}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={saving || conflict}
+              onClick={() => void save()}
+            >
+              {saving ? 'Saving…' : 'Save and publish'}
+            </button>
+          </div>
+        )}
       </div>
+
+      <SidePanel
+        open={!!panel}
+        title={panelTitle}
+        eyebrow={tab}
+        dirty={panelDirty}
+        onClose={() => setPanel(null)}
+        footer={(requestClose) => (
+          <>
+            {panel?.index !== null && (
+              <button
+                type="button"
+                className="kit-remove"
+                disabled={!canRemove}
+                title={canRemove ? undefined : 'At least one is required.'}
+                onClick={() => setConfirm('remove')}
+              >
+                <Trash aria-hidden="true" size={16} />
+                Remove
+              </button>
+            )}
+            <span className="kit-spacer" />
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={requestClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => void applyPanel()}
+            >
+              {panel?.kind === 'local'
+                ? 'Save in this browser'
+                : 'Apply to page'}
+            </button>
+          </>
+        )}
+      >
+        {panel?.kind === 'doc' && (
+          <p className="kit-note">
+            Applies to this page’s draft. Select “Save and publish” to put it
+            live.
+          </p>
+        )}
+        {panel?.kind === 'local' && <p className="kit-note">{LOCAL_NOTE}</p>}
+        {panelFields()}
+      </SidePanel>
+
+      <KitConfirm
+        open={confirm === 'remove'}
+        title={`Remove this ${panelNoun}?`}
+        confirmLabel="Remove"
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => void removeFromPanel()}
+      >
+        <p>
+          {panel?.kind === 'doc'
+            ? 'It comes off the page draft. Nothing changes on the website until you save and publish.'
+            : 'It is removed from this browser’s copy straight away.'}
+        </p>
+      </KitConfirm>
+      <KitConfirm
+        open={confirm === 'discard'}
+        title="Discard unsaved changes on this page?"
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          discardPage();
+          setConfirm(null);
+        }}
+      >
+        <p>This page goes back to what is live on the website.</p>
+      </KitConfirm>
     </AdminShell>
   );
 }

@@ -79,12 +79,12 @@ async function renderCms() {
       <Probe />
     </ContentProvider>,
   );
-  await screen.findByText('Published', { selector: 'span' });
+  await screen.findByText('All changes published');
 }
 const edit = (label: string, value: string) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const tab = (name: string) =>
-  screen.getByRole('button', { name: new RegExp(`^${name}( •)?$`) });
+  screen.getByRole('tab', { name: new RegExp(`^${name}( •)?$`) });
 
 beforeEach(() => {
   failing = new Set();
@@ -101,9 +101,9 @@ beforeEach(() => {
 describe('CMS publishing updates the live content only from confirmed saves', () => {
   it('keeps unsaved edits on other tabs out of the published content', async () => {
     await renderCms();
-    edit('Hero Title', 'Unsaved home title');
+    edit('Verse text', 'An unsaved verse.');
     fireEvent.click(tab('About'));
-    edit('Story', '  A new story.  ');
+    edit('History', '  A new story.  ');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save and publish' }));
     });
@@ -113,7 +113,9 @@ describe('CMS publishing updates the live content only from confirmed saves', ()
       expect(context.content.site.story).toBe('A new story.'),
     );
     // …and not the Home draft, which stays unsaved.
-    expect(context.content.site.heroTitle).toBe(defaultPages.home.hero.title);
+    expect(context.content.site.homeVerseText).toBe(
+      defaultPages.home.verse.text,
+    );
     expect(tab('Home')).toHaveTextContent('Home •');
     expect(tab('About')).toHaveTextContent(/^About$/);
   });
@@ -122,8 +124,8 @@ describe('CMS publishing updates the live content only from confirmed saves', ()
     failing = new Set(['site']);
     await renderCms();
     fireEvent.click(tab('Giving'));
-    edit('Giving Verse Text', 'A confirmed verse.');
-    edit('Giving Bank', 'Rejected Bank');
+    edit('Verse text', 'A confirmed verse.');
+    edit('Bank', 'Rejected Bank');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save and publish' }));
     });
@@ -138,7 +140,78 @@ describe('CMS publishing updates the live content only from confirmed saves', ()
       screen.getByText(/Giving published, but the rest was not/),
     ).toBeInTheDocument();
     // The rejected bank details remain an unsaved edit.
-    expect(screen.getByLabelText('Giving Bank')).toHaveValue('Rejected Bank');
+    expect(screen.getByLabelText('Bank')).toHaveValue('Rejected Bank');
     expect(tab('Giving')).toHaveTextContent('Giving •');
+  });
+
+  it('shows no page-heading fields and keeps the Events and Sermons tools reachable', async () => {
+    await renderCms();
+    for (const name of ['Events', 'Sermons'])
+      expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/hero|heading|tagline/i)).toBeNull();
+    fireEvent.click(tab('Locations'));
+    expect(
+      screen.getByRole('link', { name: /Manage services, groups and events/ }),
+    ).toHaveAttribute('href', '/admin/events');
+  });
+
+  it('list panels apply to the page draft and only the page Save publishes', async () => {
+    await renderCms();
+    fireEvent.click(tab('About'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Community' }));
+    const panel = screen.getByRole('dialog', { name: 'Edit value' });
+    expect(panel).toBeInTheDocument();
+    edit('Value', 'Belonging');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to page' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(patches).toEqual([]);
+    expect(context.content.pages.values[1]![1]).toBe('Community');
+    expect(tab('About')).toHaveTextContent('About •');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save and publish' }));
+    });
+    await waitFor(() => expect(patches).toEqual(['about']));
+    await waitFor(() =>
+      expect(context.content.pages.values[1]![1]).toBe('Belonging'),
+    );
+  });
+
+  it('asks before closing a panel with unapplied edits; Escape closes the topmost layer first', async () => {
+    await renderCms();
+    fireEvent.click(tab('About'));
+    const trigger = screen.getByRole('button', { name: 'Edit Mission' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    edit('Value', 'Changed');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(
+      screen.getByRole('alertdialog', { name: 'Discard your changes?' }),
+    ).toBeInTheDocument();
+    // Escape closes the confirmation (Keep editing), not the panel.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Value')).toHaveValue('Changed');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(tab('About')).toHaveTextContent(/^About$/);
+  });
+
+  it('removing an item asks first and keeps at least one required photo', async () => {
+    await renderCms();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit Slideshow photo 1' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(
+      screen.getByRole('alertdialog', { name: 'Remove this slideshow photo?' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(tab('Home')).toHaveTextContent('Home •');
+    expect(context.content.pages.heroImages).toHaveLength(
+      defaultPages.home.heroImages.length,
+    );
   });
 });

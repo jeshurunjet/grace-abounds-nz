@@ -58,6 +58,18 @@
   --palette-blue: #3b82f6;
   --palette-google-blue: #4285f4;
 
+  /* Editor kit: status badges and Manage tile tints */
+  --palette-green-pale: #e6f2ea;
+  --palette-green-light: #86d4a3;
+  --palette-red-pale: #fdecea;
+  --palette-red-light: #f4a69d;
+  --palette-blue-pale: #e8f0fb;
+  --palette-blue-ink: #2c5aa0;
+  --palette-blue-light: #a9c7f2;
+  --palette-purple-pale: #f6eef6;
+  --palette-purple-ink: #7a3f78;
+  --palette-purple-light: #dcb3da;
+
   /*
    * Older colour names still used by some rules. They now point at the new
    * palette; prefer the names above in new code.
@@ -137,6 +149,23 @@
   --shadow: 0 12px 40px
     color-mix(in srgb, var(--palette-charcoal-new) 10%, transparent);
   --radius: 1.25rem;
+
+  /* Editor kit (workspace tools) */
+  --scrim: color-mix(in srgb, var(--palette-charcoal-new) 18%, transparent);
+  --success-bg: var(--palette-green-pale);
+  --success-ink: var(--palette-green-deep);
+  --danger-ink: var(--palette-error);
+  --neutral-badge-bg: var(--palette-grey-50);
+  --tile-website-bg: var(--palette-logo-gold-tint);
+  --tile-website-ink: var(--palette-gold-text);
+  --tile-activities-bg: var(--palette-blue-pale);
+  --tile-activities-ink: var(--palette-blue-ink);
+  --tile-sermons-bg: var(--palette-purple-pale);
+  --tile-sermons-ink: var(--palette-purple-ink);
+  --tile-members-bg: var(--palette-green-pale);
+  --tile-members-ink: var(--palette-green-deep);
+  --tile-care-bg: var(--palette-red-pale);
+  --tile-care-ink: var(--palette-error);
 }
 
 /*
@@ -178,4 +207,33 @@
     var(--palette-dark-surface) 97%,
     transparent
   );
+
+  /* Editor kit (workspace tools) */
+  --scrim: color-mix(in srgb, var(--palette-black) 45%, transparent);
+  --success-bg: color-mix(in srgb, var(--palette-green) 18%, transparent);
+  --success-ink: var(--palette-green-light);
+  --danger-ink: var(--palette-red-light);
+  --neutral-badge-bg: color-mix(in srgb, var(--palette-white) 8%, transparent);
+  --tile-website-bg: color-mix(
+    in srgb,
+    var(--palette-logo-gold) 14%,
+    transparent
+  );
+  --tile-website-ink: var(--palette-dark-accent);
+  --tile-activities-bg: color-mix(
+    in srgb,
+    var(--palette-blue) 18%,
+    transparent
+  );
+  --tile-activities-ink: var(--palette-blue-light);
+  --tile-sermons-bg: color-mix(
+    in srgb,
+    var(--palette-purple-ink) 30%,
+    transparent
+  );
+  --tile-sermons-ink: var(--palette-purple-light);
+  --tile-members-bg: color-mix(in srgb, var(--palette-green) 18%, transparent);
+  --tile-members-ink: var(--palette-green-light);
+  --tile-care-bg: color-mix(in srgb, var(--palette-red) 18%, transparent);
+  --tile-care-ink: var(--palette-red-light);
 }

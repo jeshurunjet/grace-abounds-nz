@@ -8,6 +8,7 @@ import './theme.css';
 import './styles.css';
 import './workspace-navigation.css';
 import './workspace-theme.css';
+import './editor-kit.css';
 
 const lora = localFont({
   variable: '--font-display',

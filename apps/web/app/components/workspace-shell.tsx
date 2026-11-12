@@ -5,6 +5,7 @@ import {
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  LayoutGrid,
   ArrowLeft,
   FolderOpen,
   CalendarDays,
@@ -25,7 +26,11 @@ import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
 import Image from 'next/image';
 import { accountProfile } from '../lib/profiles';
-import { getRoleNavigation, isRouteActive } from '../lib/role-navigation';
+import {
+  getRoleNavigation,
+  isManageRoute,
+  isRouteActive,
+} from '../lib/role-navigation';
 
 /** Stored desktop sidebar choice: 'true' = collapsed, 'false' = expanded. */
 export const SIDEBAR_KEY = 'grace-sidebar-collapsed';
@@ -258,7 +263,9 @@ export function WorkspaceShell({
               const active =
                 link.label === 'Home'
                   ? ['/members', '/admin', '/pastor'].includes(pathname)
-                  : isRouteActive(pathname, link.href);
+                  : link.label === 'Manage'
+                    ? isManageRoute(pathname)
+                    : isRouteActive(pathname, link.href);
               const Icon =
                 (
                   {
@@ -267,6 +274,7 @@ export function WorkspaceShell({
                     Messages: MessageCircle,
                     'Resource gallery': FolderOpen,
                     'Events & calendar': CalendarDays,
+                    Manage: LayoutGrid,
                     'Website content': FilePenLine,
                     'Manage events': CalendarDays,
                     'Activities & calendar': CalendarDays,
@@ -280,9 +288,6 @@ export function WorkspaceShell({
                 )[link.label] ?? Home;
               return (
                 <Fragment key={link.href}>
-                  {link.href === '/admin/cms' && (
-                    <p className="workspace-nav-caption">Manage</p>
-                  )}
                   <Link
                     href={href}
                     aria-label={link.label}

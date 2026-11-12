@@ -109,7 +109,7 @@ export default function MembersPage() {
               Website content
             </Link>
             <Link className="button button-outline" href="/admin/users">
-              Member activity
+              {role === 'pastor' ? 'Members & roles' : 'Member directory'}
             </Link>
             {role === 'pastor' && (
               <Link className="button button-outline" href="/pastor/care">

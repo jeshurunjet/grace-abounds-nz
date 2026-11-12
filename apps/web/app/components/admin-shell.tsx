@@ -10,19 +10,9 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
     { href: '/members/gallery', label: 'Resource gallery', icon: '▧' },
     { href: '/members/calendar', label: 'Events & calendar', icon: '□' },
   ];
+  // Staff tools live on the Manage hub (/admin/manage), one tile each.
   if (role === 'pastor' || role === 'admin')
-    links.push(
-      { href: '/admin/cms', label: 'Website content', icon: '✎' },
-      { href: '/admin/events', label: 'Activities & calendar', icon: '◫' },
-      { href: '/admin/sermons', label: 'Manage sermons', icon: '▷' },
-      {
-        href: '/admin/users',
-        label: role === 'pastor' ? 'Members & roles' : 'Member activity',
-        icon: '◎',
-      },
-    );
-  if (role === 'pastor')
-    links.push({ href: '/pastor/care', label: 'Pastoral care', icon: '♡' });
+    links.push({ href: '/admin/manage', label: 'Manage', icon: '▦' });
   links.push({ href: '/settings', label: 'Settings', icon: '⚙' });
   links.push({ href: '/help', label: 'Help', icon: '?' });
   return links;

@@ -13,7 +13,7 @@ export function MemberShell({ children }: { children: ReactNode }) {
       kind={
         role === 'pastor' ? 'Pastor' : role === 'admin' ? 'Admin' : 'Members'
       }
-      links={workspaceLinks(role)}
+      links={workspaceLinks()}
     >
       {children}
     </WorkspaceShell>

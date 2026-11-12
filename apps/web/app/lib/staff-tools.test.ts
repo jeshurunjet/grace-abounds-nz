@@ -3,9 +3,9 @@ import { staffTools } from './staff-tools';
 import { workspaceLinks } from '../components/admin-shell';
 
 describe('workspace navigation by role', () => {
-  it('every role keeps Calendar and Gallery in the sidebar; there is no Manage stop', () => {
-    for (const role of ['member', 'admin', 'pastor']) {
-      const labels = workspaceLinks(role).map((link) => link.label);
+  it('every role gets the same sidebar: Calendar and Gallery, no Manage stop', () => {
+    {
+      const labels = workspaceLinks().map((link) => link.label);
       expect(labels).toEqual(
         expect.arrayContaining([
           'Main website',

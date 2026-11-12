@@ -54,22 +54,17 @@ type ContentContextValue = {
   applyPublished: (patch: PublishedPatch) => void;
 };
 /**
- * Published settings and page sections come from the server. Only these
- * page fields are still kept in this browser until their collections move
- * to the database (Phase 2 slice 2).
+ * Published settings, page sections and the Phase 2B collections (campuses,
+ * Next steps, leadership) come from the server. Browser storage keeps only
+ * the parts that have not moved to the database yet (activities, sermons,
+ * member records); it never supplies site, pages or team.
  */
-const LOCAL_PAGE_FIELDS = ['locations', 'steps', 'resources'] as const;
-const localPages = (pages: ContentState['pages']) =>
-  Object.fromEntries(LOCAL_PAGE_FIELDS.map((key) => [key, pages[key]]));
 function localPart(content: ContentState) {
-  const { site: _site, pages, ...rest } = content;
+  const { site: _site, pages: _pages, team: _team, ...rest } = content;
   void _site;
-  return {
-    ...rest,
-    pages: Object.fromEntries(
-      LOCAL_PAGE_FIELDS.map((key) => [key, pages[key]]),
-    ),
-  };
+  void _pages;
+  void _team;
+  return rest;
 }
 // Treat any unsupported visibility value as an unpublished draft.
 function normalizeRecords<T extends Partial<PublicContent>>(value: T): T {
@@ -119,37 +114,28 @@ export function ContentProvider({
     if (loaded.current) {
       if (bundleKey === 'null') return;
       setHasPublished(true);
-      // A newer published bundle: replace only the server-owned site/page
-      // fields; browser-only collections and other local data stay.
+      // A newer published bundle: replace the server-owned site, pages and
+      // leadership; other browser-kept data stays.
       setContent((current) => ({
         ...current,
         site: published.site,
-        pages: { ...published.pages, ...localPages(current.pages) },
+        pages: published.pages,
+        team: published.team,
       }));
       return;
     }
     loaded.current = true;
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-      // Published site and pages always come from the server; browser storage
-      // only supplies the parts that have not moved to the database yet.
-      const local = (saved?.pages ?? {}) as Partial<ContentState['pages']>;
-      const base: ContentState = saved
-        ? {
-            ...seedContent,
-            ...saved,
-            site: published.site,
-            pages: {
-              ...published.pages,
-              ...Object.fromEntries(
-                LOCAL_PAGE_FIELDS.filter((key) => local[key]).map((key) => [
-                  key,
-                  local[key],
-                ]),
-              ),
-            },
-          }
-        : { ...seedContent, ...published };
+      // Site, pages and leadership always come from the server; browser
+      // storage only supplies the parts that have not moved yet.
+      const base: ContentState = {
+        ...seedContent,
+        ...(saved ?? {}),
+        site: published.site,
+        pages: published.pages,
+        team: published.team,
+      };
       setContent(normalizeRecords(base));
       localStorage.removeItem?.(LEGACY_EDITOR_KEY);
     } catch {

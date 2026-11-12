@@ -1,14 +1,33 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  defaultLocations,
+  defaultNextSteps,
   defaultPages,
   defaultSiteSettings,
+  defaultTeam,
+  type PublicCollections,
   type PublicContentBundle,
 } from '@grace-abounds/validation';
 import { ContentProvider, useContent } from './content-provider';
+const collections = {
+  locations: defaultLocations.map(({ status: _s, ...item }, i) => {
+    void _s;
+    return { ...item, id: `loc-${i}` };
+  }),
+  steps: defaultNextSteps.map(({ status: _s, ...item }, i) => {
+    void _s;
+    return { ...item, id: `step-${i}` };
+  }),
+  team: defaultTeam.map(({ status: _s, ...item }, i) => {
+    void _s;
+    return { ...item, id: `team-${i}` };
+  }),
+} satisfies PublicCollections;
 const published: PublicContentBundle = {
   site: defaultSiteSettings,
   pages: defaultPages,
+  collections,
 };
 const state = vi.hoisted(() => ({ role: 'admin' }));
 vi.mock('next-auth/react', () => ({
@@ -58,21 +77,33 @@ describe('live website content', () => {
     await waitFor(() => expect(context.ready).toBe(true));
     expect(context.content.site.heroTitle).toBe('Grace');
   });
-  it('keeps browser-only collections after reloading the provider', async () => {
-    state.role = 'pastor';
-    const view = renderProvider();
-    await waitFor(() => expect(context.ready).toBe(true));
-    await act(() =>
-      context.update((current) => ({
-        ...current,
-        pages: { ...current.pages, locations: [] },
-      })),
+  it('campuses, journeys and leadership come from the server, never browser storage', async () => {
+    localStorage.setItem(
+      'grace-abounds-content-v4',
+      JSON.stringify({
+        pages: { locations: [], steps: [] },
+        team: [{ id: 'old', name: 'Stale person' }],
+      }),
     );
-    view.unmount();
     renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
-    expect(context.content.pages.locations).toEqual([]);
-    expect(context.content.site.heroTitle).toBe('Grace');
+    expect(context.content.pages.locations.map((l) => l.id)).toEqual([
+      'manukau',
+      'botany',
+      'henderson',
+    ]);
+    expect(context.content.pages.steps[0]!.memberHref).toBe(
+      '/members?join=New%20to%20Faith',
+    );
+    expect(context.content.team.map((t) => t.name)).toEqual(
+      defaultTeam.map((t) => t.name),
+    );
+    // Nothing migrated is written back to browser storage.
+    const stored = JSON.parse(
+      localStorage.getItem('grace-abounds-content-v4') ?? '{}',
+    );
+    expect(stored).not.toHaveProperty('pages');
+    expect(stored).not.toHaveProperty('team');
   });
   it('shows no demo content when published content is unavailable', async () => {
     renderProvider(null);
@@ -81,15 +112,12 @@ describe('live website content', () => {
     expect(context.content.site.heroTitle).toBe('');
     expect(context.content.site.givingNumber).toBe('');
   });
-  it('takes newer published content from the server without losing browser-only collections', async () => {
+  it('takes newer published content from the server without losing browser-only data', async () => {
     state.role = 'pastor';
     const view = renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
     await act(() =>
-      context.update((current) => ({
-        ...current,
-        pages: { ...current.pages, locations: [] },
-      })),
+      context.update((current) => ({ ...current, activities: [] })),
     );
     // Another browser publishes; router.refresh() delivers bundle B.
     const bundleB: PublicContentBundle = {
@@ -107,6 +135,7 @@ describe('live website content', () => {
           hero: { ...defaultPages.events.hero, title: 'Events B' },
         },
       },
+      collections: { ...collections, team: collections.team.slice(0, 1) },
     };
     view.rerender(
       <ContentProvider initialContent={bundleB}>
@@ -116,7 +145,8 @@ describe('live website content', () => {
     await waitFor(() => expect(context.content.site.heroTitle).toBe('Title B'));
     expect(context.content.site.givingBank).toBe('Bank B');
     expect(context.content.pages.heroes['/events'].title).toBe('Events B');
-    expect(context.content.pages.locations).toEqual([]);
+    expect(context.content.team).toHaveLength(1);
+    expect(context.content.activities).toEqual([]);
   });
   it('recovers when content becomes available, and keeps it if a later refresh fails', async () => {
     const view = renderProvider(null);

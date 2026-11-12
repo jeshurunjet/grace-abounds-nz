@@ -29,6 +29,10 @@ import { useContent } from '../../components/content-provider';
 import { useToast } from '../../components/toast';
 import Image from '../../components/site-image';
 import { KitConfirm } from '../../components/editor-kit/confirm';
+import {
+  CollectionSection,
+  type FieldSpec,
+} from '../../components/editor-kit/collection-section';
 import { SidePanel } from '../../components/editor-kit/side-panel';
 import {
   KitPhoto,
@@ -179,71 +183,13 @@ function writeDocList(draft: Draft, list: DocList, items: DocItem[]): Draft {
   return { ...draft, pages: { ...draft.pages, [list]: items } as Pages };
 }
 
-// ---------- Collections kept in this browser until slice 2 ----------
-type LocalList = 'locations' | 'steps' | 'resources' | 'team';
-const localLists: Record<
-  LocalList,
-  { noun: string; fields: [string, string][] }
-> = {
-  locations: {
-    noun: 'campus',
-    fields: [
-      ['name', 'Name'],
-      ['type', 'Kind of campus'],
-      ['address', 'Address'],
-      ['image', 'Photo'],
-    ],
-  },
-  steps: {
-    noun: 'step',
-    fields: [
-      ['title', 'Title'],
-      ['subtitle', 'Subtitle'],
-      ['heading', 'Card heading'],
-      ['body', 'Description'],
-      ['cta', 'Button label'],
-      ['path', 'Journey steps (one per line)'],
-    ],
-  },
-  resources: {
-    noun: 'resource',
-    fields: [
-      ['title', 'Title'],
-      ['type', 'Type'],
-      ['url', 'Link'],
-      ['description', 'Description'],
-    ],
-  },
-  team: {
-    noun: 'person',
-    fields: [
-      ['name', 'Name'],
-      ['role', 'Role'],
-      ['bio', 'Short bio'],
-      ['image', 'Photo'],
-      ['status', 'Visibility'],
-    ],
-  },
+type PanelState = {
+  kind: 'doc';
+  list: DocList;
+  index: number | null;
+  value: DocItem;
+  original: DocItem;
 };
-type Record_ = Record<string, unknown>;
-const LOCAL_NOTE =
-  'Saved in this browser only until this list moves to the database in the next update.';
-
-type PanelState =
-  | {
-      kind: 'doc';
-      list: DocList;
-      index: number | null;
-      value: DocItem;
-      original: DocItem;
-    }
-  | {
-      kind: 'local';
-      list: LocalList;
-      index: number | null;
-      value: Record_;
-      original: Record_;
-    };
 
 const initials = (name: string) =>
   name
@@ -261,6 +207,72 @@ function thumb(src: unknown, fallback: string): ReactNode {
     <span aria-hidden="true">{fallback}</span>
   );
 }
+
+// ---------- Database collections (Phase 2B): one Save per record ----------
+const teamBlank = { name: '', role: '', bio: '', image: '', status: 'draft' };
+const teamFields: FieldSpec[] = [
+  { key: 'name', label: 'Name', kind: 'text' },
+  { key: 'role', label: 'Role', kind: 'text' },
+  { key: 'bio', label: 'Short bio', kind: 'long' },
+  { key: 'image', label: 'Photo', kind: 'photo' },
+  { key: 'status', label: 'Visibility', kind: 'status' },
+];
+const locationBlank = {
+  name: '',
+  kind: 'Campus',
+  address: '',
+  image: '',
+  status: 'draft',
+};
+const locationFields: FieldSpec[] = [
+  {
+    key: 'name',
+    label: 'Name',
+    kind: 'text',
+    hint: 'For example “Grace East — Botany”.',
+  },
+  { key: 'kind', label: 'Kind of campus', kind: 'text' },
+  { key: 'address', label: 'Address', kind: 'text' },
+  { key: 'image', label: 'Photo', kind: 'photo' },
+  { key: 'status', label: 'Visibility', kind: 'status' },
+];
+const stepBlank = {
+  title: '',
+  subtitle: '',
+  heading: '',
+  body: '',
+  icon: '',
+  cta: { kind: 'interest', label: '', target: '' },
+  path: [],
+  status: 'draft',
+};
+const stepFields: FieldSpec[] = [
+  { key: 'title', label: 'Title', kind: 'text' },
+  { key: 'subtitle', label: 'Subtitle', kind: 'text' },
+  { key: 'heading', label: 'Card heading', kind: 'text' },
+  { key: 'body', label: 'Description', kind: 'long' },
+  { key: 'icon', label: 'Symbol', kind: 'text', hint: 'One character, e.g. ✦' },
+  { key: 'cta.label', label: 'Button label', kind: 'text' },
+  {
+    key: 'cta.kind',
+    label: 'Button goes to',
+    kind: 'select',
+    options: [
+      ['interest', 'A next-step request (members sign in to send it)'],
+      ['appointment', 'An appointment request'],
+      ['calendar', 'An activity in the calendar'],
+      ['link', 'A web page'],
+    ],
+  },
+  {
+    key: 'cta.target',
+    label: 'Details',
+    kind: 'text',
+    hint: 'Request name, activity web name (e.g. foundations-class) or https:// link. Leave blank to use the title.',
+  },
+  { key: 'path', label: 'Journey steps', kind: 'lines' },
+  { key: 'status', label: 'Visibility', kind: 'status' },
+];
 
 export default function CmsPage() {
   const { content, update, ready, storageError, retrySave, applyPublished } =
@@ -453,40 +465,6 @@ export default function CmsPage() {
     setDraft(writeDocList(draft, list, items));
     markDirty(docLists[list].resource);
   };
-  const localItems = (list: LocalList): Record_[] =>
-    (list === 'team'
-      ? content.team
-      : content.pages[list]) as unknown as Record_[];
-  const openLocal = (list: LocalList, index: number | null) => {
-    const items = localItems(list);
-    const blank: Record_ = Object.fromEntries(
-      localLists[list].fields.map(([key]) => [
-        key,
-        key === 'path' ? [] : key === 'status' ? 'draft' : '',
-      ]),
-    );
-    const value =
-      index === null
-        ? { ...blank, id: crypto.randomUUID() }
-        : { ...items[index]! };
-    setPanel({ kind: 'local', list, index, value, original: value });
-  };
-  const writeLocal = (list: LocalList, items: Record_[]) =>
-    update((state) =>
-      list === 'team'
-        ? { ...state, team: items as unknown as ContentState['team'] }
-        : ({
-            ...state,
-            pages: { ...state.pages, [list]: items },
-          } as ContentState),
-    );
-  const moveLocal = (list: LocalList, index: number, delta: number) => {
-    const items = [...localItems(list)];
-    const target = index + delta;
-    if (target < 0 || target >= items.length) return;
-    [items[index], items[target]] = [items[target]!, items[index]!];
-    void writeLocal(list, items);
-  };
   async function applyPanel() {
     if (!panel || !draft) return;
     if (panel.kind === 'doc') {
@@ -496,12 +474,7 @@ export default function CmsPage() {
       setDraft(writeDocList(draft, panel.list, items));
       markDirty(docLists[panel.list].resource);
       setPanel(null);
-      return;
     }
-    const items = [...localItems(panel.list)];
-    if (panel.index === null) items.push(panel.value);
-    else items[panel.index] = panel.value;
-    if (await writeLocal(panel.list, items)) setPanel(null);
   }
   async function removeFromPanel() {
     if (!panel || panel.index === null || !draft) return;
@@ -512,9 +485,6 @@ export default function CmsPage() {
       setDraft(writeDocList(draft, panel.list, items));
       markDirty(docLists[panel.list].resource);
       setPanel(null);
-    } else {
-      const items = localItems(panel.list).filter((_, i) => i !== panel.index);
-      if (await writeLocal(panel.list, items)) setPanel(null);
     }
     setConfirm(null);
   }
@@ -614,77 +584,9 @@ export default function CmsPage() {
       </SectionCard>
     );
   }
-  function localSection(
-    list: LocalList,
-    icon: typeof Images,
-    title: string,
-    description: string,
-  ) {
-    const items = localItems(list);
-    const { noun } = localLists[list];
-    return (
-      <SectionCard
-        icon={icon}
-        title={title}
-        description={description}
-        action={
-          <button
-            type="button"
-            className="kit-add"
-            disabled={!ready}
-            onClick={() => openLocal(list, null)}
-          >
-            <Plus aria-hidden="true" size={16} />
-            Add {noun}
-          </button>
-        }
-      >
-        <p className="kit-note">{LOCAL_NOTE}</p>
-        <RowList empty={`No ${noun}s yet.`}>
-          {items.map((item, index) => {
-            const name =
-              String(item.name ?? item.title ?? `${noun} ${index + 1}`) ||
-              `${noun} ${index + 1}`;
-            const status = item.status as string | undefined;
-            return (
-              <ListRow
-                key={String(item.id ?? index)}
-                media={thumb(item.image, initials(name) || '•')}
-                title={name}
-                detail={String(
-                  item.role ?? item.address ?? item.subtitle ?? item.type ?? '',
-                )}
-                badge={
-                  status
-                    ? status === 'published'
-                      ? { tone: 'success', label: 'Live' }
-                      : {
-                          tone: 'neutral',
-                          label: status === 'archived' ? 'Archived' : 'Draft',
-                        }
-                    : undefined
-                }
-                editLabel={`Edit ${name}`}
-                onEdit={() => openLocal(list, index)}
-                onMoveUp={
-                  index > 0 ? () => moveLocal(list, index, -1) : undefined
-                }
-                onMoveDown={
-                  index < items.length - 1
-                    ? () => moveLocal(list, index, 1)
-                    : undefined
-                }
-              />
-            );
-          })}
-        </RowList>
-      </SectionCard>
-    );
-  }
-
   function panelFields() {
     if (!panel) return null;
-    const set = (value: DocItem | Record_) =>
+    const set = (value: DocItem) =>
       setPanel((current) => current && ({ ...current, value } as PanelState));
     if (panel.kind === 'doc') {
       if (typeof panel.value === 'string')
@@ -715,59 +617,9 @@ export default function CmsPage() {
         />
       ));
     }
-    const value = panel.value;
-    return localLists[panel.list].fields.map(([key, label]) => {
-      if (key === 'image')
-        return (
-          <KitPhoto
-            key={key}
-            label={label}
-            value={String(value[key] ?? '')}
-            onChange={(next) => set({ ...value, [key]: next })}
-          />
-        );
-      if (key === 'status')
-        return (
-          <div className="kit-field" key={key}>
-            <label htmlFor="panel-status">{label}</label>
-            <select
-              id="panel-status"
-              value={String(value[key] ?? 'draft')}
-              onChange={(event) => set({ ...value, [key]: event.target.value })}
-            >
-              <option value="draft">Keep as draft</option>
-              <option value="published">Show on website</option>
-              <option value="archived">Archive</option>
-            </select>
-          </div>
-        );
-      if (key === 'path')
-        return (
-          <KitText
-            key={key}
-            label={label}
-            multiline
-            rows={5}
-            value={((value[key] as string[]) ?? []).join('\n')}
-            onChange={(next) => set({ ...value, [key]: next.split('\n') })}
-          />
-        );
-      return (
-        <KitText
-          key={key}
-          label={label}
-          multiline={key === 'body' || key === 'bio' || key === 'description'}
-          value={String(value[key] ?? '')}
-          onChange={(next) => set({ ...value, [key]: next })}
-        />
-      );
-    });
+    return null;
   }
-  const panelNoun = panel
-    ? panel.kind === 'doc'
-      ? docLists[panel.list].noun
-      : localLists[panel.list].noun
-    : '';
+  const panelNoun = panel ? docLists[panel.list].noun : '';
   const panelTitle = panel
     ? `${panel.index === null ? 'Add' : 'Edit'} ${panelNoun}`
     : '';
@@ -911,22 +763,38 @@ export default function CmsPage() {
                   />
                 </div>
               </SectionCard>
-              {localSection(
-                'team',
-                Users,
-                'Leadership team',
-                'People shown on the About page.',
-              )}
+              <CollectionSection
+                collection="team"
+                noun="person"
+                icon={Users}
+                title="Leadership team"
+                description="People shown on the About page. Each person saves on their own."
+                blank={teamBlank}
+                fields={teamFields}
+                summary={(row) => ({
+                  title: String(row.name),
+                  detail: String(row.role ?? ''),
+                  media: thumb(row.image, initials(String(row.name)) || '•'),
+                })}
+              />
             </>
           )}
           {tab === 'Locations' && (
             <>
-              {localSection(
-                'locations',
-                MapPin,
-                'Campuses',
-                'Campus details. Service times come from Activities & calendar.',
-              )}
+              <CollectionSection
+                collection="locations"
+                noun="campus"
+                icon={MapPin}
+                title="Campuses"
+                description="Campus details. Service times come from Activities."
+                blank={locationBlank}
+                fields={locationFields}
+                summary={(row) => ({
+                  title: String(row.name),
+                  detail: String(row.address ?? ''),
+                  media: thumb(row.image, initials(String(row.name)) || '•'),
+                })}
+              />
               <p className="kit-empty">
                 <Link href="/admin/events">
                   Manage services, groups and events
@@ -934,13 +802,24 @@ export default function CmsPage() {
               </p>
             </>
           )}
-          {tab === 'Next steps' &&
-            localSection(
-              'steps',
-              Footprints,
-              'Next steps',
-              'Journeys shown on the Next steps page. Members can also request these.',
-            )}
+          {tab === 'Next steps' && (
+            <CollectionSection
+              collection="next-steps"
+              noun="step"
+              icon={Footprints}
+              title="Next steps"
+              description="Journeys on the Next steps page. Each saves on its own."
+              blank={stepBlank}
+              fields={stepFields}
+              summary={(row) => ({
+                title: String(row.title),
+                detail: String(row.subtitle ?? ''),
+                media: (
+                  <span aria-hidden="true">{String(row.icon || '•')}</span>
+                ),
+              })}
+            />
+          )}
           {tab === 'Giving' && (
             <>
               <SectionCard icon={BookOpen} title="Giving verse">
@@ -1045,12 +924,11 @@ export default function CmsPage() {
                 'Sign-in verses',
                 'One is shown on the sign-in page.',
               )}
-              {localSection(
-                'resources',
-                BookOpen,
-                'Resources',
-                'Links shared with members.',
-              )}
+              <p className="kit-note">
+                Member resources now live in the{' '}
+                <Link href="/members/gallery">Gallery</Link>, where staff add
+                and edit them.
+              </p>
             </>
           )}
         </div>
@@ -1132,20 +1010,15 @@ export default function CmsPage() {
               className="button"
               onClick={() => void applyPanel()}
             >
-              {panel?.kind === 'local'
-                ? 'Save in this browser'
-                : 'Apply to page'}
+              Apply to page
             </button>
           </>
         )}
       >
-        {panel?.kind === 'doc' && (
-          <p className="kit-note">
-            Applies to this page’s draft. Select “Save and publish” to put it
-            live.
-          </p>
-        )}
-        {panel?.kind === 'local' && <p className="kit-note">{LOCAL_NOTE}</p>}
+        <p className="kit-note">
+          Applies to this page’s draft. Select “Save and publish” to put it
+          live.
+        </p>
         {panelFields()}
       </SidePanel>
 
@@ -1157,9 +1030,8 @@ export default function CmsPage() {
         onConfirm={() => void removeFromPanel()}
       >
         <p>
-          {panel?.kind === 'doc'
-            ? 'It comes off the page draft. Nothing changes on the website until you save and publish.'
-            : 'It is removed from this browser’s copy straight away.'}
+          It comes off the page draft. Nothing changes on the website until you
+          save and publish.
         </p>
       </KitConfirm>
       <KitConfirm

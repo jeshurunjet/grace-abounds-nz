@@ -2,10 +2,12 @@ import {
   pageKeys,
   type PageContentMap,
   type PageKey,
+  type PublicCollections,
   type PublicContentBundle,
+  type PublicNextStep,
   type SiteSettings,
 } from '@grace-abounds/validation';
-import type { ContentState, SiteContent } from './content';
+import type { ContentState, SiteContent, TeamMember } from './content';
 
 /*
  * Converts between the API's named content shapes and the shapes the
@@ -152,10 +154,55 @@ const blankSite: SiteContent = {
 };
 
 /** Published bundle → the component-side site and pages fields (blank if none). */
+/** Where a Next steps call to action goes (Phase 2B destinations). */
+export function nextStepHref(step: Pick<PublicNextStep, 'title' | 'cta'>) {
+  const { kind, target } = step.cta;
+  if (kind === 'appointment') return '/members?panel=appointment';
+  if (kind === 'calendar')
+    return target
+      ? `/events/${encodeURIComponent(target)}`
+      : '/members/calendar';
+  if (kind === 'link') return target || '/next-steps';
+  return `/members?join=${encodeURIComponent(target || step.title)}`;
+}
+
+/** Published database collections → the shapes existing components read. */
+export function collectionsToLegacy(
+  collections: PublicCollections | undefined,
+) {
+  return {
+    locations: (collections?.locations ?? []).map((item) => ({
+      id: item.key,
+      name: item.name,
+      address: item.address,
+      type: item.kind,
+      image: item.image,
+    })),
+    steps: (collections?.steps ?? []).map((item) => ({
+      icon: item.icon,
+      title: item.title,
+      subtitle: item.subtitle,
+      heading: item.heading,
+      body: item.body,
+      cta: item.cta.label,
+      memberHref: nextStepHref(item),
+      path: item.path,
+    })),
+    team: (collections?.team ?? []).map((item): TeamMember => ({
+      id: item.id,
+      name: item.name,
+      role: item.role,
+      bio: item.bio,
+      image: item.image,
+      status: 'published',
+    })),
+  };
+}
+
 export function toLegacy(
   bundle: PublicContentBundle | null,
   base: LegacyPages,
-): { site: SiteContent; pages: LegacyPages } {
+): { site: SiteContent; pages: LegacyPages; team: TeamMember[] } {
   let result = {
     site: { ...blankSite },
     pages: {
@@ -174,11 +221,18 @@ export function toLegacy(
       ) as LegacyPages['heroes'],
     } as LegacyPages,
   };
-  if (!bundle) return result;
+  const { locations, steps, team } = collectionsToLegacy(bundle?.collections);
+  result.pages = {
+    ...result.pages,
+    locations,
+    steps,
+    resources: [],
+  } as LegacyPages;
+  if (!bundle) return { ...result, team };
   result = mergePatch(result, siteToLegacy(bundle.site));
   for (const key of pageKeys)
     result = mergePatch(result, pageToLegacy(key, bundle.pages[key]));
-  return result;
+  return { ...result, team };
 }
 
 const verses = (text: string) =>

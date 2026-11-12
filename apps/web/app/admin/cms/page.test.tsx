@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -20,6 +21,9 @@ import { ContentProvider, useContent } from '../../components/content-provider';
 
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { role: 'admin' } } }),
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 vi.mock('../../components/admin-shell', () => ({
   AdminShell: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -42,8 +46,39 @@ const json = (status: number, body: unknown) =>
       headers: { 'content-type': 'application/json' },
     }),
   );
+type Row = Record<string, unknown> & { id: string; version: number };
+/** Database-backed collections (campuses, journeys, leadership). */
+let collections: Record<string, Row[]> = {};
+const collectionCalls: string[] = [];
+let staleSaves = false;
+function collectionApi(url: string, init?: RequestInit) {
+  const [name, id] = url.replace('/api/v1/staff/', '').split('/');
+  const rows = (collections[name!] ??= []);
+  const method = init?.method ?? 'GET';
+  if (method === 'GET') return json(200, { data: rows });
+  collectionCalls.push(`${method} ${name}${id ? `/${id}` : ''}`);
+  const body = JSON.parse(String(init?.body ?? '{}'));
+  if (method === 'POST') {
+    const row = { ...body, id: `new-${rows.length}`, version: 1 };
+    rows.push(row);
+    return json(201, { data: row, version: 1 });
+  }
+  const index = rows.findIndex((row) => row.id === id);
+  const sent = new Headers(init?.headers).get('if-match');
+  if (staleSaves || sent !== `"${rows[index]!.version}"`) {
+    rows[index] = { ...rows[index]!, name: 'Saved elsewhere', version: 9 };
+    return json(412, {
+      error: { code: 'VERSION_CONFLICT', message: 'Changed by someone else.' },
+    });
+  }
+  rows[index] = { ...body, id, version: rows[index]!.version + 1 };
+  return json(200, { data: rows[index], version: rows[index]!.version });
+}
+
 // The fake API answers like the real one: canonical (schema-parsed) data.
 function fakeApi(url: string, init?: RequestInit) {
+  if (/\/staff\/(locations|team|next-steps)/.test(url))
+    return collectionApi(url, init);
   const resource = url.replace('/api/v1/staff/', '').replace('pages/', '');
   const schema =
     resource === 'site' ? siteSettingsSchema : pageSchemas[resource as PageKey];
@@ -89,6 +124,21 @@ const tab = (name: string) =>
 beforeEach(() => {
   failing = new Set();
   patches.length = 0;
+  collectionCalls.length = 0;
+  staleSaves = false;
+  collections = {
+    team: [
+      {
+        id: 't1',
+        name: 'Ana Example',
+        role: 'Senior Pastor',
+        bio: '',
+        image: '',
+        status: 'published',
+        version: 1,
+      },
+    ],
+  };
   const saved = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => saved.get(key) ?? null,
@@ -213,5 +263,67 @@ describe('CMS publishing updates the live content only from confirmed saves', ()
     expect(context.content.pages.heroImages).toHaveLength(
       defaultPages.home.heroImages.length,
     );
+  });
+});
+
+describe('campuses, journeys and leadership save one record at a time', () => {
+  it('creates nothing until Save, then creates the record on the server', async () => {
+    await renderCms();
+    fireEvent.click(tab('About'));
+    fireEvent.click(await screen.findByRole('button', { name: /Add person/ }));
+    const panel = screen.getByRole('dialog', { name: 'Add person' });
+    fireEvent.change(within(panel).getByLabelText('Name'), {
+      target: { value: 'Mere Example' },
+    });
+    fireEvent.change(within(panel).getByLabelText('Role'), {
+      target: { value: 'Youth Pastor' },
+    });
+    expect(collectionCalls).toEqual([]);
+    expect(patches).toEqual([]);
+    await act(async () => {
+      fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(collectionCalls).toEqual(['POST team']));
+    expect(collections.team!.at(-1)).toMatchObject({
+      name: 'Mere Example',
+      role: 'Youth Pastor',
+      status: 'draft',
+    });
+    // The page itself has no unsaved changes: the record saved on its own.
+    expect(tab('About')).toHaveTextContent(/^About$/);
+  });
+
+  it('a stale save keeps what was typed and offers the latest version', async () => {
+    staleSaves = true;
+    await renderCms();
+    fireEvent.click(tab('About'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit Ana Example' }),
+    );
+    const panel = screen.getByRole('dialog', { name: 'Edit person' });
+    fireEvent.change(within(panel).getByLabelText('Role'), {
+      target: { value: 'Lead Pastor' },
+    });
+    await act(async () => {
+      fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(collectionCalls).toEqual(['PATCH team/t1']));
+    expect(within(panel).getByRole('alert')).toBeInTheDocument();
+    expect(within(panel).getByLabelText('Role')).toHaveValue('Lead Pastor');
+    expect(
+      within(panel).getByRole('button', { name: 'Load latest version' }),
+    ).toBeInTheDocument();
+  });
+
+  it('published records cannot be deleted from the panel', async () => {
+    await renderCms();
+    fireEvent.click(tab('About'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit Ana Example' }),
+    );
+    const panel = screen.getByRole('dialog', { name: 'Edit person' });
+    expect(
+      within(panel).getByRole('button', { name: 'Delete' }),
+    ).toBeDisabled();
   });
 });

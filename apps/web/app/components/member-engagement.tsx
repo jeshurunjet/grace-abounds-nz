@@ -23,6 +23,9 @@ export function MemberEngagement() {
   const [prayer, setPrayer] = useState('');
   const [prayerSent, setPrayerSent] = useState(false);
   const [opportunity, setOpportunity] = useState('');
+  const [panel, setPanel] = useState<null | 'appointment' | 'prayer' | 'step'>(
+    null,
+  );
   const currentUser =
     content.users.find((user) => user.email === session?.user?.email) ??
     content.users.find((user) => user.role === 'member');
@@ -47,6 +50,11 @@ export function MemberEngagement() {
   const { live } = useActivities();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    // Next steps "appointment" buttons link here with ?panel=appointment.
+    if (params.get('panel') === 'appointment') {
+      setPanel('appointment');
+      return;
+    }
     const requested = params.get('join');
     if (requested && opportunities.some((item) => item.name === requested)) {
       setOpportunity(requested);
@@ -165,9 +173,6 @@ export function MemberEngagement() {
       'info',
     );
   }
-  const [panel, setPanel] = useState<null | 'appointment' | 'prayer' | 'step'>(
-    null,
-  );
   const [appointmentDirty, setAppointmentDirty] = useState(false);
   useEffect(() => {
     if (opportunity && new URLSearchParams(window.location.search).get('join'))

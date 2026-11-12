@@ -824,3 +824,30 @@
 .messages-unavailable h2 {
   margin: 0 0 0.5rem;
 }
+
+/* Collections: unsaved order bar, and the library management area */
+.kit-order-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--highlight);
+}
+.kit-order-bar > span {
+  flex: 1;
+  font-weight: 600;
+  color: var(--ink-mid);
+}
+.library-manage {
+  max-width: none;
+  margin-top: 2.5rem;
+}
+.staff-tools-label {
+  margin: 0;
+  font: 700 0.78rem var(--font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--maple);
+}

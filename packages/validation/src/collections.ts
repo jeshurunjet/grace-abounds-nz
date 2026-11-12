@@ -120,7 +120,11 @@ export type StaffRecord<T> = T & {
   updatedAt: string;
 };
 /** Published records as the public website receives them. */
-export type PublicLocation = Omit<LocationInput, 'status'> & { id: string };
+/** `key` is the stable campus id activities use. */
+export type PublicLocation = Omit<LocationInput, 'status'> & {
+  id: string;
+  key: string;
+};
 export type PublicNextStep = Omit<NextStepInput, 'status'> & { id: string };
 export type PublicTeamMember = Omit<TeamMemberInput, 'status'> & {
   id: string;

@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 import { AppChrome } from './components/app-chrome';
 import { Providers } from './components/providers';
+import { fetchPublicContent } from '../lib/server/public-content';
 import './theme.css';
 import './styles.css';
 import './workspace-navigation.css';
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
   description:
     'A community of faith rooted in love, growing in grace, and sharing the hope of Jesus.',
 };
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
@@ -58,7 +59,7 @@ export default function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <Providers>
+        <Providers initialContent={await fetchPublicContent()}>
           <AppChrome>{children}</AppChrome>
         </Providers>
       </body>

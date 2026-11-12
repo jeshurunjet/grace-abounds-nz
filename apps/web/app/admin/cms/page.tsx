@@ -1,10 +1,23 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  pageKeys,
+  type PageContentMap,
+  type PageKey,
+  type SiteSettings,
+} from '@grace-abounds/validation';
 import { AdminShell } from '../../components/admin-shell';
 import { useContent } from '../../components/content-provider';
-import type { ContentState } from '../../lib/content';
+import { useToast } from '../../components/toast';
+import { api, ApiError, errorMessage } from '../../lib/api-client';
+import type { ContentState, SiteContent } from '../../lib/content';
+import {
+  pageFromLegacy,
+  siteFromLegacy,
+  toLegacy,
+} from '../../lib/content-adapter';
 import { validatePublicContent } from '../../lib/content-validation';
 
 const labels: Record<string, string> = {
@@ -335,10 +348,226 @@ const tabs = [
   'Shared',
 ] as const;
 type Tab = (typeof tabs)[number];
+type Resource = 'site' | PageKey;
+type Draft = { site: SiteContent; pages: ContentState['pages'] };
+type Versions = Partial<Record<Resource, number>>;
+
+/** Which saved resource each tab publishes. */
+const tabResources: Record<Tab, Resource[]> = {
+  Home: ['home'],
+  About: ['about'],
+  Locations: ['location'],
+  'Next steps': ['next-steps'],
+  Giving: ['give', 'site'],
+  Events: ['events'],
+  Sermons: ['sermons'],
+  Shared: ['site'],
+};
+/** Site fields that belong to a page document rather than shared settings. */
+const siteFieldPage: Partial<Record<keyof SiteContent, PageKey>> = {
+  heroEyebrow: 'home',
+  heroTitle: 'home',
+  heroAccent: 'home',
+  heroCopy: 'home',
+  homeVerseText: 'home',
+  homeVerseReference: 'home',
+  story: 'about',
+  givingVerseText: 'give',
+  givingVerseReference: 'give',
+};
+const pageFieldPage: Partial<Record<keyof ContentState['pages'], PageKey>> = {
+  heroImages: 'home',
+  gallery: 'home',
+  aboutIntro: 'about',
+  aboutHeroImage: 'about',
+  aboutImage: 'about',
+  ministryYears: 'about',
+  officeHours: 'about',
+  values: 'about',
+  givingImpact: 'give',
+};
+const heroPage: Record<string, PageKey> = {
+  '/location': 'location',
+  '/next-steps': 'next-steps',
+  '/give': 'give',
+  '/events': 'events',
+  '/sermons': 'sermons',
+};
+/** Collections still kept in this browser until Phase 2 slice 2. */
+const localPageFields = ['locations', 'steps', 'resources'] as const;
+const LOCAL_NOTE =
+  'Saved in this browser only until this list moves to the database in the next update.';
+const resourceLabel = (resource: Resource) =>
+  resource === 'site'
+    ? 'Shared settings'
+    : (labels[`/${resource}`] ?? resource);
+
 export default function CmsPage() {
-  const { content, update, ready, storageError, retrySave } = useContent();
-  const warnings = validatePublicContent(content);
+  const { content, update, ready, storageError, retrySave, applyPublished } =
+    useContent();
+  const toast = useToast();
   const [tab, setTab] = useState<Tab>('Home');
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [versions, setVersions] = useState<Versions>({});
+  const [dirty, setDirty] = useState<Set<Resource>>(new Set());
+  const [loadError, setLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const [conflict, setConflict] = useState(false);
+
+  /** Loads the latest published content and versions (staff only). */
+  const load = useCallback(async () => {
+    setLoadError('');
+    try {
+      const [site, ...pages] = await Promise.all([
+        api<SiteSettings>('/staff/site'),
+        ...pageKeys.map((key) =>
+          api<PageContentMap[PageKey]>(`/staff/pages/${key}`),
+        ),
+      ]);
+      const bundle = {
+        site: site.data,
+        pages: Object.fromEntries(
+          pageKeys.map((key, i) => [key, pages[i]!.data]),
+        ),
+      } as { site: SiteSettings; pages: PageContentMap };
+      const legacy = toLegacy(bundle, content.pages);
+      setDraft(legacy);
+      setVersions({
+        site: site.version,
+        ...Object.fromEntries(
+          pageKeys.map((key, i) => [key, pages[i]!.version]),
+        ),
+      });
+      setDirty(new Set());
+      setConflict(false);
+      setSaveError('');
+      setFieldErrors([]);
+    } catch (failure) {
+      setLoadError(errorMessage(failure));
+    }
+    // content.pages supplies only the browser-kept collections.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (ready) void load();
+  }, [ready, load]);
+  useEffect(() => {
+    if (dirty.size === 0) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  const markDirty = (resource: Resource) =>
+    setDirty((current) => new Set(current).add(resource));
+  const editSite = (key: keyof SiteContent, next: unknown) => {
+    setDraft(
+      (current) =>
+        current && { ...current, site: { ...current.site, [key]: next } },
+    );
+    markDirty(siteFieldPage[key] ?? 'site');
+  };
+  const editPage = (key: keyof ContentState['pages'], next: unknown) => {
+    setDraft(
+      (current) =>
+        current && {
+          ...current,
+          pages: { ...current.pages, [key]: next } as Draft['pages'],
+        },
+    );
+    const page = pageFieldPage[key];
+    if (page) markDirty(page);
+  };
+  const editHero = (route: string, next: unknown) => {
+    setDraft(
+      (current) =>
+        current && {
+          ...current,
+          pages: {
+            ...current.pages,
+            heroes: { ...current.pages.heroes, [route]: next },
+          } as Draft['pages'],
+        },
+    );
+    markDirty(heroPage[route]!);
+  };
+
+  const pending = tabResources[tab].filter((resource) => dirty.has(resource));
+  async function save() {
+    if (!draft || pending.length === 0) return;
+    setSaving(true);
+    setSaveError('');
+    setFieldErrors([]);
+    const published: string[] = [];
+    // Browser-kept collections are not part of what the server publishes.
+    const {
+      locations: _l,
+      steps: _s,
+      resources: _r,
+      ...publishedPages
+    } = draft.pages;
+    void _l;
+    void _s;
+    void _r;
+    try {
+      for (const resource of pending) {
+        const body =
+          resource === 'site'
+            ? siteFromLegacy(draft.site)
+            : pageFromLegacy(resource, draft.site, draft.pages);
+        const result = await api(
+          resource === 'site' ? '/staff/site' : `/staff/pages/${resource}`,
+          {
+            method: 'PATCH',
+            version: versions[resource],
+            body: JSON.stringify(body),
+          },
+        );
+        setVersions((current) => ({ ...current, [resource]: result.version }));
+        setDirty((current) => {
+          const next = new Set(current);
+          next.delete(resource);
+          return next;
+        });
+        published.push(resourceLabel(resource));
+      }
+      applyPublished({ site: draft.site, pages: publishedPages });
+      toast.push(`${published.join(' and ')} published.`, 'success');
+    } catch (failure) {
+      if (published.length)
+        applyPublished({ site: draft.site, pages: publishedPages });
+      if (failure instanceof ApiError && failure.code === 'VERSION_CONFLICT') {
+        setConflict(true);
+        setSaveError(
+          'Someone else published changes to this page since you opened it. Your edits are still here; load the latest version before publishing again.',
+        );
+      } else {
+        if (failure instanceof ApiError && failure.fieldErrors)
+          setFieldErrors(
+            Object.entries(failure.fieldErrors).map(
+              ([field, message]) => `${field}: ${message}`,
+            ),
+          );
+        setSaveError(
+          `${published.length ? `${published.join(' and ')} published, but the rest was not. ` : ''}${errorMessage(failure)}`,
+        );
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const view = draft ?? { site: content.site, pages: content.pages };
+  const warnings = validatePublicContent({ ...content, ...view });
+  const status = saving
+    ? 'Saving…'
+    : pending.length
+      ? 'Unsaved changes'
+      : draft
+        ? 'Published'
+        : 'Loading…';
   const siteKeys: Record<Tab, (keyof ContentState['site'])[]> = {
     Home: [
       'heroEyebrow',
@@ -371,7 +600,7 @@ export default function CmsPage() {
       'authVerses',
     ],
   };
-  const pageKeys: Record<Tab, (keyof ContentState['pages'])[]> = {
+  const pageKeysByTab: Record<Tab, (keyof ContentState['pages'])[]> = {
     Home: ['heroImages', 'gallery'],
     About: [
       'aboutIntro',
@@ -397,16 +626,26 @@ export default function CmsPage() {
       Sermons: '/sermons',
     } as const
   )[tab as 'Locations' | 'Next steps' | 'Giving' | 'Events' | 'Sermons'];
+  const isLocal = (key: keyof ContentState['pages']) =>
+    (localPageFields as readonly string[]).includes(key);
   return (
     <AdminShell>
       <header className="workspace-header">
         <p className="eyebrow">Public website</p>
         <h1>Website content</h1>
         <p>
-          Manage all seven public pages. Changes go live on the website as you
-          type. <Link href="/">View the live site</Link>
+          Manage all seven public pages. Changes go live on the website when you
+          select Save. <Link href="/">View the live site</Link>
         </p>
       </header>
+      {loadError && (
+        <div className="publishing-errors" role="alert">
+          <p>Website content couldn’t be loaded. {loadError}</p>
+          <button className="button button-outline" onClick={() => void load()}>
+            Try again
+          </button>
+        </div>
+      )}
       {storageError && (
         <div className="publishing-errors" role="alert">
           <p>{storageError}</p>
@@ -436,73 +675,109 @@ export default function CmsPage() {
               className={tab === item ? 'active' : ''}
             >
               {item}
+              {tabResources[item].some((resource) => dirty.has(resource)) &&
+                ' •'}
             </button>
           ))}
           <p className="form-note">
-            Every change saves immediately. Member activity stays private.
+            Saving publishes immediately. Member activity stays private.
           </p>
         </aside>
         <section className="panel cms-form">
           <h2>{tab}</h2>
-          <fieldset disabled={!ready} className="cms-fields">
+          <fieldset disabled={!draft || saving} className="cms-fields">
             {siteKeys[tab].map((key) => (
               <Fields
                 key={key}
                 name={key}
-                value={content.site[key]}
-                onChange={(next) =>
-                  update((state) => ({
-                    ...state,
-                    site: { ...state.site, [key]: next },
-                  }))
-                }
+                value={view.site[key]}
+                onChange={(next) => editSite(key, next)}
               />
             ))}
             {heroKey && (
               <Fields
                 name="Page introduction"
-                value={content.pages.heroes[heroKey]}
-                onChange={(next) =>
-                  update(
-                    (state) =>
-                      ({
-                        ...state,
-                        pages: {
-                          ...state.pages,
-                          heroes: { ...state.pages.heroes, [heroKey]: next },
-                        },
-                      }) as ContentState,
-                  )
-                }
+                value={view.pages.heroes[heroKey]}
+                onChange={(next) => editHero(heroKey, next)}
               />
             )}
-            {pageKeys[tab].map((key) => (
-              <Fields
-                key={key}
-                name={key}
-                value={content.pages[key]}
-                onChange={(next) =>
-                  update(
-                    (state) =>
-                      ({
-                        ...state,
-                        pages: { ...state.pages, [key]: next },
-                      }) as ContentState,
-                  )
-                }
-              />
+            {pageKeysByTab[tab]
+              .filter((key) => !isLocal(key))
+              .map((key) => (
+                <Fields
+                  key={key}
+                  name={key}
+                  value={view.pages[key]}
+                  onChange={(next) => editPage(key, next)}
+                />
+              ))}
+          </fieldset>
+          <div className="form-actions">
+            <button
+              className="button"
+              disabled={!draft || saving || pending.length === 0 || conflict}
+              onClick={() => void save()}
+            >
+              {saving ? 'Saving…' : 'Save and publish'}
+            </button>
+            <span className="form-note" role="status" aria-live="polite">
+              {status}
+            </span>
+            {conflict && (
+              <button
+                className="button button-outline"
+                onClick={() => void load()}
+              >
+                Load latest (discards your unsaved edits)
+              </button>
+            )}
+          </div>
+          {saveError && (
+            <div className="publishing-errors" role="alert">
+              <p>{saveError}</p>
+              {fieldErrors.length > 0 && (
+                <ul>
+                  {fieldErrors.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {/* Collections not yet in the database: unchanged behaviour. */}
+          <fieldset disabled={!ready} className="cms-fields">
+            {pageKeysByTab[tab].filter(isLocal).map((key) => (
+              <div key={key}>
+                <p className="form-note">{LOCAL_NOTE}</p>
+                <Fields
+                  name={key}
+                  value={content.pages[key]}
+                  onChange={(next) =>
+                    update(
+                      (state) =>
+                        ({
+                          ...state,
+                          pages: { ...state.pages, [key]: next },
+                        }) as ContentState,
+                    )
+                  }
+                />
+              </div>
             ))}
             {tab === 'About' && (
-              <Fields
-                name="Leadership profiles"
-                value={content.team}
-                onChange={(next) =>
-                  update((state) => ({
-                    ...state,
-                    team: next as ContentState['team'],
-                  }))
-                }
-              />
+              <div>
+                <p className="form-note">{LOCAL_NOTE}</p>
+                <Fields
+                  name="Leadership profiles"
+                  value={content.team}
+                  onChange={(next) =>
+                    update((state) => ({
+                      ...state,
+                      team: next as ContentState['team'],
+                    }))
+                  }
+                />
+              </div>
             )}
           </fieldset>
           {(tab === 'Events' || tab === 'Locations') && (

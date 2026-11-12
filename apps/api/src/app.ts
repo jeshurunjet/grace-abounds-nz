@@ -4,6 +4,7 @@ import { prisma } from '@grace-abounds/database';
 import { registerErrorHandling } from './lib/errors.js';
 import { registerIdentity } from './lib/identity.js';
 import { registerAccountRoutes } from './routes/account.js';
+import { registerContentRoutes } from './routes/content.js';
 import { registerMeRoutes } from './routes/me.js';
 import { registerPastorMemberRoutes } from './routes/pastor-members.js';
 
@@ -39,6 +40,7 @@ export function buildApp() {
   registerIdentity(app);
   registerMeRoutes(app);
   registerAccountRoutes(app);
+  registerContentRoutes(app);
   registerPastorMemberRoutes(app);
   return app;
 }

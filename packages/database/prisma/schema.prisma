@@ -49,6 +49,9 @@ model User {
   authenticators Authenticator[]
   challenges     AuthChallenge[]
   auditEvents    AuditEvent[]    @relation("AuditActor")
+  siteEdits      SiteSettings[]    @relation("SiteSettingsEditor")
+  pageEdits      PageContent[]     @relation("PageContentEditor")
+  contentRevisions ContentRevision[] @relation("ContentRevisionActor")
 }
 
 // Auth.js Prisma adapter tables (https://authjs.dev/getting-started/adapters/prisma)
@@ -182,4 +185,49 @@ model AuditEvent {
   @@index([entityType, entityId])
   @@index([actorId])
   @@index([createdAt])
+}
+
+// ---------- Website content (Phase 2) ----------
+
+/// Shared church settings (contact, social, sign-in verses, giving details).
+/// One row, id 'site'. `data` is validated by siteSettingsSchema.
+model SiteSettings {
+  id          String   @id @default("site")
+  data        Json
+  /// Incremented on every save; If-Match checks use it.
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  updatedBy User? @relation("SiteSettingsEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+/// One row per public page section ('home', 'about', ...). `data` is
+/// validated by pageSchemas[key]. Saving publishes immediately.
+model PageContent {
+  key         String   @id
+  data        Json
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  updatedBy User? @relation("PageContentEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+/// Every saved version of a content record, written in the same transaction
+/// as the save. Restore creates a new revision (restoredFromId).
+model ContentRevision {
+  id             String   @id @default(cuid())
+  entityType     String
+  entityKey      String
+  version        Int
+  data           Json
+  actorId        String?
+  restoredFromId String?
+  createdAt      DateTime @default(now())
+
+  actor User? @relation("ContentRevisionActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([entityType, entityKey, version])
+  @@index([entityType, entityKey, createdAt])
 }

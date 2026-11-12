@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PublicCollections } from './collections.ts';
 
 /*
  * Public website content: shared settings and the seven page sections.
@@ -148,4 +149,6 @@ export type PageContentMap = {
 export type PublicContentBundle = {
   site: SiteSettings;
   pages: PageContentMap;
+  /** Published campuses, Next steps journeys and leadership (Phase 2B). */
+  collections?: PublicCollections;
 };

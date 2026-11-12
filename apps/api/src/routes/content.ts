@@ -21,6 +21,7 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { requireRole } from '../lib/identity.js';
+import { publicCollections } from './collections.js';
 
 const unavailable = () =>
   new AppError(
@@ -83,11 +84,13 @@ export function registerContentRoutes(app: FastifyInstance) {
       }),
     ]);
     if (!site || pages.length !== pageKeys.length) throw unavailable();
+    const collections = await publicCollections();
     reply.header('cache-control', 'no-store');
     return {
       data: {
         site: site.data,
         pages: Object.fromEntries(pages.map((page) => [page.key, page.data])),
+        collections,
       },
     };
   });

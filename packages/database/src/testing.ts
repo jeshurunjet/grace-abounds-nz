@@ -7,7 +7,7 @@ export async function resetIdentityTables() {
   if (!dbTestsEnabled)
     throw new Error('Refusing to reset: not the test database.');
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "ContentRevision","PageContent","SiteSettings","AuditEvent","AuthAttempt","AuthChallenge","UserSession","Authenticator","Account","VerificationToken","User" CASCADE',
+    'TRUNCATE "Resource","ResourceFolder","TeamMember","NextStep","Location","ContentRevision","PageContent","SiteSettings","AuditEvent","AuthAttempt","AuthChallenge","UserSession","Authenticator","Account","VerificationToken","User" CASCADE',
   );
 }
 

@@ -6,8 +6,11 @@
  *   pnpm --filter @grace-abounds/database content:seed
  */
 import {
+  defaultLocations,
+  defaultNextSteps,
   defaultPages,
   defaultSiteSettings,
+  defaultTeam,
   pageKeys,
 } from '@grace-abounds/validation';
 import { prisma } from '../src/index.ts';
@@ -46,6 +49,60 @@ await prisma.$transaction(async (tx) => {
       },
     });
     created.push(key);
+  }
+
+  // Phase 2B collections: only when the collection is still empty.
+  const status = 'PUBLISHED' as const;
+  const revision = (entityType: string, entityKey: string, data: object) =>
+    tx.contentRevision.create({
+      data: { entityType, entityKey, version: 1, data },
+    });
+  if ((await tx.location.count()) === 0) {
+    for (const [
+      position,
+      { status: _s, ...item },
+    ] of defaultLocations.entries()) {
+      void _s;
+      const row = await tx.location.create({
+        data: { ...item, position, status },
+      });
+      await revision('locations', row.id, { ...item, status: 'published' });
+    }
+    created.push('locations');
+  }
+  if ((await tx.nextStep.count()) === 0) {
+    for (const [
+      position,
+      { status: _s, cta, ...item },
+    ] of defaultNextSteps.entries()) {
+      void _s;
+      const row = await tx.nextStep.create({
+        data: {
+          ...item,
+          ctaKind: cta.kind,
+          ctaLabel: cta.label,
+          ctaTarget: cta.target,
+          position,
+          status,
+        },
+      });
+      await revision('next-steps', row.id, {
+        ...item,
+        cta,
+        status: 'published',
+      });
+    }
+    created.push('next steps');
+  }
+  if ((await tx.teamMember.count()) === 0) {
+    for (const [position, { status: _s, ...item }] of defaultTeam.entries()) {
+      void _s;
+      const row = await tx.teamMember.create({
+        data: { ...item, position, status },
+      });
+      await revision('team', row.id, { ...item, status: 'published' });
+    }
+    created.push('team');
   }
 });
 console.log(

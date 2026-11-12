@@ -231,3 +231,121 @@ model ContentRevision {
   @@unique([entityType, entityKey, version])
   @@index([entityType, entityKey, createdAt])
 }
+
+// ---------- Phase 2B: editorial collections ----------
+// Each record saves on its own with If-Match on `version`; every save writes
+// a ContentRevision (entityType = collection name, entityKey = id) and an
+// AuditEvent in the same transaction. Drafts and archived records never
+// appear in public or member responses.
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ResourceVisibility {
+  /// Anyone may open it once published.
+  PUBLIC
+  /// Signed-in members only.
+  MEMBERS
+}
+
+/// A campus. `key` is the stable id activities refer to ('manukau').
+model Location {
+  id          String        @id @default(cuid())
+  key         String        @unique
+  name        String
+  kind        String        @default("")
+  address     String        @default("")
+  image       String        @default("")
+  position    Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  updatedById String?
+
+  @@index([status, position])
+}
+
+/// A Next steps journey shown on the public Next steps page.
+model NextStep {
+  id          String        @id @default(cuid())
+  title       String
+  subtitle    String        @default("")
+  heading     String        @default("")
+  body        String        @default("")
+  icon        String        @default("")
+  /// Where the call to action goes: interest | appointment | calendar | link.
+  ctaKind     String        @default("interest")
+  ctaLabel    String        @default("")
+  /// interest: request name; calendar: activity slug (optional); link: URL.
+  ctaTarget   String        @default("")
+  path        String[]
+  position    Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  updatedById String?
+
+  @@index([status, position])
+}
+
+/// A leadership profile on the About page.
+model TeamMember {
+  id          String        @id @default(cuid())
+  name        String
+  role        String        @default("")
+  bio         String        @default("")
+  image       String        @default("")
+  position    Int           @default(0)
+  status      ContentStatus @default(DRAFT)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  updatedById String?
+
+  @@index([status, position])
+}
+
+/// A folder in the shared library (Gallery).
+model ResourceFolder {
+  id          String   @id @default(cuid())
+  name        String
+  parentId    String?
+  position    Int      @default(0)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  parent    ResourceFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  ResourceFolder[] @relation("FolderTree")
+  resources Resource[]
+}
+
+/// Library metadata. The file itself is a separate asset (uploads arrive in
+/// Phase 2D); until then `url` holds an https link or a site path.
+model Resource {
+  id          String             @id @default(cuid())
+  title       String
+  description String             @default("")
+  type        String             @default("Document")
+  url         String             @default("")
+  /// Set when uploads exist (Phase 2D): the stored file for this resource.
+  assetId     String?
+  folderId    String?
+  visibility  ResourceVisibility @default(MEMBERS)
+  position    Int                @default(0)
+  status      ContentStatus      @default(DRAFT)
+  version     Int                @default(1)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  updatedById String?
+
+  folder ResourceFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
+
+  @@index([status, position])
+}

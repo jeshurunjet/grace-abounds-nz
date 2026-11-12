@@ -487,11 +487,20 @@
 }
 
 /* Home: compact member tools bar and staff tools (calendar-first Home) */
+.member-home-head {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+}
+.member-home-greeting {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 .member-modules {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
-  margin: 1rem 0 1.25rem;
 }
 .member-modules a,
 .member-modules button {
@@ -517,40 +526,18 @@
 .member-modules svg {
   color: var(--maple);
 }
+/* Staff tools: the tile design, full width under the calendar */
 .staff-tools {
-  margin: 0 0 1.5rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: var(--surface-raised);
+  margin-top: 2rem;
   scroll-margin-top: 6rem;
 }
 .staff-tools h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1.05rem;
+  margin: 0 0 1rem;
 }
-.staff-tools ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 0.5rem;
+.staff-tools .kit-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
 }
-.staff-tools a {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 0.75rem;
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-.staff-tools a:hover {
-  background: var(--active-bg);
-}
-.staff-tools .member-action-icon {
+.member-action-icon {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.6rem;

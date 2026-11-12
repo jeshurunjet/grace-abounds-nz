@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { staffTools } from '../lib/staff-tools';
 
-/** Compact links to the staff editors, shown on Home for Pastor and Admin. */
+/** Staff editors as large tiles, shown on Home under the calendar. */
 export function StaffTools({ role }: { role: string }) {
   return (
     <section
@@ -11,18 +11,27 @@ export function StaffTools({ role }: { role: string }) {
       aria-labelledby="staff-tools-title"
     >
       <h2 id="staff-tools-title">Staff tools</h2>
-      <ul>
-        {staffTools(role).map(({ href, title, icon: Icon, tone }) => (
-          <li key={href}>
-            <Link href={href} className={`kit-tile-${tone}`}>
-              <span className="member-action-icon" aria-hidden="true">
-                <Icon size={18} />
+      <div className="kit-tiles">
+        {staffTools(role).map(
+          ({ href, title, description, icon: Icon, tone }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`kit-tile kit-tile-${tone}`}
+            >
+              <span className="kit-tile-art" aria-hidden="true">
+                <span>
+                  <Icon size={40} strokeWidth={1.6} />
+                </span>
               </span>
-              {title}
+              <span className="kit-tile-body">
+                <strong>{title}</strong>
+                <small>{description}</small>
+              </span>
             </Link>
-          </li>
-        ))}
-      </ul>
+          ),
+        )}
+      </div>
     </section>
   );
 }

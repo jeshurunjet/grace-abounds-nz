@@ -85,15 +85,15 @@ Baseline code limits: 10-minute expiry, 5 requests/hour per normalized email and
 
 Each slice includes its contracts, meaningful permission/data/failure tests, accurate frontend states and a short update here. Coded/verified/owner-accepted are separate statuses. Owner preview and Codex review occur at slice boundaries; do not repeat successful provider setup or unrelated full audits.
 
-| Phase | Scope                                                                                       | Status                                                                                                                                                                                 |
-| ----- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                            |
-| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                    |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 accepted. **2A complete at `fb2af2a` (Messages follow-up done; tests, lint and owner visual checks pass); awaiting brief closing checkpoint.** 2B–2D not started. |
-| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                  |
-| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                               |
-| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                    |
-| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                |
+| Phase | Scope                                                                                       | Status                                                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                                   |
+| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                           |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 and 2A accepted. **2B coded at `68b83c5` (collections, library, sermons with Pastor-only approval); awaiting owner browser checks and Codex review.** 2C–2D not started. |
+| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                         |
+| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                                      |
+| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                           |
+| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                       |
 
 ### Phase 2 — finish the CMS and shared content foundation
 
@@ -1370,3 +1370,57 @@ This follows "Codex Phase 2A checkpoint". Only the requested follow-up was made,
 Codex reran the affected Messages page, workspace-shell and staff-tools tests: **9 passed across 3 files**; whitespace check passed. Acknowledged the owner/Claude recorded full 72-test suite, lint and six visual checks, without claiming an independent browser walkthrough. The prior stopped-server production build remains the build evidence; no fresh build required for this small reviewed follow-up, and none run. Existing documented limitations remain for their planned phases. Full Phase 2 and production launch remain incomplete.
 
 **Next:** with owner go-ahead, Claude starts Phase 2B from the current reviewed branch, following the active revised plan. Preserve the simplified Home, fixed headings, explicit Save behavior and server-confirmed resource isolation. Move structured collections to real resource-specific APIs/DB; include the agreed video approval boundary rather than retaining an Admin direct-publish bypass. Keep People/care permission work in Phase 4, S3 uploads in 2D and automation/Messenger in Future F1/F2. Update this sole handover with migrations, checks and evidence, then return for a focused slice review. No merge, push or deployment without authorization. Codex changed documentation only in this checkpoint.
+
+### Phase 2B checkpoint — Claude, 13 November 2026, head `68b83c5`
+
+Implements "2B. Structured collections and uniform saves" with the Pastor-only video boundary. Commits: `21a5dec` (collections API), `93854fa` (Codex 2A verdict recorded), `a820d2b` (website, CMS and Gallery on the collections), `68b83c5` (sermons, assets, approval). Approved UI and theme preserved; no uploads, care, messaging or automation work.
+
+**Data and migrations (owner-applied to dev and test):**
+
+- `20261112181421_phase2b_collections`: `Location`, `NextStep`, `TeamMember`, `ResourceFolder`, `Resource`; enums `ContentStatus`, `ResourceVisibility`.
+- `20261112201626_phase2b_sermons_assets`: `Sermon`, `Asset`; enums `SermonReview`, `AssetAccess`, `AssetStatus`; `Resource.assetId` and `Sermon.mediaAssetId` become Restrict foreign keys to `Asset`. Additive only.
+- Relationships: one `Asset` store (Phase 2D fills it); a `Resource` and a `Sermon` refer to a file by asset ID, never a copy. `Resource` holds descriptive metadata and explicit `public`/`members` visibility; folders are a self-referencing tree.
+- `content:seed` (development only, empty tables only) adds campuses, journeys and leadership as published, and the prototype's sample sermons as **awaiting Pastor approval**. Nothing is seeded as approved.
+
+**Collections (campuses, Next steps journeys, leadership, library folders and resources):**
+
+- `/v1/staff/:collection` list/create, `PATCH /:id` with If-Match (428 without, 412 stale, 422 field errors), `DELETE /:id` with If-Match, `PUT /order` (409 `ORDER_STALE` if the set changed). Pastor and Admin only.
+- Each write stores a `ContentRevision` and an `AuditEvent` in the same transaction.
+- Deletion: published records must be archived first (`ARCHIVE_FIRST`); a campus that was ever published is kept (`IN_USE`, activities may refer to its key until Phase 3); a non-empty folder is kept.
+- Campus `key` is derived once on create and never changes.
+- Website: the public bundle carries published collections; campuses, journeys, leadership and sermons always come from the server, and browser storage can no longer override or store them.
+- Website content editor: each campus, journey or person saves on its own from the side panel. Nothing is created until Save. A conflict keeps the typed values and offers "Load latest version". Delete is only offered for unpublished records and asks first.
+- Next steps buttons go to real destinations: interest → the join panel, appointment → the appointment panel, calendar → an event or the calendar, link → a validated https or site path.
+- Resources left Site details. The Gallery reads `/v1/member/library` (signed-in, published only, no status field) with folder filter and search; Pastor/Admin manage folders and resources in the same place. Unsafe links are not rendered as destinations.
+
+**Sermons and the Pastor-only boundary (`/v1/staff/sermons`):**
+
+- Admin and Pastor create and save a private working copy. Save never publishes; review fields are rejected by the strict schema.
+- `submit` (staff) asks for approval. `approve`, `reject` (note required) and `unpublish` are **Pastor only**; Admin receives 403.
+- Approval binds to the exact saved version: it needs If-Match equal to the current version and a pending request. Any later save withdraws the request. A connected upload must be `VERIFIED` (`MEDIA_NOT_READY` otherwise); direct links must be https MP4/M4V/WebM/MP3/M4A.
+- Approval copies the public fields to `live` with `liveVersion`, approver and time. A replacement or metadata edit needs approval again while the approved version stays live. Archive takes a sermon down; restore returns it as a draft. A sermon that has ever been on the site is archived before deletion.
+- Public and member responses include only approved, non-archived sermons (`collections.sermons`), newest first. The slug is fixed on create.
+- Library resources may not link to video files or YouTube/Vimeo/Facebook video, so the library cannot publish a video around the Pastor.
+- Editor: "Sermons & videos" on the kit, with an "Awaiting your approval" list for the Pastor, a publishing box (state, approve / send back / unpublish / archive / restore) and a playable preview of the recording link.
+- The sitemap now lists approved sermons from the API.
+
+**Evidence (owner's Mac, 13 Nov):**
+
+- `pnpm test`: **23 files, 81 passed** (89 DB tests skipped as designed), including new tests for the Gallery, collection saves in the CMS, the provider's server-only collections, and the Sermons editor (Admin cannot approve; nothing created before Save; Pastor approves exact versions and sends back with a note; draft → submit → approve).
+- `pnpm test:db`: **12 files, 97 passed**, including `collections.test.ts` (7) and `sermons.test.ts` (6): roles; revisions and audit; drafts/pending excluded from public; stale/428/422; concurrent saves; order; delete rules; member library; exact-version approval; replacement stays on the old version until approved; reject with note; unpublish/archive/restore/delete; library video links refused.
+- Typecheck (web, api, validation) clean; Prettier check clean on changed files.
+- Lint: the one warning (an unused variable in the CMS page) is fixed in `68b83c5`; owner rerun pending.
+- Owner browser checks pending: a campus/person/step saved in one browser appears in another and after a restart; Next steps buttons; Gallery as Admin and as member; Sermons as Admin (submit) and Pastor (approve, send back, replacement stays live).
+
+**Limitations and deferrals:**
+
+- No revision list/restore UI yet (2C). Cache invalidation outbox not added; pages read with no-store.
+- Activities remain browser-kept until Phase 3; the sitemap still lists their published seed records, and ever-published campuses cannot be deleted.
+- Uploads, verification and download grants are 2D; `Asset` is defined but unused. Approved sermons are not yet listed inside the Gallery.
+- Video readiness for direct links is limited to https and a supported file type; the Pastor confirms playback with the preview. No processing is claimed.
+- Pastor Home counts and an approval badge on Home are Phase 4.
+- Pre-existing browser-kept sermon edits are no longer read.
+
+**Current next instruction:**
+
+> Owner: run `pnpm lint` and the browser checks above. Codex: focused review of `21a5dec..68b83c5` against the 2B exit criteria, especially the Pastor-only approval boundary and the server-only collection source. Claude: wait for acceptance before 2C. No merge, push or deployment.

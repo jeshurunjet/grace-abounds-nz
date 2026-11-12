@@ -1,6 +1,6 @@
 'use client';
 import { useContent } from './content-provider';
-import Image from 'next/image';
+import Image from './site-image';
 import { useEffect, useState } from 'react';
 export function HeroGallery() {
   const { content } = useContent();

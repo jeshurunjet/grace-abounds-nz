@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '../../components/site-image';
 import { notFound, useParams } from 'next/navigation';
 import { useContent } from '../../components/content-provider';
 import { Breadcrumbs } from '../../components/breadcrumbs';

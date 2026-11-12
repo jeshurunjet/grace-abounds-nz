@@ -11,18 +11,23 @@ const text = (max: number) => z.string().trim().max(max);
 const required = (max: number, label: string) =>
   z.string().trim().min(1, `Enter ${label}.`).max(max);
 /**
- * Images the public site can display: a site path (/images/x.jpg) or an
- * images.unsplash.com address. Uploaded images (S3 + CloudFront) are added
- * in the uploads slice.
+ * A photo is a site image path (/images/x.jpg) or an https:// link to a photo
+ * on another website. Owner decision (Phase 2): any https link is allowed
+ * until uploads (S3 + CloudFront) arrive.
  */
+export function isImageRef(value: string): boolean {
+  return (
+    /^\/images\/\S+$/.test(value) ||
+    /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?(?:[/?#]\S*)?$/.test(value)
+  );
+}
+export const IMAGE_REF_MESSAGE =
+  'Use an https:// photo link or a site image path starting with /images/.';
 const imageRef = z
   .string()
   .trim()
   .max(500)
-  .regex(
-    /^(\/images\/\S+|https:\/\/images\.unsplash\.com\/\S+)$/,
-    'Use a site image path starting with /images/ or an images.unsplash.com address.',
-  );
+  .refine(isImageRef, IMAGE_REF_MESSAGE);
 const optionalUrl = z
   .string()
   .trim()

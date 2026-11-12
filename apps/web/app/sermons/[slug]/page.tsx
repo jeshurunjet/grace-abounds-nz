@@ -1,5 +1,5 @@
 'use client';
-import Image from 'next/image';
+import Image from '../../components/site-image';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';

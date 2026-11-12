@@ -1,6 +1,6 @@
 'use client';
 import { useContent } from '../components/content-provider';
-import Image from 'next/image';
+import Image from '../components/site-image';
 import {
   ContactForm,
   ManagedContact,

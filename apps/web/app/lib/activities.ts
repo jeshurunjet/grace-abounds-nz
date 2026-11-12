@@ -7,6 +7,7 @@
  * dates are 'YYYY-MM-DD', times 'HH:mm'. Storing local times (not UTC
  * instants) keeps a 10:00am service at 10:00am across daylight saving.
  */
+import { IMAGE_REF_MESSAGE, isImageRef } from '@grace-abounds/validation';
 export const CHURCH_TIME_ZONE = 'Pacific/Auckland';
 
 export type ActivityKind = 'service' | 'group' | 'study' | 'event' | 'ministry';
@@ -344,12 +345,8 @@ export function validateActivity(activity: Activity, all: Activity[]) {
     errors.push('Capacity must be a whole number of 1 or more, or blank.');
   if (activity.status === 'scheduled' && !activity.publishAt)
     errors.push('Choose when this activity goes live.');
-  if (
-    activity.image &&
-    !/^\/images\/[^\s]+$/.test(activity.image) &&
-    !/^https:\/\/images\.unsplash\.com\/[^\s]+$/.test(activity.image)
-  )
-    errors.push('Image must be a /images/ path or images.unsplash.com URL.');
+  if (activity.image && !isImageRef(activity.image))
+    errors.push(IMAGE_REF_MESSAGE);
   return errors;
 }
 

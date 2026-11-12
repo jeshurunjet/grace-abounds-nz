@@ -1,5 +1,5 @@
 'use client';
-import Image from 'next/image';
+import Image from './site-image';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
 export function ManagedTeam() {

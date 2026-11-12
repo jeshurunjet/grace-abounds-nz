@@ -1,8 +1,9 @@
 'use client';
-import Image from 'next/image';
+import Image from '../../components/site-image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  isImageRef,
   pageKeys,
   type PageContentMap,
   type PageKey,
@@ -88,11 +89,13 @@ function TextField({
   const multiline =
     value.length > 100 ||
     /story|copy|body|bio|summary|verses|opportunities|description/i.test(name);
+  // Photo fields preview the image and say so when it can't be loaded.
+  const [failed, setFailed] = useState('');
+  const preview = /image|gallery/i.test(name) && isImageRef(value);
   return (
     <label>
       {label(name)}
-      {(/^\/images\/[^\s]+$/.test(value) ||
-        /^https:\/\/images\.unsplash\.com\/[^\s]+$/.test(value)) && (
+      {preview && failed !== value && (
         <Image
           className="cms-image-preview"
           unoptimized
@@ -100,7 +103,14 @@ function TextField({
           alt="Content image preview"
           width={320}
           height={180}
+          onError={() => setFailed(value)}
         />
+      )}
+      {preview && failed === value && (
+        <span className="form-note" role="alert">
+          This photo couldn’t be loaded. Check the link — some websites don’t
+          allow their photos to be shown on other sites.
+        </span>
       )}
       {multiline ? (
         <textarea

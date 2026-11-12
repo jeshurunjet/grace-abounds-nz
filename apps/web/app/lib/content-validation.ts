@@ -1,3 +1,4 @@
+import { IMAGE_REF_MESSAGE, isImageRef } from '@grace-abounds/validation';
 import type { ContentState } from './content';
 export function validatePublicContent(
   content: Pick<ContentState, 'site' | 'pages' | 'sermons' | 'team'>,
@@ -5,9 +6,7 @@ export function validatePublicContent(
   const errors: string[] = [];
   const safeLink = (value: string) =>
     /^(https:\/\/[^\s]+|\/(?!\/)[^\s]*)$/.test(value);
-  const image = (value: string) =>
-    /^\/images\/[^\s]+$/.test(value) ||
-    /^https:\/\/images\.unsplash\.com\/[^\s]+$/.test(value);
+  const image = isImageRef;
   const scan = (value: unknown, path: string) => {
     if (Array.isArray(value)) {
       value.forEach((entry, index) => scan(entry, `${path} ${index + 1}`));
@@ -18,9 +17,7 @@ export function validatePublicContent(
         const field = `${path} · ${key}`;
         if (typeof entry === 'string') {
           if (/image$/i.test(key) && !image(entry))
-            errors.push(
-              `${field}: use a local /images/ path or an images.unsplash.com HTTPS URL.`,
-            );
+            errors.push(`${field}: ${IMAGE_REF_MESSAGE}`);
           if (/href$|url$/i.test(key) && entry && !safeLink(entry))
             errors.push(`${field}: use an HTTPS URL or a local path.`);
         }
@@ -32,10 +29,7 @@ export function validatePublicContent(
     if (!content.pages[key].length)
       errors.push(`Add at least one ${key} image.`);
     content.pages[key].forEach((src) => {
-      if (!image(src))
-        errors.push(
-          `${key}: use a local /images/ path or an images.unsplash.com HTTPS URL.`,
-        );
+      if (!image(src)) errors.push(`${key}: ${IMAGE_REF_MESSAGE}`);
     });
   }
   // Fixed-shape records: each entry must keep exactly its named fields.

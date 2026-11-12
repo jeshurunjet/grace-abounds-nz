@@ -12,11 +12,16 @@ vi.mock('next-auth/react', () => ({
 describe('MemberEngagement', () => {
   it('exposes appointments, next steps, activities and the shared planner', () => {
     render(<MemberEngagement />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Request an appointment/ }),
+    );
     expect(
-      screen.getByRole('heading', { name: 'Appointments' }),
+      screen.getByRole('dialog', { name: 'Appointments' }),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    fireEvent.click(screen.getByRole('button', { name: /Take a next step/ }));
     expect(
-      screen.getByRole('heading', { name: 'Take a next step' }),
+      screen.getByRole('dialog', { name: 'Take a next step' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: 'Activities & bookings' }),
@@ -33,6 +38,10 @@ describe('MemberEngagement', () => {
     expect(
       screen.getByRole('button', { name: 'Submit interest' }),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    expect(
+      screen.getByRole('link', { name: /Resource gallery/ }),
+    ).toHaveAttribute('href', '/members/gallery');
 
     expect(
       screen.getByRole('searchbox', { name: 'Search activities' }),

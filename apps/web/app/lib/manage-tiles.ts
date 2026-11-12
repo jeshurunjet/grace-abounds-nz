@@ -28,9 +28,9 @@ export function manageTiles(role: string): ManageTile[] {
     },
     {
       href: '/admin/events',
-      title: 'Activities & calendar',
+      title: 'Activities',
       description:
-        'Services, connect groups, Bible studies and ministry teams.',
+        'Create and edit the services, groups, studies and teams that appear on the calendar.',
       icon: CalendarDays,
       tone: 'activities',
     },

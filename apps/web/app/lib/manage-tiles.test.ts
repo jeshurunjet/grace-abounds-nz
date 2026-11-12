@@ -11,8 +11,8 @@ describe('workspace navigation by role', () => {
         expect.arrayContaining([
           'Main website',
           'Home',
-          'Resource gallery',
-          'Events & calendar',
+          'Resources',
+          'Calendar',
           'Settings',
           'Help',
         ]),
@@ -29,13 +29,13 @@ describe('workspace navigation by role', () => {
     const titles = (role: string) => manageTiles(role).map((t) => t.title);
     expect(titles('admin')).toEqual([
       'Website content',
-      'Activities & calendar',
+      'Activities',
       'Sermons',
       'Member directory',
     ]);
     expect(titles('pastor')).toEqual([
       'Website content',
-      'Activities & calendar',
+      'Activities',
       'Sermons',
       'Members & roles',
       'Pastoral care',

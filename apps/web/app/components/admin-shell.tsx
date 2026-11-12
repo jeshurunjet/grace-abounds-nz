@@ -7,8 +7,8 @@ export function workspaceLinks(role: string = 'member'): WorkspaceLink[] {
     { href: '/', label: 'Main website', icon: '⌂' },
     { href: '/members', label: 'Home', icon: '◈' },
     { href: '/members/messages', label: 'Messages', icon: '✉' },
-    { href: '/members/gallery', label: 'Resource gallery', icon: '▧' },
-    { href: '/members/calendar', label: 'Events & calendar', icon: '□' },
+    { href: '/members/calendar', label: 'Calendar', icon: '□' },
+    { href: '/members/gallery', label: 'Resources', icon: '▧' },
   ];
   // Staff tools live on the Manage hub (/admin/manage), one tile each.
   if (role === 'pastor' || role === 'admin')

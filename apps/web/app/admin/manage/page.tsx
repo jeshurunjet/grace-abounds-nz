@@ -9,8 +9,8 @@ export default function ManagePage() {
   const role = data?.user?.role ?? 'admin';
   return (
     <AdminShell>
-      <div className="kit-page">
-        <header className="workspace-header">
+      <div className="kit-page kit-hub">
+        <header className="kit-hub-head">
           <h1>Manage</h1>
           <p>Choose what you’d like to work on.</p>
         </header>

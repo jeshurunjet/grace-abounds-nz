@@ -59,10 +59,13 @@ describe('workspace navigation trial', () => {
       'href',
       href,
     );
-    expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute(
-      'href',
-      href,
-    );
+    // The top bar no longer repeats Home or the public-site link.
+    expect(
+      screen.queryByRole('link', { name: 'Back to home' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'View website' }),
+    ).not.toBeInTheDocument();
     // No saved preference: starts collapsed to the icon rail.
     expect(document.documentElement.dataset.sidebar).toBe('collapsed');
     expect(container.firstChild).toHaveClass('workspace-collapsed');

@@ -6,7 +6,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   LayoutGrid,
-  ArrowLeft,
   FolderOpen,
   CalendarDays,
   FilePenLine,
@@ -160,28 +159,9 @@ export function WorkspaceShell({
         <span>Menu</span>
       </button>
       <header className="workspace-topbar" inert={mobile && open}>
-        <Link
-          href={homeHref}
-          className="workspace-topbar-title"
-          aria-label="Workspace home"
-        >
-          <small>{kind === 'Members' ? 'Member' : kind} workspace</small>
-          <strong>Grace Abounds International</strong>
-        </Link>
+        {/* The sidebar logo leads home and "Main website" opens the public
+            site, so the top bar keeps only notifications and the account. */}
         <div className="workspace-account-controls">
-          {pathname !== homeHref && (
-            <Link
-              href={homeHref}
-              aria-label="Back to home"
-              className="workspace-home-return"
-            >
-              <ArrowLeft size={17} aria-hidden="true" />
-              <span>Back to home</span>
-            </Link>
-          )}
-          <Link href="/" className="workspace-view-site">
-            View website
-          </Link>
           <NotificationMenu />
           <div className="member-menu" ref={accountRef}>
             <button
@@ -272,8 +252,8 @@ export function WorkspaceShell({
                     'Main website': Globe,
                     Home,
                     Messages: MessageCircle,
-                    'Resource gallery': FolderOpen,
-                    'Events & calendar': CalendarDays,
+                    Resources: FolderOpen,
+                    Calendar: CalendarDays,
                     Manage: LayoutGrid,
                     'Website content': FilePenLine,
                     'Manage events': CalendarDays,
@@ -316,7 +296,6 @@ export function WorkspaceShell({
           inert={mobile && open}
         >
           <MessageCircle size={23} aria-hidden="true" />
-          <span>Messages</span>
         </Link>
       )}
     </div>

@@ -15,7 +15,6 @@ export default function MembersPage() {
   const { content } = useContent();
   const { data } = useSession();
   const member = accountProfile(data?.user);
-  const role = data?.user?.role ?? 'member';
   const notices = content.appointmentRequests
     .filter(
       (item) =>
@@ -96,43 +95,7 @@ export default function MembersPage() {
           )}
         </div>
       </div>
-      {role !== 'member' && (
-        <section className="panel staff-shortcuts">
-          <h2>{role === 'pastor' ? 'Pastor tools' : 'Admin tools'}</h2>
-          <p>
-            {role === 'pastor'
-              ? 'Review website changes and publish approved content.'
-              : 'Prepare content and submit it for pastor approval.'}
-          </p>
-          <div className="form-actions">
-            <Link className="button" href="/admin/cms">
-              Website content
-            </Link>
-            <Link className="button button-outline" href="/admin/users">
-              {role === 'pastor' ? 'Members & roles' : 'Member directory'}
-            </Link>
-            {role === 'pastor' && (
-              <Link className="button button-outline" href="/pastor/care">
-                Prayer & appointments
-              </Link>
-            )}
-          </div>
-        </section>
-      )}
       <MemberEngagement />
-      <div className="member-feature-grid member-feature-single">
-        <Reveal>
-          <Link className="member-resource-feature" href="/members/gallery">
-            <span>Member files</span>
-            <h2>Resource Gallery</h2>
-            <p>
-              Browse sermon notes, group guides, bulletins, audio, and ministry
-              files.
-            </p>
-            <b>Open gallery →</b>
-          </Link>
-        </Reveal>
-      </div>
     </MemberShell>
   );
 }

@@ -2,17 +2,23 @@
 
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Clock, HandHeart, Users } from 'lucide-react';
+import {
+  CalendarCheck,
+  FolderOpen,
+  Footprints,
+  Heart,
+  Users,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
 import { MemberActivities } from './member-activities';
+import { SidePanel } from './editor-kit/side-panel';
 
 export function MemberEngagement() {
   const { content, update, ready, storageError } = useContent();
   const { data: session } = useSession();
   const { push } = useToast();
-  const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [prayer, setPrayer] = useState('');
   const [prayerSent, setPrayerSent] = useState(false);
   const [opportunity, setOpportunity] = useState('');
@@ -70,7 +76,8 @@ export function MemberEngagement() {
       return;
     }
     form.reset();
-    setAppointmentOpen(false);
+    setAppointmentDirty(false);
+    setPanel(null);
     push(
       'Appointment added to this browser preview only. It has not been delivered.',
       'info',
@@ -145,6 +152,42 @@ export function MemberEngagement() {
       'info',
     );
   }
+  const [panel, setPanel] = useState<null | 'appointment' | 'prayer' | 'step'>(
+    null,
+  );
+  const [appointmentDirty, setAppointmentDirty] = useState(false);
+  useEffect(() => {
+    if (opportunity && new URLSearchParams(window.location.search).get('join'))
+      setPanel('step');
+  }, [opportunity]);
+  const close = () => {
+    setPanel(null);
+    setAppointmentDirty(false);
+    setPrayerSent(false);
+  };
+  const cards = [
+    {
+      key: 'appointment' as const,
+      icon: CalendarCheck,
+      tone: 'activities',
+      title: 'Request an appointment',
+      body: 'Pastoral care, prayer, baptism interview or marriage support.',
+    },
+    {
+      key: 'prayer' as const,
+      icon: Heart,
+      tone: 'care',
+      title: 'Prayer request',
+      body: 'Share privately with the pastoral team.',
+    },
+    {
+      key: 'step' as const,
+      icon: Footprints,
+      tone: 'members',
+      title: 'Take a next step',
+      body: 'Join a group, a class or a ministry team.',
+    },
+  ];
   return (
     <div className="member-engagement">
       {storageError && (
@@ -152,99 +195,122 @@ export function MemberEngagement() {
           {storageError}
         </p>
       )}
-      <section className="panel member-appointment-card">
-        <div className="member-section-heading">
-          <span>
-            <Clock aria-hidden="true" />
-          </span>
-          <div>
-            <p className="eyebrow">Pastoral care</p>
-            <h2>Appointments</h2>
-          </div>
-          <button
-            className="button button-outline"
-            onClick={() => setAppointmentOpen((value) => !value)}
-          >
-            {appointmentOpen ? 'Cancel' : 'Request appointment'}
-          </button>
-        </div>
-        {appointmentOpen ? (
-          <form
-            className="member-appointment-form"
-            onSubmit={requestAppointment}
-          >
-            <label>
-              Appointment type
-              <select name="type" required defaultValue="">
-                <option value="" disabled>
-                  Choose a reason
-                </option>
-                <option>Pastoral care</option>
-                <option>Prayer</option>
-                <option>Baptism interview</option>
-                <option>Marriage support</option>
-              </select>
-            </label>
-            <label>
-              Preferred date
-              <input name="date" type="date" required />
-            </label>
-            <label>
-              Message
-              <textarea
-                name="message"
-                rows={3}
-                placeholder="Anything you would like the pastoral team to know?"
-              />
-            </label>
-            <button className="button" disabled={!ready || !!storageError}>
-              Save appointment preview
+      <section className="member-for-you" aria-labelledby="member-for-you">
+        <h2 id="member-for-you">For you</h2>
+        <div className="member-for-you-grid">
+          {cards.map(({ key, icon: Icon, tone, title, body }) => (
+            <button
+              key={key}
+              type="button"
+              className={`member-action-card kit-tile-${tone}`}
+              onClick={() => setPanel(key)}
+            >
+              <span className="member-action-icon" aria-hidden="true">
+                <Icon size={26} strokeWidth={1.7} />
+              </span>
+              <strong>{title}</strong>
+              <small>{body}</small>
             </button>
-          </form>
-        ) : (
-          <p>
-            Prepare an appointment request for the pastoral team. This preview
-            keeps requests in this browser and does not deliver them.
-          </p>
-        )}
-        <div className="member-pastoral-prayer">
-          <h3>Prayer request</h3>
-          {prayerSent ? (
-            <p className="member-prayer-success" role="status">
-              Your request is in this browser preview only. It has not been sent
-              to the pastor.
-            </p>
-          ) : (
-            <>
-              <textarea
-                aria-label="Private prayer request"
-                rows={3}
-                value={prayer}
-                onChange={(event) => setPrayer(event.target.value)}
-                placeholder="How can we pray with you?"
-              />
-              <button
-                className="button button-outline"
-                disabled={!ready || !!storageError || !prayer.trim()}
-                onClick={submitPrayer}
-              >
-                Save prayer preview
-              </button>
-            </>
-          )}
+          ))}
+          <Link
+            className="member-action-card kit-tile-website"
+            href="/members/gallery"
+          >
+            <span className="member-action-icon" aria-hidden="true">
+              <FolderOpen size={26} strokeWidth={1.7} />
+            </span>
+            <strong>Resource gallery</strong>
+            <small>
+              Sermon notes, group guides, bulletins and ministry files.
+            </small>
+          </Link>
         </div>
       </section>
 
-      <section className="panel member-join-card">
-        <div className="member-section-heading">
-          <span>
-            <HandHeart aria-hidden="true" />
-          </span>
-          <div>
-            <p className="eyebrow">Next steps</p>
-            <h2>Take a next step</h2>
-          </div>
-        </div>
+      <SidePanel
+        open={panel === 'appointment'}
+        title="Appointments"
+        eyebrow="Pastoral care"
+        dirty={appointmentDirty}
+        onClose={close}
+      >
+        <p>
+          Prepare an appointment request for the pastoral team. This preview
+          keeps requests in this browser and does not deliver them.
+        </p>
+        <form
+          className="member-appointment-form"
+          onSubmit={requestAppointment}
+          onChange={() => setAppointmentDirty(true)}
+        >
+          <label>
+            Appointment type
+            <select name="type" required defaultValue="">
+              <option value="" disabled>
+                Choose a reason
+              </option>
+              <option>Pastoral care</option>
+              <option>Prayer</option>
+              <option>Baptism interview</option>
+              <option>Marriage support</option>
+            </select>
+          </label>
+          <label>
+            Preferred date
+            <input name="date" type="date" required />
+          </label>
+          <label>
+            Message
+            <textarea
+              name="message"
+              rows={3}
+              placeholder="Anything you would like the pastoral team to know?"
+            />
+          </label>
+          <button className="button" disabled={!ready || !!storageError}>
+            Save appointment preview
+          </button>
+        </form>
+      </SidePanel>
+
+      <SidePanel
+        open={panel === 'prayer'}
+        title="Prayer request"
+        eyebrow="Pastoral care"
+        dirty={!!prayer.trim()}
+        onClose={close}
+      >
+        {prayerSent ? (
+          <p className="member-prayer-success" role="status">
+            Your request is in this browser preview only. It has not been sent
+            to the pastor.
+          </p>
+        ) : (
+          <>
+            <textarea
+              aria-label="Private prayer request"
+              rows={5}
+              value={prayer}
+              onChange={(event) => setPrayer(event.target.value)}
+              placeholder="How can we pray with you?"
+            />
+            <button
+              className="button"
+              disabled={!ready || !!storageError || !prayer.trim()}
+              onClick={submitPrayer}
+            >
+              Save prayer preview
+            </button>
+          </>
+        )}
+      </SidePanel>
+
+      <SidePanel
+        open={panel === 'step'}
+        title="Take a next step"
+        eyebrow="Next steps"
+        onClose={close}
+      >
         <div className="member-join-controls">
           <label>
             <span>Choose an opportunity</span>
@@ -278,10 +344,7 @@ export function MemberEngagement() {
             </div>
           )}
         </div>
-        <small>
-          These options are managed in Website content → Next steps.
-        </small>
-      </section>
+      </SidePanel>
 
       <MemberActivities />
     </div>

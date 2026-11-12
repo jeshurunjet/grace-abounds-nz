@@ -1,10 +1,19 @@
 /* Reversible navigation trial; shared by Member, Admin and Pastor workspaces. */
-/* Subtle desktop sidebar toggle at the top of the sidebar, beside the logo. */
+/* Desktop sidebar toggle: always directly under the logo, so it does not
+   move when the sidebar collapses or expands. */
 .workspace .workspace-brand {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   column-gap: 0.5rem;
+  row-gap: 0.6rem;
+}
+.workspace .workspace-brand > .workspace-sidebar-toggle {
+  justify-self: start;
+}
+/* The top bar holds only notifications and the account menu. */
+.workspace .workspace-topbar {
+  justify-content: flex-end;
 }
 .workspace .workspace-brand > strong {
   grid-column: 1 / -1;
@@ -56,7 +65,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.9rem 1.15rem;
+  padding: 0.9rem;
   border: 1px solid var(--gold);
   border-radius: 2rem;
   background: var(--dark-section);
@@ -85,6 +94,12 @@
   :root[data-sidebar='collapsed'] .workspace .workspace-brand .brand {
     justify-content: center;
   }
+  :root[data-sidebar='collapsed']
+    .workspace
+    .workspace-brand
+    > .workspace-sidebar-toggle {
+    justify-self: center;
+  }
   :root[data-sidebar='collapsed'] .workspace .workspace-brand .brand > span,
   :root[data-sidebar='collapsed'] .workspace .workspace-brand > strong,
   :root[data-sidebar='collapsed'] .workspace .workspace-link-label,
@@ -99,11 +114,9 @@
   .workspace .workspace-sidebar-toggle {
     display: none;
   }
-  .workspace .workspace-message-fab {
-    padding: 0.85rem;
-  }
-  .workspace .workspace-message-fab > span {
-    display: none;
+  /* The mobile drawer's close button sits beside the logo. */
+  .workspace .workspace-brand {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .workspace .workspace-topbar .workspace-account-controls {
     gap: 0.4rem;

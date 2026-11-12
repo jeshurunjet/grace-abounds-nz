@@ -89,7 +89,7 @@ Each slice includes its contracts, meaningful permission/data/failure tests, acc
 | ----- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                         |
 | 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model. |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 accepted. **2A implemented (`49ea86f..5854084`), awaiting owner/Codex review.** 2B–2D not started.                             |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 accepted. **2A implemented (`49ea86f..5c97de0`); tests, lint and build pass; awaiting owner/Codex review.** 2B–2D not started. |
 | 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                               |
 | 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                            |
 | 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                 |
@@ -1285,23 +1285,11 @@ Scope: "2A. Small navigation/Home cleanup and reported visual defects" only. No 
 - New `staff-tools.test.ts`: role sidebar links with no Manage, and staff tiles per role.
 - New `campus.test.ts`.
 
-**Evidence:**
+**Evidence (owner's Mac, 13 Nov, head `5c97de0`):**
 
-- `pnpm test` (owner's Mac) after `49ea86f`: all files passed ("clean test").
-- Commits `7c6bf99`, `7054a33` and `5854084` change markup and CSS only. Each was typechecked (web source) and Prettier-checked by Claude. **`pnpm test`, `pnpm lint` and `pnpm build` were not re-run after them.** Run once:
-
-  ```
-  pnpm test && pnpm lint
-  ```
-
-  Then, with the dev server stopped:
-
-  ```
-  pnpm build
-  ```
-
-  After the build, delete `apps/web/.next` before restarting `pnpm dev`.
-
+- `pnpm test`: **20 files, 71 passed** (76 DB tests skipped as designed; `test:db` unaffected, since 2A has no API/DB change).
+- `pnpm lint`: ESLint `--max-warnings=0` and the full Prettier check pass. The first run flagged an unused `role` parameter in `workspaceLinks()`; it was removed in `5c97de0`, since the sidebar is the same for every role.
+- `pnpm build` passes, with the dev server stopped. Delete `apps/web/.next` before the next `pnpm dev`.
 - Owner browser review:
   - **Seen and accepted:** the Home layout through several iterations, the full-width calendar, the staff tiles, the member tool links and the profile button fix.
   - **Not explicitly confirmed:** the Locations cards and campus pills, the sign-in dots, the `/admin/manage` redirect, and the narrow-mobile pass.
@@ -1317,4 +1305,4 @@ Scope: "2A. Small navigation/Home cleanup and reported visual defects" only. No 
 
 **Current next instruction:**
 
-> Owner: run the two checks above and confirm the unconfirmed browser items. Codex: review `dfffdba..5854084` against 2A's exit criteria, and advise on the Messages shortcut (hide vs unavailable). Claude: wait for owner/Codex acceptance before starting Phase 2B. No merge, push or deployment.
+> Owner: confirm the unconfirmed browser items. Codex: review `dfffdba..5c97de0` against 2A's exit criteria, and advise on the Messages shortcut (hide vs unavailable). Claude: wait for owner/Codex acceptance before starting Phase 2B. No merge, push or deployment.

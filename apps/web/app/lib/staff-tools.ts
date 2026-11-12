@@ -1,7 +1,5 @@
 import {
   CalendarCog,
-  CalendarDays,
-  FolderOpen,
   Globe,
   Heart,
   Users,
@@ -9,7 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-export type ManageTile = {
+export type StaffTool = {
   href: string;
   title: string;
   description: string;
@@ -17,9 +15,10 @@ export type ManageTile = {
   tone: 'website' | 'activities' | 'sermons' | 'members' | 'care';
 };
 
-/** The staff tools each role may open. The server enforces the same rules. */
-export function manageTiles(role: string): ManageTile[] {
-  const tiles: ManageTile[] = [
+/** The staff tools each role may open (shown on Home). The server enforces
+ * the same rules. */
+export function staffTools(role: string): StaffTool[] {
+  const tiles: StaffTool[] = [
     {
       href: '/admin/cms',
       title: 'Website content',
@@ -35,20 +34,6 @@ export function manageTiles(role: string): ManageTile[] {
         'Create and edit the services, groups, studies and teams that appear on the calendar.',
       icon: CalendarCog,
       tone: 'activities',
-    },
-    {
-      href: '/members/calendar',
-      title: 'Calendar',
-      description: 'See what’s on across the church, and book in.',
-      icon: CalendarDays,
-      tone: 'activities',
-    },
-    {
-      href: '/members/gallery',
-      title: 'Resources',
-      description: 'Sermon notes, group guides, bulletins and ministry files.',
-      icon: FolderOpen,
-      tone: 'website',
     },
     {
       href: '/admin/sermons',

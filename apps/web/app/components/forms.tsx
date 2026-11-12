@@ -396,6 +396,7 @@ export function AuthForm({
                 type="button"
                 key={index}
                 className={index === verseIndex ? 'active' : ''}
+                aria-pressed={index === verseIndex}
                 onClick={() => setVerseIndex(index)}
                 aria-label={`Show verse ${index + 1}`}
               />

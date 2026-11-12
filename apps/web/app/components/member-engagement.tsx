@@ -1,12 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { CalendarCheck, Footprints, Heart, Users } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarDays,
+  FolderOpen,
+  Heart,
+  Users,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
-import { MemberActivities } from './member-activities';
+import { useActivities } from './activity-ui';
 import { SidePanel } from './editor-kit/side-panel';
 
 export function MemberEngagement() {
@@ -36,11 +43,23 @@ export function MemberEngagement() {
         ),
     [content.pages],
   );
+  const router = useRouter();
+  const { live } = useActivities();
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('join');
-    if (requested && opportunities.some((item) => item.name === requested))
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('join');
+    if (requested && opportunities.some((item) => item.name === requested)) {
       setOpportunity(requested);
-  }, [opportunities]);
+      return;
+    }
+    // Older links that pointed at Home's former activity list now open the
+    // Calendar page, which holds joining and bookings.
+    if (
+      params.get('activity') ||
+      (requested && live.some((item) => item.title === requested))
+    )
+      router.replace(`/members/calendar?${params.toString()}#activities`);
+  }, [opportunities, live, router]);
   const selected = opportunities.find((item) => item.name === opportunity);
   async function requestAppointment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,29 +178,6 @@ export function MemberEngagement() {
     setAppointmentDirty(false);
     setPrayerSent(false);
   };
-  const cards = [
-    {
-      key: 'appointment' as const,
-      icon: CalendarCheck,
-      tone: 'activities',
-      title: 'Request an appointment',
-      body: 'Pastoral care, prayer, baptism interview or marriage support.',
-    },
-    {
-      key: 'prayer' as const,
-      icon: Heart,
-      tone: 'care',
-      title: 'Prayer request',
-      body: 'Share privately with the pastoral team.',
-    },
-    {
-      key: 'step' as const,
-      icon: Footprints,
-      tone: 'members',
-      title: 'Take a next step',
-      body: 'Join a group, a class or a ministry team.',
-    },
-  ];
   return (
     <div className="member-engagement">
       {storageError && (
@@ -189,25 +185,24 @@ export function MemberEngagement() {
           {storageError}
         </p>
       )}
-      <section className="member-for-you" aria-labelledby="member-for-you">
-        <h2 id="member-for-you">For you</h2>
-        <div className="member-for-you-grid">
-          {cards.map(({ key, icon: Icon, tone, title, body }) => (
-            <button
-              key={key}
-              type="button"
-              className={`member-action-card kit-tile-${tone}`}
-              onClick={() => setPanel(key)}
-            >
-              <span className="member-action-icon" aria-hidden="true">
-                <Icon size={26} strokeWidth={1.7} />
-              </span>
-              <strong>{title}</strong>
-              <small>{body}</small>
-            </button>
-          ))}
-        </div>
-      </section>
+      <nav className="member-modules" aria-label="Your church tools">
+        <Link href="/members/calendar">
+          <CalendarDays aria-hidden="true" size={18} />
+          Calendar &amp; bookings
+        </Link>
+        <button type="button" onClick={() => setPanel('prayer')}>
+          <Heart aria-hidden="true" size={18} />
+          Prayer
+        </button>
+        <button type="button" onClick={() => setPanel('appointment')}>
+          <CalendarCheck aria-hidden="true" size={18} />
+          Appointments
+        </button>
+        <Link href="/members/gallery">
+          <FolderOpen aria-hidden="true" size={18} />
+          Gallery
+        </Link>
+      </nav>
 
       <SidePanel
         open={panel === 'appointment'}
@@ -327,8 +322,6 @@ export function MemberEngagement() {
           )}
         </div>
       </SidePanel>
-
-      <MemberActivities />
     </div>
   );
 }

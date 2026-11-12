@@ -5,7 +5,6 @@ import {
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
-  LayoutGrid,
   FolderOpen,
   CalendarDays,
   FilePenLine,
@@ -25,11 +24,7 @@ import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
 import Image from 'next/image';
 import { accountProfile } from '../lib/profiles';
-import {
-  getRoleNavigation,
-  isManageRoute,
-  isRouteActive,
-} from '../lib/role-navigation';
+import { getRoleNavigation, isRouteActive } from '../lib/role-navigation';
 
 /** Stored desktop sidebar choice: 'true' = collapsed, 'false' = expanded. */
 export const SIDEBAR_KEY = 'grace-sidebar-collapsed';
@@ -243,18 +238,15 @@ export function WorkspaceShell({
               const active =
                 link.label === 'Home'
                   ? ['/members', '/admin', '/pastor'].includes(pathname)
-                  : link.label === 'Manage'
-                    ? isManageRoute(pathname)
-                    : isRouteActive(pathname, link.href);
+                  : isRouteActive(pathname, link.href);
               const Icon =
                 (
                   {
                     'Main website': Globe,
                     Home,
                     Messages: MessageCircle,
-                    Resources: FolderOpen,
+                    Gallery: FolderOpen,
                     Calendar: CalendarDays,
-                    Manage: LayoutGrid,
                     'Website content': FilePenLine,
                     'Manage events': CalendarDays,
                     'Activities & calendar': CalendarDays,

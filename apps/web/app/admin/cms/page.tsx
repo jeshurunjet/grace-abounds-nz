@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
@@ -39,6 +40,7 @@ import {
   type SaveState,
 } from '../../components/editor-kit/parts';
 import { api, ApiError, errorMessage } from '../../lib/api-client';
+import { getRoleNavigation } from '../../lib/role-navigation';
 import type { ContentState, SiteContent } from '../../lib/content';
 import {
   mergePatch,
@@ -264,6 +266,8 @@ export default function CmsPage() {
   const { content, update, ready, storageError, retrySave, applyPublished } =
     useContent();
   const toast = useToast();
+  const { data: session } = useSession();
+  const homeHref = getRoleNavigation(session?.user?.role).workspaceHref;
   const [tab, setTab] = useState<Tab>('Home');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmed, setConfirmed] = useState<
@@ -771,9 +775,9 @@ export default function CmsPage() {
   return (
     <AdminShell>
       <div className="kit-page">
-        <Link className="kit-back" href="/admin/manage">
+        <Link className="kit-back" href={homeHref}>
           <ArrowLeft aria-hidden="true" size={16} />
-          Manage
+          Home
         </Link>
         <header className="kit-page-head">
           <h1>Website content</h1>

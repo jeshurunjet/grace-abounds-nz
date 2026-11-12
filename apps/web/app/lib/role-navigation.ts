@@ -28,24 +28,6 @@ export function getRoleNavigation(role?: AppRole | null) {
   return roleNavigation[role ?? 'member'];
 }
 
-/** Staff tools reached from the Manage hub keep "Manage" highlighted. */
-const MANAGE_ROUTES = [
-  '/admin/manage',
-  '/admin/cms',
-  '/admin/events',
-  '/admin/sermons',
-  '/admin/users',
-  '/pastor/care',
-  // Staff open these from the hub too (members have them in the sidebar).
-  '/members/calendar',
-  '/members/gallery',
-];
-export function isManageRoute(pathname: string) {
-  return MANAGE_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
-}
-
 export function isRouteActive(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(`${href}/`);

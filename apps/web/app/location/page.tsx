@@ -7,6 +7,7 @@ import { Reveal } from '../components/reveal';
 import { useContent } from '../components/content-provider';
 import { SundayStatus, useActivities } from '../components/activity-ui';
 import { describeSchedule, spotsLeft, type Activity } from '../lib/activities';
+import { campusLabel } from '../lib/campus';
 export default function Location() {
   const { content } = useContent();
   const { locations } = content.pages;
@@ -21,15 +22,17 @@ export default function Location() {
   const services = live.filter(
     (item) => item.kind === 'service' && item.locationId === active.id,
   );
+  /** One spaced action group per card: primary Join, secondary See dates. */
   const join = (item: Activity) => {
     const spots = spotsLeft(item, participations);
     return (
-      <>
+      <div className="activity-card-actions">
         {spots != null && (
           <small>{spots ? `${spots} places left` : 'Currently full'}</small>
         )}
         <Link
-          href={`/members?activity=${encodeURIComponent(item.id)}#activities`}
+          className="button"
+          href={`/members/calendar?activity=${encodeURIComponent(item.id)}#activities`}
         >
           {spots === 0
             ? 'View details'
@@ -37,8 +40,10 @@ export default function Location() {
               ? 'Join Group'
               : 'Join Study'}
         </Link>
-        <Link href={`/events/${item.slug}`}>See dates</Link>
-      </>
+        <Link className="button button-outline" href={`/events/${item.slug}`}>
+          See dates
+        </Link>
+      </div>
     );
   };
   return (
@@ -81,7 +86,7 @@ export default function Location() {
                     key={location.name}
                     onClick={() => setSelected(index)}
                   >
-                    {location.name.split(' — ')[1]}
+                    {campusLabel(location.name)}
                   </button>
                 ))}
               </div>

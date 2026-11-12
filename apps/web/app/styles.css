@@ -2953,6 +2953,7 @@ dd {
 }
 .profile-summary {
   overflow: hidden;
+  align-self: start; /* no empty dark block when the details column is taller */
   border-radius: 1.5rem;
   background: var(--dark-section);
 }
@@ -2974,7 +2975,8 @@ dd {
   border-radius: 1rem;
   object-fit: cover;
 }
-.profile-summary h1 {
+.profile-summary h1,
+.profile-summary h2 {
   margin: 1.1rem 0 0;
   color: var(--on-dark);
   font-size: 1.65rem;
@@ -4936,19 +4938,6 @@ body:has(.auth-page) .auth-page {
 .giving-note h3 {
   font-size: 2rem;
 }
-.auth-page aside:after {
-  content: '';
-  display: flex;
-  width: 110px;
-  height: 6px;
-  border-radius: 99px;
-  background: linear-gradient(
-    90deg,
-    var(--gold) 0 30%,
-    color-mix(in srgb, var(--palette-maple) 40%, transparent) 30% 65%,
-    color-mix(in srgb, var(--palette-wine) 40%, transparent) 65%
-  );
-}
 .auth-verse-gallery {
   display: grid;
   margin-top: auto;
@@ -4959,15 +4948,20 @@ body:has(.auth-page) .auth-page {
 }
 .auth-verse-gallery > div {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.15rem;
+  margin: 1.5rem 0 0 -0.4rem;
 }
+/* Small dots with a larger tap area; the one indicator for the verses. */
 .auth-verse-gallery > div button {
+  box-sizing: content-box;
   width: 0.45rem;
   height: 0.45rem;
-  padding: 0;
+  padding: 0.4rem;
   border: 0;
   border-radius: 99px;
   background: color-mix(in srgb, var(--palette-cream) 30%, transparent);
+  background-clip: content-box;
+  cursor: pointer;
 }
 .auth-verse-gallery > div button.active {
   width: 1.6rem;
@@ -5698,15 +5692,25 @@ body:has(.auth-page) .auth-page {
     padding: 7rem 0 4rem;
   }
 }
-.connect-group-grid article > a,
-.study-grid article > a {
-  width: 100%;
+/* Group/study cards: one action group pinned to the card foot, so cards in a
+   row line up; primary Join plus secondary See dates. */
+.activity-card-actions {
   margin-top: auto;
-  padding: 0.65rem;
-  border-radius: 99px;
-  background: var(--gold);
-  color: var(--on-gold);
-  font-weight: 700;
+  padding-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.connect-group-grid .activity-card-actions small,
+.study-grid .activity-card-actions small {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-soft);
+}
+.activity-card-actions .button {
+  flex: 1 1 8rem;
+  justify-content: center;
   text-align: center;
 }
 

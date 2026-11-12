@@ -1,13 +1,6 @@
 /*
- * Workspace light palette trial (Member, Pastor and Admin shells only).
- * Matched to the gold in public/brand/logo.png. Scoped to light mode inside
- * .workspace, so the public website and dark mode are unchanged. Delete this
- * file (and its import in layout.tsx) to revert.
- *
- * Contrast (WCAG): charcoal on white 15.8, on page 14.6; secondary 6.4/5.9;
- * charcoal on gold button 8.5 (hover 7.0); active nav text 13.9; active bar
- * 4.7; dark-amber accents 7.1/6.6; control outlines 3.4/3.2. Gold is never
- * used as text on white (1.9).
+ * Workspace sidebar in light mode: a light sidebar instead of the dark band
+ * used elsewhere. No colour values here; colours come from theme.css.
  */
 
 /* Sidebar: light surface instead of the large dark panel. */
@@ -31,9 +24,9 @@
   color: var(--ink);
 }
 :root:not([data-theme='dark']) .workspace aside nav a[aria-current='page'] {
-  background: var(--ws-active);
+  background: var(--active-bg);
   color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--ws-active-bar);
+  box-shadow: inset 3px 0 0 var(--active-bar);
 }
 :root:not([data-theme='dark']) .workspace-user {
   border-top-color: var(--line);
@@ -46,22 +39,13 @@
   color: var(--ink-soft);
 }
 
-/* Primary actions: logo gold with a dark label, also on hover. */
-:root:not([data-theme='dark']) .workspace .button:hover {
-  background: var(--ws-gold-hover);
-  color: var(--on-gold);
-}
-:root:not([data-theme='dark']) .workspace .button-outline:hover {
-  background: var(--ws-highlight);
-}
-
 /* Restrained yellow highlights. */
 :root:not([data-theme='dark'])
   .workspace
   .pastor-calendar-grid
   button.selected {
-  border-color: var(--ws-active-bar);
-  background: var(--ws-highlight);
+  border-color: var(--active-bar);
+  background: var(--highlight);
 }
 
 /* Inline text links and form controls. */
@@ -72,7 +56,7 @@
 :root:not([data-theme='dark'])
   .workspace
   :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
-  border-color: var(--ws-control-line);
+  border-color: var(--control-line);
 }
 
 /* Visible keyboard focus everywhere in the workspace. */

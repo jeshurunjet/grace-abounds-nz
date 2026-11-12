@@ -267,8 +267,8 @@ p {
   transition: 0.2s;
 }
 .button:hover {
-  background: var(--maple);
-  color: var(--linen);
+  background: var(--gold-hover);
+  color: var(--on-gold);
   transform: translateY(-1px);
 }
 .button-outline {

@@ -33,6 +33,13 @@ describe('content schemas', () => {
         heroImages: ['//evil.example/x.jpg'],
       }).success,
     ).toBe(false);
+    // Hosts the site cannot display would break the public page.
+    expect(
+      pageSchemas.about.safeParse({
+        ...defaultPages.about,
+        image: 'https://example.com/photo.jpg',
+      }).success,
+    ).toBe(false);
     expect(
       pageSchemas.events.safeParse({
         hero: { ...defaultPages.events.hero, title: ' ' },

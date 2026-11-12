@@ -10,14 +10,18 @@ import { z } from 'zod';
 const text = (max: number) => z.string().trim().max(max);
 const required = (max: number, label: string) =>
   z.string().trim().min(1, `Enter ${label}.`).max(max);
-/** An image is a site path (/images/x.jpg) or an https URL. */
+/**
+ * Images the public site can display: a site path (/images/x.jpg) or an
+ * images.unsplash.com address. Uploaded images (S3 + CloudFront) are added
+ * in the uploads slice.
+ */
 const imageRef = z
   .string()
   .trim()
   .max(500)
   .regex(
-    /^(\/(?!\/)|https:\/\/)/,
-    'Use an https:// address or a site path starting with /.',
+    /^(\/images\/\S+|https:\/\/images\.unsplash\.com\/\S+)$/,
+    'Use a site image path starting with /images/ or an images.unsplash.com address.',
   );
 const optionalUrl = z
   .string()

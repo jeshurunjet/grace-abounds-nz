@@ -1,8 +1,9 @@
-import type {
-  PageContentMap,
-  PageKey,
-  PublicContentBundle,
-  SiteSettings,
+import {
+  pageKeys,
+  type PageContentMap,
+  type PageKey,
+  type PublicContentBundle,
+  type SiteSettings,
 } from '@grace-abounds/validation';
 import type { ContentState, SiteContent } from './content';
 
@@ -24,61 +25,160 @@ type HeroPage = keyof typeof heroRoutes;
 type Hero = PageContentMap['home']['hero'];
 const emptyHero: Hero = { eyebrow: '', title: '', accent: '', copy: '' };
 
-/** Published bundle → the component-side site and pages fields. */
+/**
+ * The component-side fields one published resource controls. Heroes are kept
+ * separate so a single page's introduction merges into `pages.heroes`.
+ */
+export type PublishedPatch = {
+  site: Partial<SiteContent>;
+  pages: Partial<Omit<LegacyPages, 'heroes'>>;
+  heroes: Partial<LegacyPages['heroes']>;
+};
+export type ContentResource = 'site' | PageKey;
+
+/** Shared settings → their component-side fields. */
+function siteToLegacy(s: SiteSettings): PublishedPatch {
+  return {
+    site: {
+      contactEmail: s.contact.email,
+      contactPhone: s.contact.phone,
+      contactAddress: s.contact.address,
+      footerAddress: s.footerAddress,
+      facebookUrl: s.social.facebook,
+      instagramUrl: s.social.instagram,
+      youtubeUrl: s.social.youtube,
+      authVerses: s.authVerses
+        .map((v) => `${v.text}|${v.reference}`)
+        .join('\n'),
+      givingAccount: s.giving.accountName,
+      givingBank: s.giving.bank,
+      givingNumber: s.giving.accountNumber,
+    },
+    pages: {},
+    heroes: {},
+  };
+}
+
+/** One page document → its component-side fields. */
+function pageToLegacy<K extends PageKey>(
+  key: K,
+  data: PageContentMap[K],
+): PublishedPatch {
+  const patch: PublishedPatch = { site: {}, pages: {}, heroes: {} };
+  if (key in heroRoutes)
+    patch.heroes[heroRoutes[key as HeroPage]] = (data as { hero: Hero }).hero;
+  if (key === 'home') {
+    const home = data as PageContentMap['home'];
+    patch.site = {
+      heroEyebrow: home.hero.eyebrow,
+      heroTitle: home.hero.title,
+      heroAccent: home.hero.accent,
+      heroCopy: home.hero.copy,
+      homeVerseText: home.verse.text,
+      homeVerseReference: home.verse.reference,
+    };
+    patch.pages = { heroImages: home.heroImages, gallery: home.gallery };
+  } else if (key === 'about') {
+    const about = data as PageContentMap['about'];
+    patch.site = { story: about.story };
+    patch.pages = {
+      aboutIntro: about.intro,
+      aboutImage: about.image,
+      aboutHeroImage: about.heroImage,
+      ministryYears: about.ministryYears,
+      officeHours: about.officeHours,
+      values: about.values.map((v) => [v.number, v.title, v.body]),
+    };
+  } else if (key === 'give') {
+    const give = data as PageContentMap['give'];
+    patch.site = {
+      givingVerseText: give.verse.text,
+      givingVerseReference: give.verse.reference,
+    };
+    patch.pages = {
+      givingImpact: give.impact.map((i) => [i.percent, i.title, i.body]),
+    };
+  }
+  return patch;
+}
+
+/** A server-confirmed resource (`{ data }` of a save or load) → its fields. */
+export function resourceToLegacy(
+  resource: ContentResource,
+  data: SiteSettings | PageContentMap[PageKey],
+): PublishedPatch {
+  return resource === 'site'
+    ? siteToLegacy(data as SiteSettings)
+    : pageToLegacy(resource, data as PageContentMap[PageKey]);
+}
+
+/** Applies a patch to component-side content without touching other fields. */
+export function mergePatch<T extends { site: SiteContent; pages: LegacyPages }>(
+  target: T,
+  patch: PublishedPatch,
+): T {
+  return {
+    ...target,
+    site: { ...target.site, ...patch.site },
+    pages: {
+      ...target.pages,
+      ...patch.pages,
+      heroes: { ...target.pages.heroes, ...patch.heroes },
+    } as LegacyPages,
+  };
+}
+
+const blankSite: SiteContent = {
+  heroEyebrow: '',
+  heroTitle: '',
+  heroAccent: '',
+  heroCopy: '',
+  story: '',
+  contactEmail: '',
+  contactPhone: '',
+  contactAddress: '',
+  footerAddress: '',
+  facebookUrl: '',
+  instagramUrl: '',
+  youtubeUrl: '',
+  homeVerseText: '',
+  homeVerseReference: '',
+  givingVerseText: '',
+  givingVerseReference: '',
+  authVerses: '',
+  givingAccount: '',
+  givingBank: '',
+  givingNumber: '',
+};
+
+/** Published bundle → the component-side site and pages fields (blank if none). */
 export function toLegacy(
   bundle: PublicContentBundle | null,
   base: LegacyPages,
 ): { site: SiteContent; pages: LegacyPages } {
-  const s = bundle?.site;
-  const p = bundle?.pages;
-  const site: SiteContent = {
-    heroEyebrow: p?.home.hero.eyebrow ?? '',
-    heroTitle: p?.home.hero.title ?? '',
-    heroAccent: p?.home.hero.accent ?? '',
-    heroCopy: p?.home.hero.copy ?? '',
-    homeVerseText: p?.home.verse.text ?? '',
-    homeVerseReference: p?.home.verse.reference ?? '',
-    story: p?.about.story ?? '',
-    contactEmail: s?.contact.email ?? '',
-    contactPhone: s?.contact.phone ?? '',
-    contactAddress: s?.contact.address ?? '',
-    footerAddress: s?.footerAddress ?? '',
-    facebookUrl: s?.social.facebook ?? '',
-    instagramUrl: s?.social.instagram ?? '',
-    youtubeUrl: s?.social.youtube ?? '',
-    authVerses: (s?.authVerses ?? [])
-      .map((v) => `${v.text}|${v.reference}`)
-      .join('\n'),
-    givingVerseText: p?.give.verse.text ?? '',
-    givingVerseReference: p?.give.verse.reference ?? '',
-    givingAccount: s?.giving.accountName ?? '',
-    givingBank: s?.giving.bank ?? '',
-    givingNumber: s?.giving.accountNumber ?? '',
+  let result = {
+    site: { ...blankSite },
+    pages: {
+      ...base,
+      heroImages: [],
+      gallery: [],
+      aboutIntro: '',
+      aboutImage: '',
+      aboutHeroImage: '',
+      ministryYears: '',
+      officeHours: '',
+      values: [],
+      givingImpact: [],
+      heroes: Object.fromEntries(
+        Object.values(heroRoutes).map((route) => [route, emptyHero]),
+      ) as LegacyPages['heroes'],
+    } as LegacyPages,
   };
-  const heroes = Object.fromEntries(
-    (Object.keys(heroRoutes) as HeroPage[]).map((key) => [
-      heroRoutes[key],
-      p?.[key].hero ?? emptyHero,
-    ]),
-  ) as LegacyPages['heroes'];
-  const pages: LegacyPages = {
-    ...base,
-    heroImages: p?.home.heroImages ?? [],
-    gallery: p?.home.gallery ?? [],
-    aboutIntro: p?.about.intro ?? '',
-    aboutImage: p?.about.image ?? '',
-    aboutHeroImage: p?.about.heroImage ?? '',
-    ministryYears: p?.about.ministryYears ?? '',
-    officeHours: p?.about.officeHours ?? '',
-    values: (p?.about.values ?? []).map((v) => [v.number, v.title, v.body]),
-    givingImpact: (p?.give.impact ?? []).map((i) => [
-      i.percent,
-      i.title,
-      i.body,
-    ]),
-    heroes,
-  };
-  return { site, pages };
+  if (!bundle) return result;
+  result = mergePatch(result, siteToLegacy(bundle.site));
+  for (const key of pageKeys)
+    result = mergePatch(result, pageToLegacy(key, bundle.pages[key]));
+  return result;
 }
 
 const verses = (text: string) =>

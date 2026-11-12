@@ -81,6 +81,66 @@ describe('live website content', () => {
     expect(context.content.site.heroTitle).toBe('');
     expect(context.content.site.givingNumber).toBe('');
   });
+  it('takes newer published content from the server without losing browser-only collections', async () => {
+    state.role = 'pastor';
+    const view = renderProvider();
+    await waitFor(() => expect(context.ready).toBe(true));
+    await act(() =>
+      context.update((current) => ({
+        ...current,
+        pages: { ...current.pages, locations: [] },
+      })),
+    );
+    // Another browser publishes; router.refresh() delivers bundle B.
+    const bundleB: PublicContentBundle = {
+      site: {
+        ...defaultSiteSettings,
+        giving: { ...defaultSiteSettings.giving, bank: 'Bank B' },
+      },
+      pages: {
+        ...defaultPages,
+        home: {
+          ...defaultPages.home,
+          hero: { ...defaultPages.home.hero, title: 'Title B' },
+        },
+        events: {
+          hero: { ...defaultPages.events.hero, title: 'Events B' },
+        },
+      },
+    };
+    view.rerender(
+      <ContentProvider initialContent={bundleB}>
+        <Probe />
+      </ContentProvider>,
+    );
+    await waitFor(() => expect(context.content.site.heroTitle).toBe('Title B'));
+    expect(context.content.site.givingBank).toBe('Bank B');
+    expect(context.content.pages.heroes['/events'].title).toBe('Events B');
+    expect(context.content.pages.locations).toEqual([]);
+  });
+  it('recovers when content becomes available, and keeps it if a later refresh fails', async () => {
+    const view = renderProvider(null);
+    await waitFor(() => expect(context.ready).toBe(true));
+    expect(context.contentUnavailable).toBe(true);
+    view.rerender(
+      <ContentProvider initialContent={published}>
+        <Probe />
+      </ContentProvider>,
+    );
+    await waitFor(() => expect(context.content.site.heroTitle).toBe('Grace'));
+    expect(context.contentUnavailable).toBe(false);
+    expect(context.content.site.givingBank).toBe(
+      defaultSiteSettings.giving.bank,
+    );
+    view.rerender(
+      <ContentProvider initialContent={null}>
+        <Probe />
+      </ContentProvider>,
+    );
+    await act(async () => {});
+    expect(context.content.site.heroTitle).toBe('Grace');
+    expect(context.contentUnavailable).toBe(false);
+  });
   it('ignores member attempts to alter public content or activities', async () => {
     state.role = 'member';
     renderProvider();

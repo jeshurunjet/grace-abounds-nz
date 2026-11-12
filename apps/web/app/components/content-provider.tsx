@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,9 +14,12 @@ import {
   publishStatuses,
   seedContent,
   type ContentState,
-  type SiteContent,
 } from '../lib/content';
-import { toLegacy } from '../lib/content-adapter';
+import {
+  mergePatch,
+  toLegacy,
+  type PublishedPatch,
+} from '../lib/content-adapter';
 
 // v4: activities replace events, groups, studies and RSVPs.
 const STORAGE_KEY = 'grace-abounds-content-v4';
@@ -43,11 +47,11 @@ type ContentContextValue = {
   retrySave: () => void;
   /** True when published content could not be loaded from the server. */
   contentUnavailable: boolean;
-  /** Shows content the server has just confirmed as published. */
-  applyPublished: (next: {
-    site?: SiteContent;
-    pages?: Partial<ContentState['pages']>;
-  }) => void;
+  /**
+   * Shows one resource the server has just confirmed as published (the
+   * canonical data from its save response). Nothing else changes.
+   */
+  applyPublished: (patch: PublishedPatch) => void;
 };
 /**
  * Published settings and page sections come from the server. Only these
@@ -55,6 +59,8 @@ type ContentContextValue = {
  * to the database (Phase 2 slice 2).
  */
 const LOCAL_PAGE_FIELDS = ['locations', 'steps', 'resources'] as const;
+const localPages = (pages: ContentState['pages']) =>
+  Object.fromEntries(LOCAL_PAGE_FIELDS.map((key) => [key, pages[key]]));
 function localPart(content: ContentState) {
   const { site: _site, pages, ...rest } = content;
   void _site;
@@ -89,9 +95,17 @@ export function ContentProvider({
   children: ReactNode;
   initialContent: PublicContentBundle | null;
 }) {
-  const [published] = useState(() =>
-    toLegacy(initialContent, seedContent.pages),
+  // The root layout re-renders with a fresh bundle on router.refresh() (see
+  // ContentFreshness); key on its value so identical bundles change nothing.
+  const bundleKey = JSON.stringify(initialContent);
+  const published = useMemo(
+    () => toLegacy(JSON.parse(bundleKey), seedContent.pages),
+    [bundleKey],
   );
+  const loaded = useRef(false);
+  // Once real content has been shown, a failed refresh keeps showing it
+  // rather than blanking the page.
+  const [hasPublished, setHasPublished] = useState(initialContent !== null);
   const [content, setContent] = useState<ContentState>(() => ({
     ...seedContent,
     ...published,
@@ -102,6 +116,19 @@ export function ContentProvider({
   const { data } = useSession();
   const role = data?.user?.role;
   useEffect(() => {
+    if (loaded.current) {
+      if (bundleKey === 'null') return;
+      setHasPublished(true);
+      // A newer published bundle: replace only the server-owned site/page
+      // fields; browser-only collections and other local data stay.
+      setContent((current) => ({
+        ...current,
+        site: published.site,
+        pages: { ...published.pages, ...localPages(current.pages) },
+      }));
+      return;
+    }
+    loaded.current = true;
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
       // Published site and pages always come from the server; browser storage
@@ -129,7 +156,7 @@ export function ContentProvider({
       /* Keep the published content when a browser's saved data is invalid. */
     }
     setReady(true);
-  }, [published]);
+  }, [published, bundleKey]);
   useEffect(() => {
     if (!ready) return;
     try {
@@ -145,13 +172,9 @@ export function ContentProvider({
       ready,
       storageError,
       retrySave: () => setSaveAttempt((current) => current + 1),
-      contentUnavailable: initialContent === null,
-      applyPublished(next) {
-        setContent((current) => ({
-          ...current,
-          ...(next.site && { site: next.site }),
-          ...(next.pages && { pages: { ...current.pages, ...next.pages } }),
-        }));
+      contentUnavailable: initialContent === null && !hasPublished,
+      applyPublished(patch) {
+        setContent((current) => mergePatch(current, patch));
       },
       async update(recipe) {
         if (!ready) return false;
@@ -179,7 +202,7 @@ export function ContentProvider({
         }
       },
     }),
-    [content, ready, storageError, role, initialContent],
+    [content, ready, storageError, role, initialContent, hasPublished],
   );
   return (
     <ContentContext.Provider value={value}>{children}</ContentContext.Provider>

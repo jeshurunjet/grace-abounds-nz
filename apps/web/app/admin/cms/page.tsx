@@ -15,7 +15,9 @@ import { useToast } from '../../components/toast';
 import { api, ApiError, errorMessage } from '../../lib/api-client';
 import type { ContentState, SiteContent } from '../../lib/content';
 import {
+  mergePatch,
   pageFromLegacy,
+  resourceToLegacy,
   siteFromLegacy,
   toLegacy,
 } from '../../lib/content-adapter';
@@ -511,23 +513,13 @@ export default function CmsPage() {
     setSaveError('');
     setFieldErrors([]);
     const published: string[] = [];
-    // Browser-kept collections are not part of what the server publishes.
-    const {
-      locations: _l,
-      steps: _s,
-      resources: _r,
-      ...publishedPages
-    } = draft.pages;
-    void _l;
-    void _s;
-    void _r;
     try {
       for (const resource of pending) {
         const body =
           resource === 'site'
             ? siteFromLegacy(draft.site)
             : pageFromLegacy(resource, draft.site, draft.pages);
-        const result = await api(
+        const result = await api<SiteSettings | PageContentMap[PageKey]>(
           resource === 'site' ? '/staff/site' : `/staff/pages/${resource}`,
           {
             method: 'PATCH',
@@ -535,6 +527,11 @@ export default function CmsPage() {
             body: JSON.stringify(body),
           },
         );
+        // Only this confirmed resource becomes published, using the server's
+        // canonical (trimmed, validated) data. Other drafts stay unsaved.
+        const patch = resourceToLegacy(resource, result.data);
+        applyPublished(patch);
+        setDraft((current) => current && mergePatch(current, patch));
         setVersions((current) => ({ ...current, [resource]: result.version }));
         setDirty((current) => {
           const next = new Set(current);
@@ -543,11 +540,8 @@ export default function CmsPage() {
         });
         published.push(resourceLabel(resource));
       }
-      applyPublished({ site: draft.site, pages: publishedPages });
       toast.push(`${published.join(' and ')} published.`, 'success');
     } catch (failure) {
-      if (published.length)
-        applyPublished({ site: draft.site, pages: publishedPages });
       if (failure instanceof ApiError && failure.code === 'VERSION_CONFLICT') {
         setConflict(true);
         setSaveError(

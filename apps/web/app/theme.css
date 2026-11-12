@@ -105,7 +105,7 @@
   --gold-light: var(--palette-gold-light); /* gold on dark backgrounds */
   --gold-hover: var(--palette-logo-gold-hover);
   --on-gold: var(--palette-charcoal-new); /* text on gold */
-  --active-bg: var(--palette-logo-gold-pale); /* current nav item */
+  --active-bg: var(--palette-grey-50); /* current nav item (neutral) */
   --active-bar: var(--palette-logo-gold-dark);
   --highlight: var(--palette-logo-gold-tint); /* selected / tinted areas */
   --maple: var(--palette-amber-dark); /* accent text: eyebrows, labels */
@@ -146,7 +146,7 @@
 :root[data-theme='dark'] {
   --gold: var(--palette-dark-gold);
   --gold-hover: var(--palette-dark-gold-hover);
-  --active-bg: color-mix(in srgb, var(--palette-logo-gold) 16%, transparent);
+  --active-bg: color-mix(in srgb, var(--palette-white) 7%, transparent);
   --active-bar: var(--palette-dark-gold);
   --surface: var(--palette-dark-surface);
   --surface-raised: var(--palette-dark-raised);

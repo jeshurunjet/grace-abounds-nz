@@ -1,11 +1,12 @@
 /*
- * Workspace sidebar: same background as the page (light and dark mode),
- * separated by a hairline. No colour values here; colours come from theme.css.
+ * Workspace sidebar (light and dark mode): card surface with a hairline;
+ * the current item has a neutral highlight and a dark-gold edge. No colour
+ * values here; colours come from theme.css.
  */
 
-/* Sidebar matches the page background. */
+/* Sidebar: card surface, separated from the page by a hairline. */
 .workspace > aside {
-  background: var(--surface);
+  background: var(--surface-raised);
   color: var(--ink);
   border-right: 1px solid var(--line);
 }

@@ -8,7 +8,6 @@ export function workspaceLinks(): WorkspaceLink[] {
   return [
     { href: '/', label: 'Main website', icon: '⌂' },
     { href: '/members', label: 'Home', icon: '◈' },
-    { href: '/members/messages', label: 'Messages', icon: '✉' },
     { href: '/members/calendar', label: 'Calendar', icon: '□' },
     { href: '/members/gallery', label: 'Gallery', icon: '▧' },
     { href: '/settings', label: 'Settings', icon: '⚙' },

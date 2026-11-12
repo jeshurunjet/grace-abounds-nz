@@ -14,7 +14,6 @@ vi.mock('next-auth/react', () => ({
 vi.mock('./notification-menu', () => ({ NotificationMenu: () => null }));
 const links = [
   { href: '/members', label: 'Home' },
-  { href: '/members/messages', label: 'Messages' },
   { href: '/admin/events', label: 'Activities & calendar' },
 ];
 beforeEach(() => {
@@ -80,10 +79,10 @@ describe('workspace navigation trial', () => {
     expect(
       screen.getByRole('button', { name: 'Collapse sidebar' }),
     ).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('link', { name: 'Open messages' })).toHaveAttribute(
-      'href',
-      '/members/messages',
-    );
+    // Messages is a future feature: no floating shortcut (Future F2).
+    expect(
+      screen.queryByRole('link', { name: 'Open messages' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Messages' }),
     ).not.toBeInTheDocument();
@@ -112,7 +111,7 @@ describe('workspace navigation trial', () => {
       screen.getByRole('button', { name: 'Collapse sidebar' }),
     ).toBeInTheDocument();
   });
-  it('does not show a redundant floating shortcut on Messages', () => {
+  it('shows no Messages shortcut on the messages route either', () => {
     state.path = '/members/messages';
     render(
       <WorkspaceShell kind="Members" links={links}>

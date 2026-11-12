@@ -17,6 +17,8 @@ describe('workspace navigation by role', () => {
         ]),
       );
       expect(labels).not.toContain('Manage');
+      // Messaging is a future feature (Future F2): no sidebar entry.
+      expect(labels).not.toContain('Messages');
     }
   });
 

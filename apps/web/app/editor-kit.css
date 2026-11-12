@@ -809,3 +809,18 @@
     border-left: 0;
   }
 }
+
+/* Messages route while messaging is a future feature */
+.messages-unavailable {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 40rem;
+}
+.messages-unavailable > svg {
+  flex: none;
+  color: var(--maple);
+}
+.messages-unavailable h2 {
+  margin: 0 0 0.5rem;
+}

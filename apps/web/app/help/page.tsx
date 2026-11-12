@@ -22,13 +22,10 @@ export default function HelpPage() {
           <a className="button" href={`mailto:${content.site.contactEmail}`}>
             Email the office
           </a>
-          <Link className="button button-outline" href="/members/messages">
-            Open messages
-          </Link>
         </div>
         <p className="form-note">
-          Messages in this preview stay in this browser. Use email or phone to
-          contact the office directly.
+          Private messaging in the app is planned for a later update. For now,
+          please use email or phone.
         </p>
       </section>
       <div className="reference-card-grid help-grid">

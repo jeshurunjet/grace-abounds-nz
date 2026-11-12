@@ -2,7 +2,6 @@
 import {
   Home,
   Globe,
-  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
   FolderOpen,
@@ -231,65 +230,53 @@ export function WorkspaceShell({
           </button>
         </div>
         <nav id="workspace-navigation" aria-label="Workspace navigation">
-          {links
-            .filter((link) => link.href !== '/members/messages')
-            .map((link) => {
-              const href = link.label === 'Home' ? homeHref : link.href;
-              const active =
-                link.label === 'Home'
-                  ? ['/members', '/admin', '/pastor'].includes(pathname)
-                  : isRouteActive(pathname, link.href);
-              const Icon =
-                (
-                  {
-                    'Main website': Globe,
-                    Home,
-                    Messages: MessageCircle,
-                    Gallery: FolderOpen,
-                    Calendar: CalendarDays,
-                    'Website content': FilePenLine,
-                    'Manage events': CalendarDays,
-                    'Activities & calendar': CalendarDays,
-                    'Manage sermons': Video,
-                    'Members & roles': Users,
-                    'Member activity': Users,
-                    'Pastoral care': Heart,
-                    Settings,
-                    Help: CircleHelp,
-                  } as Record<string, typeof Home>
-                )[link.label] ?? Home;
-              return (
-                <Fragment key={link.href}>
-                  <Link
-                    href={href}
-                    aria-label={link.label}
-                    title={link.label}
-                    key={link.href}
-                    onClick={() => setOpen(false)}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    <Icon size={19} aria-hidden="true" />
-                    <span className="workspace-link-label">{link.label}</span>
-                  </Link>
-                </Fragment>
-              );
-            })}
+          {links.map((link) => {
+            const href = link.label === 'Home' ? homeHref : link.href;
+            const active =
+              link.label === 'Home'
+                ? ['/members', '/admin', '/pastor'].includes(pathname)
+                : isRouteActive(pathname, link.href);
+            const Icon =
+              (
+                {
+                  'Main website': Globe,
+                  Home,
+                  Gallery: FolderOpen,
+                  Calendar: CalendarDays,
+                  'Website content': FilePenLine,
+                  'Manage events': CalendarDays,
+                  'Activities & calendar': CalendarDays,
+                  'Manage sermons': Video,
+                  'Members & roles': Users,
+                  'Member activity': Users,
+                  'Pastoral care': Heart,
+                  Settings,
+                  Help: CircleHelp,
+                } as Record<string, typeof Home>
+              )[link.label] ?? Home;
+            return (
+              <Fragment key={link.href}>
+                <Link
+                  href={href}
+                  aria-label={link.label}
+                  title={link.label}
+                  key={link.href}
+                  onClick={() => setOpen(false)}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <Icon size={19} aria-hidden="true" />
+                  <span className="workspace-link-label">{link.label}</span>
+                </Link>
+              </Fragment>
+            );
+          })}
         </nav>
       </aside>
       <main inert={mobile && open} className="workspace-content">
         {children}
       </main>
-      {pathname !== '/members/messages' && (
-        <Link
-          href="/members/messages"
-          className="workspace-message-fab"
-          aria-label="Open messages"
-          title="Messages"
-          inert={mobile && open}
-        >
-          <MessageCircle size={23} aria-hidden="true" />
-        </Link>
-      )}
+      {/* Messages is a future feature (Future F2): no shortcut until the
+          real service exists. */}
     </div>
   );
 }

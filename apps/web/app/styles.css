@@ -6463,6 +6463,18 @@ button:disabled {
 .profile-summary-copy > .button {
   margin-top: 1rem;
 }
+/* Outline buttons on the dark profile card need light text, not the default
+   dark outline colour (which only showed on hover). */
+.profile-summary-copy > .button-outline {
+  color: var(--on-dark);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--palette-white) 55%, transparent);
+}
+.profile-summary-copy > .button-outline:hover {
+  background: var(--gold);
+  color: var(--on-gold);
+  box-shadow: none;
+}
 .member-filters {
   display: flex;
   align-items: flex-end;

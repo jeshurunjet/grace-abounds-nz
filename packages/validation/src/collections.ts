@@ -16,10 +16,52 @@ const optionalImage = z
   .trim()
   .max(500)
   .refine((value) => value === '' || isImageRef(value), IMAGE_REF_MESSAGE);
+/*
+ * One link classifier, used by the schemas, the Pastor publication gate and
+ * every place the website renders a stored link, so they always agree on
+ * where a link really goes. Browsers rewrite backslashes and drop tabs and
+ * newlines, so "/\host/x" would leave the site; such ambiguous forms are
+ * refused rather than normalised differently at each layer. A site path
+ * must resolve, with a standard URL parser, to the site's own origin.
+ */
+const SITE_ORIGIN = 'https://site.invalid';
+export type LinkClass = { kind: 'internal' | 'external'; href: string };
+export function classifyLink(value: string): LinkClass | null {
+  // Backslashes, whitespace and control characters are never valid here.
+  if (
+    !value ||
+    /[\\\s]/.test(value) ||
+    [...value].some((char) => char.charCodeAt(0) < 32 || char === '\x7f')
+  )
+    return null;
+  let url: URL;
+  if (value.startsWith('https://')) {
+    try {
+      url = new URL(value);
+    } catch {
+      return null;
+    }
+    if (
+      url.protocol !== 'https:' ||
+      !/^[a-z0-9.-]+$/.test(url.hostname) ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return { kind: 'external', href: value };
+  }
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  try {
+    url = new URL(value, SITE_ORIGIN);
+  } catch {
+    return null;
+  }
+  return url.origin === SITE_ORIGIN ? { kind: 'internal', href: value } : null;
+}
 /** A link: https:// address or a site path such as /next-steps. */
-export const isLinkRef = (value: string) =>
-  /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?(?:[/?#]\S*)?$/.test(value) ||
-  /^\/(?!\/)\S*$/.test(value);
+export const isLinkRef = (value: string) => classifyLink(value) !== null;
+/** The link to render, or undefined when it is not a safe destination. */
+export const safeLinkHref = (value: string) => classifyLink(value)?.href;
 const optionalLink = z
   .string()
   .trim()
@@ -53,7 +95,8 @@ export const isVideoLink = (value: string) =>
  *   who opens it first. Admin saves it as a draft for the Pastor.
  * Obvious video links are refused for everyone (use Sermons & videos).
  */
-export const isOutsideLink = (value: string) => value.startsWith('https://');
+export const isOutsideLink = (value: string) =>
+  classifyLink(value)?.kind === 'external';
 export const PASTOR_LINK_MESSAGE =
   'Only the Pastor can publish a link to another website. Save it as a draft and ask the Pastor to check and publish it.';
 export const VIDEO_LINK_MESSAGE =

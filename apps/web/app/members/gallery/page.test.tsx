@@ -177,6 +177,33 @@ describe('Gallery file manager', () => {
     expect(screen.getByText('3 items')).toBeInTheDocument();
   });
 
+  it('a stored link a browser would send off-site is shown as text, not a link', async () => {
+    library = {
+      ...library,
+      resources: [
+        {
+          ...welcome,
+          title: 'Sneaky link',
+          url: '/\\video.example/watch',
+          href: '/\\video.example/watch',
+        },
+        {
+          ...welcome,
+          id: 'r3',
+          title: 'Next steps',
+          url: '/next-steps',
+          href: '/next-steps',
+        },
+      ],
+    };
+    render(<GalleryPage />);
+    expect(await screen.findByText('Sneaky link')).toBeInTheDocument();
+    expect(screen.getByText('Sneaky link').closest('a')).toBeNull();
+    const ok = screen.getByRole('link', { name: 'Next steps' });
+    expect(ok).toHaveAttribute('href', '/next-steps');
+    expect(ok).not.toHaveAttribute('target');
+  });
+
   it('Videos & sermons is always there: approved recordings, or a helpful empty state', async () => {
     const view = render(<GalleryPage />);
     const nav = await screen.findByRole('navigation', {

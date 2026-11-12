@@ -34,7 +34,11 @@ import {
   Video,
   type LucideIcon,
 } from 'lucide-react';
-import type { StaffSermon } from '@grace-abounds/validation';
+import {
+  classifyLink,
+  safeLinkHref,
+  type StaffSermon,
+} from '@grace-abounds/validation';
 import { MemberShell } from '../../components/member-shell';
 import { useToast } from '../../components/toast';
 import { Badge, type BadgeTone } from '../../components/editor-kit/parts';
@@ -117,11 +121,9 @@ const resourceBlank = {
   status: 'draft',
 };
 const folderBlank = { name: '', parentId: null };
-const safeHref = (url: string) =>
-  url.startsWith('https://') || (url.startsWith('/') && !url.startsWith('//'))
-    ? url
-    : undefined;
-const isExternal = (href: string) => href.startsWith('https://');
+// Stored links are classified once, the same way the server does; anything
+// ambiguous (e.g. "/\host") is shown as plain text, never as a link.
+const isExternal = (href: string) => classifyLink(href)?.kind === 'external';
 
 function iconFor(item: FileItem): LucideIcon {
   const type = `${item.type} ${item.href}`.toLowerCase();
@@ -899,7 +901,7 @@ export default function GalleryPage() {
                   }),
                 )}
                 {shownFiles.map((file) => {
-                  const href = safeHref(file.href);
+                  const href = safeLinkHref(file.href);
                   return itemRow({
                     key: file.id,
                     icon: iconFor(file),

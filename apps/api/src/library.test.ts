@@ -161,6 +161,71 @@ describe.skipIf(!dbTestsEnabled)(
       expect(await library(member)).toEqual([]);
     });
 
+    it('a link a browser would send off-site is refused for everyone, not treated as a site path', async () => {
+      const [admin, pastor, member] = [
+        await as('ADMIN'),
+        await as('PASTOR'),
+        await as('MEMBER'),
+      ];
+      for (const who of [admin, pastor])
+        for (const url of [
+          '/\\video.example/watch',
+          '/\\\\video.example',
+          '//video.example',
+        ])
+          for (const status of ['published', 'draft']) {
+            const response = await call(
+              'POST',
+              '/v1/staff/resources',
+              who,
+              undefined,
+              {
+                ...resource,
+                url,
+                status,
+              },
+            );
+            expect(response.statusCode, `${url} ${status}`).toBe(422);
+            expect(response.json().error.fieldErrors.url).toBeTruthy();
+          }
+      expect(await prisma.resource.count()).toBe(0);
+      expect(await library(member)).toEqual([]);
+      const step = await call(
+        'POST',
+        '/v1/staff/next-steps',
+        admin,
+        undefined,
+        {
+          title: 'Serve',
+          subtitle: '',
+          heading: '',
+          body: '',
+          icon: '',
+          cta: { kind: 'link', label: 'Go', target: '/\\video.example/watch' },
+          path: [],
+          status: 'published',
+        },
+      );
+      expect(step.statusCode).toBe(422);
+      // Normal links keep working.
+      expect(
+        (
+          await call('POST', '/v1/staff/resources', admin, undefined, {
+            ...resource,
+            url: '/next-steps',
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(
+        (
+          await call('POST', '/v1/staff/resources', pastor, undefined, {
+            ...resource,
+            url: 'https://example.org/files/notes.pdf',
+          })
+        ).statusCode,
+      ).toBe(201);
+    });
+
     it('the Pastor publishes an outside link; Admin may then edit its text but not swap the link', async () => {
       const [admin, pastor, member] = [
         await as('ADMIN'),

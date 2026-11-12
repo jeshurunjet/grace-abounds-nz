@@ -5,6 +5,7 @@ import {
   type PublicCollections,
   type PublicContentBundle,
   type PublicNextStep,
+  safeLinkHref,
   type SiteSettings,
 } from '@grace-abounds/validation';
 import type { ContentState, Sermon, SiteContent, TeamMember } from './content';
@@ -162,7 +163,8 @@ export function nextStepHref(step: Pick<PublicNextStep, 'title' | 'cta'>) {
     return target
       ? `/events/${encodeURIComponent(target)}`
       : '/members/calendar';
-  if (kind === 'link') return target || '/next-steps';
+  // Only a link the shared classifier accepts is followed.
+  if (kind === 'link') return safeLinkHref(target) ?? '/next-steps';
   return `/members?join=${encodeURIComponent(target || step.title)}`;
 }
 

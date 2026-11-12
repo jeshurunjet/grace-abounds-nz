@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   Archive,
   ArrowLeft,
@@ -113,6 +113,16 @@ export default function SermonsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  // The Gallery links here as /admin/sermons?sermon=<id>: open that one.
+  const linked = useRef(false);
+  useEffect(() => {
+    if (!rows || linked.current) return;
+    linked.current = true;
+    const id = new URLSearchParams(window.location.search).get('sermon');
+    const row = id ? rows.find((item) => item.id === id) : undefined;
+    if (row) open(row);
+    // A one-time deep link; later list reloads never reopen it.
+  }, [rows]);
 
   const current = panel?.id
     ? rows?.find((row) => row.id === panel.id)

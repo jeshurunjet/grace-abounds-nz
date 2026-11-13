@@ -20,7 +20,9 @@ import {
   requireVersion,
   versionConflict,
 } from '../lib/errors.js';
-import { requireRole } from '../lib/identity.js';
+import { requireRole, type Actor } from '../lib/identity.js';
+import { CONTENT_CHANGED, recordContentChange } from '../lib/content-change.js';
+import { parseRestored } from '../lib/restore.js';
 import { publicCollections } from './collections.js';
 
 const unavailable = () =>
@@ -95,6 +97,21 @@ export function registerContentRoutes(app: FastifyInstance) {
     };
   });
 
+  /**
+   * A cheap freshness check for open browsers: the newest content-change
+   * event. It changes whenever published content may have changed, so a
+   * page only refetches the full bundle when needed. It carries no content.
+   */
+  app.get('/v1/public/content/stamp', async (_request, reply) => {
+    const last = await prisma.outboxEvent.findFirst({
+      where: { topic: CONTENT_CHANGED },
+      orderBy: { id: 'desc' },
+      select: { id: true },
+    });
+    reply.header('cache-control', 'no-store');
+    return { data: { stamp: String(last?.id ?? 0) } };
+  });
+
   app.get('/v1/public/site', async (_request, reply) => {
     const site = await prisma.siteSettings.findUnique({
       where: { id: 'site' },
@@ -140,43 +157,13 @@ export function registerContentRoutes(app: FastifyInstance) {
   app.patch('/v1/staff/site', async (request, reply) => {
     const actor = requireStaff(request);
     const expected = requireVersion(request.headers['if-match']);
-    const data = parse(siteSettingsSchema, request.body ?? {});
-    const saved = await prisma.$transaction(async (tx) => {
-      const result = await tx.siteSettings.updateMany({
-        where: { id: 'site', version: expected },
-        data: {
-          data: json(data),
-          version: { increment: 1 },
-          updatedById: actor.id,
-        },
-      });
-      if (result.count === 0) {
-        if (!(await tx.siteSettings.findUnique({ where: { id: 'site' } })))
-          throw unavailable();
-        throw versionConflict();
-      }
-      const version = expected + 1;
-      await tx.contentRevision.create({
-        data: {
-          entityType: 'site',
-          entityKey: 'site',
-          version,
-          data: json(data),
-          actorId: actor.id,
-        },
-      });
-      await recordAudit(tx, {
-        actorId: actor.id,
-        action: 'content.site_published',
-        entityType: 'SiteSettings',
-        entityId: 'site',
-        requestId: request.id,
-        metadata: { version },
-      });
-      return { version };
-    });
+    const saved = await saveSite(
+      { expected, requestId: request.id },
+      actor,
+      () => request.body ?? {},
+    );
     withVersion(reply, saved.version);
-    return { data, version: saved.version };
+    return saved;
   });
 
   app.get<{ Params: { pageKey: string } }>(
@@ -202,51 +189,144 @@ export function registerContentRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const actor = requireStaff(request);
       if (!isPageKey(request.params.pageKey)) throw notFound('Page');
-      const key: PageKey = request.params.pageKey;
       const expected = requireVersion(request.headers['if-match']);
-      const schema: ZodType<unknown> = pageSchemas[key];
-      const data = parse(schema, request.body ?? {});
-      const saved = await prisma.$transaction(async (tx) => {
-        const current = await tx.pageContent.findUnique({ where: { key } });
-        if (!current) throw unavailable();
-        if (current.version !== expected) throw versionConflict();
-        const changed = changedHeroFields(current.data, data);
-        if (changed.length) throw fixedHeading(changed);
-        const result = await tx.pageContent.updateMany({
-          where: { key, version: expected },
-          data: {
-            data: json(data),
-            version: { increment: 1 },
-            updatedById: actor.id,
-          },
-        });
-        if (result.count === 0) {
-          if (!(await tx.pageContent.findUnique({ where: { key } })))
-            throw unavailable();
-          throw versionConflict();
-        }
-        const version = expected + 1;
-        await tx.contentRevision.create({
-          data: {
-            entityType: 'page',
-            entityKey: key,
-            version,
-            data: json(data),
-            actorId: actor.id,
-          },
-        });
-        await recordAudit(tx, {
-          actorId: actor.id,
-          action: 'content.page_published',
-          entityType: 'PageContent',
-          entityId: key,
-          requestId: request.id,
-          metadata: { version },
-        });
-        return { version };
-      });
+      const saved = await savePage(
+        { key: request.params.pageKey, expected, requestId: request.id },
+        actor,
+        () => request.body ?? {},
+      );
       withVersion(reply, saved.version);
-      return { data, version: saved.version };
+      return saved;
     },
   );
+}
+
+type Restored = { id: string; version: number };
+
+/**
+ * Saves the shared site settings at the version the editor saw (saving
+ * publishes) and records the revision, audit and content-change events in
+ * the same transaction. A restore passes the revision it came from.
+ */
+export async function saveSite(
+  target: { expected: number; requestId: string },
+  actor: Actor,
+  input: (current: unknown) => unknown,
+  restoredFrom?: Restored,
+) {
+  const { expected } = target;
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.siteSettings.findUnique({ where: { id: 'site' } });
+    if (!current) throw unavailable();
+    if (current.version !== expected) throw versionConflict();
+    const raw = input(current.data);
+    const data = restoredFrom
+      ? parseRestored(siteSettingsSchema, raw)
+      : parse(siteSettingsSchema, raw);
+    const result = await tx.siteSettings.updateMany({
+      where: { id: 'site', version: expected },
+      data: {
+        data: json(data),
+        version: { increment: 1 },
+        updatedById: actor.id,
+      },
+    });
+    if (result.count === 0) throw versionConflict();
+    const version = expected + 1;
+    await tx.contentRevision.create({
+      data: {
+        entityType: 'site',
+        entityKey: 'site',
+        version,
+        data: json(data),
+        actorId: actor.id,
+        restoredFromId: restoredFrom?.id ?? null,
+      },
+    });
+    await recordAudit(tx, {
+      actorId: actor.id,
+      action: restoredFrom
+        ? 'content.site_version_restored'
+        : 'content.site_published',
+      entityType: 'SiteSettings',
+      entityId: 'site',
+      requestId: target.requestId,
+      metadata: {
+        version,
+        ...(restoredFrom && { restoredFromVersion: restoredFrom.version }),
+      },
+    });
+    await recordContentChange(tx, 'site', 'site', version);
+    return { data, version };
+  });
+}
+
+/**
+ * Saves one page at the version the editor saw. Page headings are fixed:
+ * a save that changes them is refused, and a restore keeps today's heading
+ * whatever the old version held.
+ */
+export async function savePage(
+  target: { key: PageKey; expected: number; requestId: string },
+  actor: Actor,
+  input: (current: unknown) => unknown,
+  restoredFrom?: Restored,
+) {
+  const { key, expected } = target;
+  const schema: ZodType<unknown> = pageSchemas[key];
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.pageContent.findUnique({ where: { key } });
+    if (!current) throw unavailable();
+    if (current.version !== expected) throw versionConflict();
+    const raw = input(current.data);
+    const data = restoredFrom ? parseRestored(schema, raw) : parse(schema, raw);
+    const changed = changedHeroFields(current.data, data);
+    if (changed.length) throw fixedHeading(changed);
+    const result = await tx.pageContent.updateMany({
+      where: { key, version: expected },
+      data: {
+        data: json(data),
+        version: { increment: 1 },
+        updatedById: actor.id,
+      },
+    });
+    if (result.count === 0) throw versionConflict();
+    const version = expected + 1;
+    await tx.contentRevision.create({
+      data: {
+        entityType: 'page',
+        entityKey: key,
+        version,
+        data: json(data),
+        actorId: actor.id,
+        restoredFromId: restoredFrom?.id ?? null,
+      },
+    });
+    await recordAudit(tx, {
+      actorId: actor.id,
+      action: restoredFrom
+        ? 'content.page_version_restored'
+        : 'content.page_published',
+      entityType: 'PageContent',
+      entityId: key,
+      requestId: target.requestId,
+      metadata: {
+        version,
+        ...(restoredFrom && { restoredFromVersion: restoredFrom.version }),
+      },
+    });
+    await recordContentChange(tx, 'page', key, version);
+    return { data, version };
+  });
+}
+
+/** A page revision's content with today's fixed heading kept in place. */
+export function withCurrentHeading(stored: unknown) {
+  return (current: unknown) => {
+    const { hero: _old, ...rest } = (stored ?? {}) as Record<string, unknown>;
+    void _old;
+    const hero = (current as { hero?: unknown } | null)?.hero;
+    // Pages without a heading (About) stay without one.
+    return hero === undefined ? rest : { ...rest, hero };
+  };
 }

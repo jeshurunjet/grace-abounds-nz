@@ -7,6 +7,7 @@ import { registerAccountRoutes } from './routes/account.js';
 import { registerCollectionRoutes } from './routes/collections.js';
 import { registerContentRoutes } from './routes/content.js';
 import { registerSermonRoutes } from './routes/sermons.js';
+import { registerRevisionRoutes } from './routes/revisions.js';
 import { registerMeRoutes } from './routes/me.js';
 import { registerPastorMemberRoutes } from './routes/pastor-members.js';
 
@@ -44,6 +45,7 @@ export function buildApp() {
   registerAccountRoutes(app);
   registerContentRoutes(app);
   registerSermonRoutes(app);
+  registerRevisionRoutes(app);
   registerCollectionRoutes(app);
   registerPastorMemberRoutes(app);
   return app;

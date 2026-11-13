@@ -24,6 +24,8 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { requireRole, type Actor } from '../lib/identity.js';
+import { recordContentChange } from '../lib/content-change.js';
+import { parseRestored } from '../lib/restore.js';
 
 /*
  * Sermons & videos, with the Pastor-only publication boundary.
@@ -143,6 +145,120 @@ export async function publicSermons(): Promise<PublicSermon[]> {
     );
 }
 
+type Apply = (
+  row: Sermon,
+  tx: Tx,
+) => Promise<Prisma.SermonUpdateManyMutationInput>;
+type Metadata = (before: Sermon, after: Sermon) => Record<string, unknown>;
+
+/**
+ * Applies one change to a sermon at the version the editor saw, then records
+ * the revision and audit event in the same transaction.
+ */
+async function changeSermon(
+  target: { id: string; expected: number; requestId: string },
+  actor: Actor,
+  action: string,
+  apply: Apply,
+  metadata: Metadata = () => ({}),
+  restoredFromId?: string,
+) {
+  const { expected } = target;
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.sermon.findUnique({
+      where: { id: target.id },
+    });
+    if (!existing) throw notFound('Sermon');
+    if (existing.version !== expected) throw versionConflict();
+    const data = await apply(existing, tx);
+    const result = await tx.sermon.updateMany({
+      where: { id: existing.id, version: expected },
+      data: { ...data, version: { increment: 1 }, updatedById: actor.id },
+    });
+    if (result.count === 0) throw versionConflict();
+    const saved = (await tx.sermon.findUnique({
+      where: { id: existing.id },
+    }))!;
+    await tx.contentRevision.create({
+      data: {
+        entityType: ENTITY,
+        entityKey: saved.id,
+        version: saved.version,
+        data: staffSermon(saved) as unknown as Prisma.InputJsonValue,
+        actorId: actor.id,
+        restoredFromId: restoredFromId ?? null,
+      },
+    });
+    await recordAudit(tx, {
+      actorId: actor.id,
+      action: `content.sermon_${action}`,
+      entityType: 'sermon',
+      entityId: saved.id,
+      requestId: target.requestId,
+      metadata: {
+        version: saved.version,
+        review: review(saved.review),
+        previousReview: review(existing.review),
+        ...metadata(existing, saved),
+      },
+    });
+    await recordContentChange(tx, ENTITY, saved.id, saved.version);
+    return saved;
+  });
+}
+
+/**
+ * The working copy after a save (or a restored version). Saving never
+ * approves: a change withdraws a pending request or an approval, and going
+ * back to exactly the live content is approved again. `live` never changes.
+ */
+function workingUpdate(row: Sermon, input: SermonInput) {
+  const live = liveOf(row);
+  const changed = !sameContent(working(row), input);
+  let next = row.review;
+  if (!row.archivedAt && live && sameContent(live, input)) next = 'APPROVED';
+  else if (changed && (next === 'PENDING' || next === 'APPROVED'))
+    next = 'DRAFT';
+  return {
+    ...input,
+    date: new Date(`${input.date}T00:00:00Z`),
+    review: next,
+  };
+}
+
+/**
+ * Restores a sermon's working copy from one of its revisions, as a new
+ * version. Only the working copy changes: what is live stays exactly as the
+ * Pastor approved it, and the restored version needs approval like any edit.
+ */
+export function restoreSermonVersion(
+  target: { id: string; expected: number; requestId: string },
+  revision: { id: string; version: number; data: unknown },
+  actor: Actor,
+) {
+  return changeSermon(
+    target,
+    actor,
+    'version_restored',
+    async (row) => {
+      const stored = (revision.data ?? {}) as Record<string, unknown>;
+      const current = working(row) as Record<string, unknown>;
+      const input = parseRestored(
+        sermonInputSchema,
+        Object.fromEntries(
+          fields.map((key) => [
+            key,
+            key in stored ? stored[key] : current[key],
+          ]),
+        ),
+      );
+      return workingUpdate(row, input);
+    },
+    () => ({ restoredFromVersion: revision.version }),
+    revision.id,
+  );
+}
+
 export function registerSermonRoutes(app: FastifyInstance) {
   const staff = (request: FastifyRequest) =>
     requireRole(request, Role.PASTOR, Role.ADMIN);
@@ -157,60 +273,24 @@ export function registerSermonRoutes(app: FastifyInstance) {
    * Applies one change to a sermon at the version the editor saw, then
    * records the revision and audit event in the same transaction.
    */
-  async function change(
+  const change = (
     request: FastifyRequest<{ Params: { id: string } }>,
     actor: Actor,
     action: string,
-    apply: (
-      row: Sermon,
-      tx: Tx,
-    ) => Promise<Prisma.SermonUpdateManyMutationInput>,
-    metadata: (
-      before: Sermon,
-      after: Sermon,
-    ) => Record<string, unknown> = () => ({}),
-  ) {
-    const expected = requireVersion(request.headers['if-match']);
-    return prisma.$transaction(async (tx) => {
-      const existing = await tx.sermon.findUnique({
-        where: { id: request.params.id },
-      });
-      if (!existing) throw notFound('Sermon');
-      if (existing.version !== expected) throw versionConflict();
-      const data = await apply(existing, tx);
-      const result = await tx.sermon.updateMany({
-        where: { id: existing.id, version: expected },
-        data: { ...data, version: { increment: 1 }, updatedById: actor.id },
-      });
-      if (result.count === 0) throw versionConflict();
-      const saved = (await tx.sermon.findUnique({
-        where: { id: existing.id },
-      }))!;
-      await tx.contentRevision.create({
-        data: {
-          entityType: ENTITY,
-          entityKey: saved.id,
-          version: saved.version,
-          data: staffSermon(saved) as unknown as Prisma.InputJsonValue,
-          actorId: actor.id,
-        },
-      });
-      await recordAudit(tx, {
-        actorId: actor.id,
-        action: `content.sermon_${action}`,
-        entityType: 'sermon',
-        entityId: saved.id,
+    apply: Apply,
+    metadata?: Metadata,
+  ) =>
+    changeSermon(
+      {
+        id: request.params.id,
+        expected: requireVersion(request.headers['if-match']),
         requestId: request.id,
-        metadata: {
-          version: saved.version,
-          review: review(saved.review),
-          previousReview: review(existing.review),
-          ...metadata(existing, saved),
-        },
-      });
-      return saved;
-    });
-  }
+      },
+      actor,
+      action,
+      apply,
+      metadata,
+    );
 
   app.get('/v1/staff/sermons', async (request, reply) => {
     staff(request);
@@ -265,22 +345,9 @@ export function registerSermonRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const actor = staff(request);
       const input = parse(sermonInputSchema, request.body ?? {});
-      const row = await change(request, actor, 'saved', async (row) => {
-        const live = liveOf(row);
-        const changed = !sameContent(working(row), input);
-        // Saving never approves. A change withdraws a pending request or an
-        // approval; going back to exactly the live content is approved again.
-        let next = row.review;
-        if (!row.archivedAt && live && sameContent(live, input))
-          next = 'APPROVED';
-        else if (changed && (next === 'PENDING' || next === 'APPROVED'))
-          next = 'DRAFT';
-        return {
-          ...input,
-          date: new Date(`${input.date}T00:00:00Z`),
-          review: next,
-        };
-      });
+      const row = await change(request, actor, 'saved', async (row) =>
+        workingUpdate(row, input),
+      );
       return done(reply, row);
     },
   );

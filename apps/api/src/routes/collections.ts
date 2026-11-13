@@ -32,6 +32,8 @@ import {
 } from '../lib/errors.js';
 import { requireActor, requireRole, type Actor } from '../lib/identity.js';
 import { publicSermons } from './sermons.js';
+import { recordContentChange } from '../lib/content-change.js';
+import { parseRestored } from '../lib/restore.js';
 
 /*
  * Phase 2B editorial collections. Every record saves on its own:
@@ -317,6 +319,93 @@ function collectionFor(
   return { def, name: request.params.collection };
 }
 
+/**
+ * Saves one record at the version the editor saw: validates the input,
+ * applies the collection's rules (including the Pastor-only outside-link
+ * gate), and writes the revision, audit event and content-change outbox
+ * event in the same transaction. A restore passes the revision it came from.
+ */
+export async function saveCollectionRecord(
+  target: { name: string; id: string; expected: number; requestId: string },
+  actor: Actor,
+  input: (existing: Row, def: Collection<never>) => unknown,
+  restoredFrom?: { id: string; version: number },
+) {
+  const def = Object.prototype.hasOwnProperty.call(collections, target.name)
+    ? collections[target.name]
+    : undefined;
+  if (!def) throw notFound('Collection');
+  const { expected } = target;
+  const row = await prisma.$transaction(async (tx) => {
+    const model = delegate(tx, def.model);
+    const existing = await model.findUnique({ where: { id: target.id } });
+    if (!existing) throw notFound('Record');
+    if (existing.version !== expected) throw versionConflict();
+    const raw = input(existing, def);
+    const parsed = restoredFrom
+      ? parseRestored(def.schema, raw)
+      : parse(def.schema, raw);
+    const data = await def.toData(parsed, tx, existing, actor);
+    const result = await model.updateMany({
+      where: { id: existing.id, version: expected },
+      data: { ...data, version: { increment: 1 }, updatedById: actor.id },
+    });
+    if (result.count === 0) throw versionConflict();
+    const saved = (await model.findUnique({ where: { id: existing.id } }))!;
+    await tx.contentRevision.create({
+      data: {
+        entityType: target.name,
+        entityKey: saved.id,
+        version: saved.version,
+        data: def.toApi(saved) as Prisma.InputJsonValue,
+        actorId: actor.id,
+        restoredFromId: restoredFrom?.id ?? null,
+      },
+    });
+    await recordAudit(tx, {
+      actorId: actor.id,
+      action: `content.${def.noun}_${restoredFrom ? 'version_restored' : 'saved'}`,
+      entityType: def.model,
+      entityId: saved.id,
+      requestId: target.requestId,
+      metadata: {
+        version: saved.version,
+        ...(restoredFrom && { restoredFromVersion: restoredFrom.version }),
+        ...(def.hasStatus && {
+          status: fromStatus(saved.status),
+          previousStatus: fromStatus(existing.status),
+        }),
+      },
+    });
+    await recordContentChange(tx, target.name, saved.id, saved.version);
+    return saved;
+  });
+  return { def, row };
+}
+
+/**
+ * The input for restoring a record from a revision: the revision's content,
+ * but today's visibility. Status and who-can-open stay as they are now, so a
+ * restore never publishes a draft or widens access; fields the revision
+ * predates keep their current values.
+ */
+export function restoredInput(stored: unknown) {
+  return (existing: Row, def: Collection<never>) => {
+    const current = def.toApi(existing);
+    const old = (stored ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = {};
+    for (const key of Object.keys(current)) {
+      if (key === 'key') continue; // a campus key never changes
+      merged[key] = key in old ? old[key] : current[key];
+    }
+    for (const key of ['status', 'visibility'])
+      if (key in current) merged[key] = current[key];
+    return merged;
+  };
+}
+export const isCollectionName = (name: string) =>
+  Object.prototype.hasOwnProperty.call(collections, name);
+
 /** Published campuses, journeys and leadership for the public bundle. */
 export async function publicCollections(): Promise<PublicCollections> {
   const published = { where: { status: 'PUBLISHED' }, ...ordered };
@@ -441,6 +530,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           requestId: request.id,
           metadata: def.hasStatus ? { status: fromStatus(created.status) } : {},
         });
+        await recordContentChange(tx, name, created.id, 1);
         return created;
       });
       reply.status(201).header('etag', `"${row.version}"`);
@@ -454,7 +544,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
     '/v1/staff/:collection/order',
     async (request) => {
       const actor = requireStaff(request);
-      const { def } = collectionFor(request);
+      const { def, name } = collectionFor(request);
       const body = request.body as { ids?: unknown } | undefined;
       const ids = Array.isArray(body?.ids)
         ? body.ids.filter((id): id is string => typeof id === 'string')
@@ -483,6 +573,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           entityId: 'order',
           requestId: request.id,
         });
+        await recordContentChange(tx, name, 'order', null);
       });
       return { data: { ids } };
     },
@@ -492,48 +583,13 @@ export function registerCollectionRoutes(app: FastifyInstance) {
     '/v1/staff/:collection/:id',
     async (request, reply) => {
       const actor = requireStaff(request);
-      const { def, name } = collectionFor(request);
+      const { name } = collectionFor(request);
       const expected = requireVersion(request.headers['if-match']);
-      const input = parse(def.schema, request.body ?? {});
-      const row = await prisma.$transaction(async (tx) => {
-        const model = delegate(tx, def.model);
-        const existing = await model.findUnique({
-          where: { id: request.params.id },
-        });
-        if (!existing) throw notFound('Record');
-        if (existing.version !== expected) throw versionConflict();
-        const data = await def.toData(input, tx, existing, actor);
-        const result = await model.updateMany({
-          where: { id: existing.id, version: expected },
-          data: { ...data, version: { increment: 1 }, updatedById: actor.id },
-        });
-        if (result.count === 0) throw versionConflict();
-        const saved = (await model.findUnique({ where: { id: existing.id } }))!;
-        await tx.contentRevision.create({
-          data: {
-            entityType: name,
-            entityKey: saved.id,
-            version: saved.version,
-            data: def.toApi(saved) as Prisma.InputJsonValue,
-            actorId: actor.id,
-          },
-        });
-        await recordAudit(tx, {
-          actorId: actor.id,
-          action: `content.${def.noun}_saved`,
-          entityType: def.model,
-          entityId: saved.id,
-          requestId: request.id,
-          metadata: {
-            version: saved.version,
-            ...(def.hasStatus && {
-              status: fromStatus(saved.status),
-              previousStatus: fromStatus(existing.status),
-            }),
-          },
-        });
-        return saved;
-      });
+      const { def, row } = await saveCollectionRecord(
+        { name, id: request.params.id, expected, requestId: request.id },
+        actor,
+        () => request.body ?? {},
+      );
       reply.header('etag', `"${row.version}"`);
       reply.header('cache-control', 'private, no-store');
       return { data: staffRecord(def, row), version: row.version };
@@ -544,7 +600,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
     '/v1/staff/:collection/:id',
     async (request, reply) => {
       const actor = requireStaff(request);
-      const { def } = collectionFor(request);
+      const { def, name } = collectionFor(request);
       const expected = requireVersion(request.headers['if-match']);
       await prisma.$transaction(async (tx) => {
         const model = delegate(tx, def.model);
@@ -592,6 +648,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           requestId: request.id,
           metadata: { version: existing.version, record: def.toApi(existing) },
         });
+        await recordContentChange(tx, name, existing.id, null);
       });
       reply.header('cache-control', 'private, no-store');
       return reply.status(204).send();

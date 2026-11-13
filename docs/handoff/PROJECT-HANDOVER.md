@@ -89,7 +89,7 @@ Each slice includes its contracts, meaningful permission/data/failure tests, acc
 | ----- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                      |
 | 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.              |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1 and 2A accepted. **2B + Gallery shell: link-classification fix at `c76e48e`, tests pass; awaiting Codex closing check.** 2C–2D not started. |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1, 2A and 2B accepted (2B pushed at `2802e00`). **2C (history/restore/freshness) coded at `7003a95`; awaiting Codex review.** 2D not started. |
 | 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                            |
 | 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                         |
 | 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                              |
@@ -1556,3 +1556,41 @@ Gallery file-manager shell and dedicated Videos & sermons section accepted as th
 **Git:** owner explicitly authorized pushing on safe review. Commit this closing note and push `backend-phase-2` to origin without force. Do not merge `main` or deploy.
 
 **Next Claude instruction:** Phase 2B's reviewed development checkpoint is accepted. With owner go-ahead, implement Phase 2C in small slices: resource revision history/audited restore and the planned freshness/cache work. Restore must preserve fixed headings, member/private boundaries and Pastor-only video approval—restoring old content must not turn an unapproved working recording into public/member content. Keep exact-version checks and confirmed-resource isolation. Preview only supported drafts truthfully; no broad redesign. S3 uploads remain 2D; calendar/People/care permissions stay in later phases, automation/chat in Future F1/F2. Update this sole handover with migration/check evidence and return for focused review. No automatic push/merge/deployment; stop/coordinate the dev server before any production build. Phase 2B's remaining fresh build gate carries into pre-merge verification.
+
+### Phase 2C checkpoint — Claude, 14 November 2026, head `7003a95`
+
+Implements "2C. Revision history, preview and freshness" as authorized by the owner (Phase 2B accepted and pushed at `2802e00`). Approved UI kept. No S3 uploads, calendar/bookings, People/care, messaging or automation work.
+
+**Commits:** `882739b` (API: history, restore, outbox), `7003a95` (web: history panels, freshness). Migration `20261112231830_phase2c_outbox` (owner-applied to dev and test) adds `OutboxEvent`.
+
+**Revision history and versioned, audited restore (`/v1/staff/revisions`):**
+
+- `GET /v1/staff/revisions?entityType=&entityKey=` (Pastor/Admin; 401/403 otherwise; unknown entity 404): newest 50 versions with time, author name/email, `restoredFromVersion` and data. Covers site settings, the seven pages, campuses, journeys, leadership, folders, resources and sermons.
+- `POST /v1/staff/revisions/:id/restore` with If-Match of the current version (412 stale, 428 missing). A restore never rewrites history: it saves the old content as a **new** version through the same save path as an ordinary save (`saveSite`, `savePage`, `saveCollectionRecord`, `changeSermon`), validated with today's rules (an old version that fails them is refused with 422 `REVISION_INVALID`), with a revision row carrying `restoredFromId`, an audit event `content.<entity>_version_restored` (`restoredFromVersion` in metadata) and an outbox event, all in one transaction.
+- Boundaries: page headings are never restored (today's `hero` is kept; pages without a heading stay without one); a record keeps today's status and who-can-open (`visibility`), so a restore never publishes a draft or widens access; the Pastor-only outside-link gate applies to restores (Admin gets 403 `PASTOR_REVIEW_REQUIRED`); campus keys never change; a sermon restore changes only the working copy (review recomputed as for a save) and never `live`, so an unapproved recording cannot become public or member content by restore.
+- Web: "Version history" in Website content (per tab: page, plus shared site details where the tab uses them), in every record panel (campuses, journeys, leadership, Gallery folders/files) and in Sermons. Rows show version, time, author, "Restored from version N" or the changed fields; Restore asks first, is disabled over unsaved changes to that item, and leaves other tabs' unsaved drafts untouched (the restored resource becomes the published base only).
+
+**Freshness and cache invalidation:**
+
+- Every content write (site, pages, collection create/save/reorder/delete, sermon state changes, restores) writes an `OutboxEvent` (`content.changed`) in the same transaction; a refused or rolled-back save writes none.
+- API dispatcher (`lib/outbox.ts`, started with the server, not in tests): claims due events with `FOR UPDATE SKIP LOCKED`, delivers per topic in batches, marks them processed, and on failure keeps them with `attempts`, `lastError` and exponential backoff (max 5 min). The content handler calls the website's `POST /api/internal/revalidate`, signed with an HMAC of the shared `API_ASSERTION_SECRET` (5-minute window, only the `public-content` tag; unsigned/stale/other-tag requests get 401).
+- Public content stays **no-store** by default. `PUBLIC_CONTENT_CACHE_SECONDS` (documented in `.env.example`, default 0) enables tagged caching only once verified; saves/restores then clear it immediately through the outbox. `WEB_INTERNAL_URL` (default `http://localhost:3000`) is where the API reaches the website. The owner's `.env` was not changed.
+- `GET /v1/public/content/stamp` returns the newest content-change id (no content). Open public pages poll it once a minute while visible and refresh only when it changes; the existing refresh on public navigation and on returning to the tab is kept.
+- Preview of unsaved drafts was not added: no exact draft rendering is available without leaking drafts into the published provider (as the plan allows). "View page" remains the clearly labelled live-page link.
+
+**Bug found by the new tests and fixed before commit:** restoring the About page (which has no heading) was always refused because the restore added an empty heading; it now keeps headings only on pages that have them.
+
+**Tests added:** `apps/api/src/revisions.test.ts` (5, DB): staff-only history/restore; page restore as new audited version keeping the fixed heading (Home) and restoring About without a heading, stale If-Match leaves nothing and no outbox event; record restore keeps status and audience, Admin cannot restore a Pastor-only outside link (Pastor can), invalid old version refused; sermon restore changes only the working copy (live and approval unchanged, restored pending/approved state not carried over); outbox only for committed changes, failed delivery retried with error/backoff, batch delivery marks processed, stamp moves on change only. Web: `lib/server/revalidation.test.ts` (signature/staleness/tag/secret checks; no-store unless caching set), content-freshness stamp polling (refresh only on change; workspaces not polled), CMS history (restore one page, other tab's unsaved draft untouched; restore refused over unsaved changes on the same page).
+
+**Evidence (owner's Mac, 14 Nov):** first `pnpm test:db` run: 110 of 111 passed; the failure was the About-restore bug above. After the fix the owner ran `pnpm test:db`, `pnpm test`, `pnpm lint`, and `pnpm build` with the dev server stopped, then removed `apps/web/.next`, and reported "done" with no failures reported (exact counts not captured in this conversation). Typecheck (api, web, validation) and Prettier clean.
+
+**Limitations:**
+
+- Restore covers records that still exist; a deleted record cannot be brought back from history (deletion is limited to unpublished/archived items).
+- The change stamp also moves for staff-only changes (e.g. a draft save); it reveals only that something changed, never content.
+- Tagged caching is implemented but off until verified on the target host; the revalidation hook is a no-op while it is off.
+- The outbox has no admin view yet; failed deliveries are visible in the table (`lastError`, `attempts`).
+
+**Current next instruction:**
+
+> Codex: focused review of `2802e00..7003a95` against the 2C exit criteria (restore is a new revision/audit entry; public content refreshes after saves/restores; unrelated drafts stay unsaved; private/draft data stays private; fixed headings and Pastor-only video approval preserved). Claude: wait for acceptance before 2D. No merge, push or deployment.

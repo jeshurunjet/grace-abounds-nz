@@ -25,6 +25,10 @@ import { useToast } from '../../components/toast';
 import { KitConfirm } from '../../components/editor-kit/confirm';
 import { SidePanel } from '../../components/editor-kit/side-panel';
 import {
+  HistoryButton,
+  HistoryPanel,
+} from '../../components/editor-kit/history-panel';
+import {
   KitPhoto,
   KitText,
   ListRow,
@@ -100,6 +104,7 @@ export default function SermonsPage() {
     'delete' | 'unpublish' | 'archive' | null
   >(null);
   const [rejecting, setRejecting] = useState(false);
+  const [history, setHistory] = useState(false);
   const [note, setNote] = useState('');
 
   const load = useCallback(async () => {
@@ -137,6 +142,7 @@ export default function SermonsPage() {
     setFieldErrors({});
     setConflict(false);
     setRejecting(false);
+    setHistory(false);
     setNote('');
   }
   const change = (key: keyof SermonInput) => (next: string) =>
@@ -600,6 +606,7 @@ export default function SermonsPage() {
               private draft until the Pastor approves it.
             </p>
           )}
+          {current && <HistoryButton onClick={() => setHistory(true)} />}
           {reviewBlock()}
           {panel && (
             <>
@@ -688,6 +695,34 @@ export default function SermonsPage() {
             </div>
           )}
         </SidePanel>
+        {current && (
+          <HistoryPanel
+            open={history}
+            targets={[
+              {
+                label: current.title,
+                entityType: 'sermons',
+                entityKey: current.id,
+                version: current.version,
+                blocked: dirty
+                  ? 'You have unsaved changes. Save or cancel them before restoring.'
+                  : undefined,
+                restoreNote:
+                  'The working copy goes back to that version. What is on the website does not change; the Pastor approves it as usual.',
+              },
+            ]}
+            onClose={() => setHistory(false)}
+            onRestored={async () => {
+              const list = (await api<StaffSermon[]>('/staff/sermons')).data;
+              const latest = list.find((row) => row.id === current.id);
+              if (latest) adopt(latest);
+              toast.push(
+                'Restored as a new version of the working copy.',
+                'success',
+              );
+            }}
+          />
+        )}
         <KitConfirm
           open={confirm === 'delete'}
           title="Delete this sermon?"

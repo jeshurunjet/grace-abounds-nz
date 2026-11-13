@@ -7,6 +7,7 @@ import { useToast } from '../toast';
 import { KitConfirm } from './confirm';
 import { SidePanel } from './side-panel';
 import { KitPhoto, KitText } from './parts';
+import { HistoryButton, HistoryPanel } from './history-panel';
 import { api, ApiError, errorMessage } from '../../lib/api-client';
 
 /*
@@ -113,6 +114,7 @@ export function RecordPanel({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [history, setHistory] = useState(false);
 
   useEffect(() => {
     if (!request) {
@@ -131,6 +133,7 @@ export function RecordPanel({
     setPanelError('');
     setFieldErrors({});
     setConflict(false);
+    setHistory(false);
     // Opening is driven by the request only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
@@ -241,6 +244,26 @@ export function RecordPanel({
     } finally {
       setSaving(false);
     }
+  }
+
+  /** After a restore: show the restored record as the saved state. */
+  async function adoptRestored() {
+    if (!panel?.id) return;
+    const result = await api<Row[]>(`/staff/${collection}`);
+    const latest = result.data.find((row) => row.id === panel.id);
+    if (!latest) return;
+    const value = editable(latest, blank);
+    setPanel({
+      id: latest.id,
+      version: latest.version,
+      value,
+      original: value,
+    });
+    setConflict(false);
+    setPanelError('');
+    onSaved(latest, false);
+    toast.push(`${titleFor(latest)} restored as a new version.`, 'success');
+    router.refresh();
   }
 
   const canDelete =
@@ -381,6 +404,7 @@ export function RecordPanel({
         {!panel?.id && (
           <p className="kit-note">Nothing is created until you select Save.</p>
         )}
+        {panel?.id && <HistoryButton onClick={() => setHistory(true)} />}
         {fields.map(field)}
         {panelError && (
           <div className="publishing-errors" role="alert">
@@ -397,6 +421,30 @@ export function RecordPanel({
           </div>
         )}
       </SidePanel>
+      {panel?.id && (
+        <HistoryPanel
+          open={history}
+          targets={[
+            {
+              label: titleFor({
+                ...panel.original,
+                id: panel.id,
+                version: panel.version ?? 0,
+              } as Row),
+              entityType: collection,
+              entityKey: panel.id,
+              version: panel.version,
+              blocked: dirty
+                ? 'You have unsaved changes in this panel. Save or cancel them before restoring.'
+                : undefined,
+              restoreNote:
+                'Its content goes back to that version straight away. Whether it is shown, and who can open it, stay as they are now.',
+            },
+          ]}
+          onClose={() => setHistory(false)}
+          onRestored={adoptRestored}
+        />
+      )}
       <KitConfirm
         open={confirmDelete}
         title={`Delete this ${noun}?`}

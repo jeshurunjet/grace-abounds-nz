@@ -76,9 +76,47 @@ function collectionApi(url: string, init?: RequestInit) {
 }
 
 // The fake API answers like the real one: canonical (schema-parsed) data.
+/** Published About content after a restore (version 2), if any. */
+let restoredAbout: Record<string, unknown> | null = null;
+const restores: { url: string; version: string | null }[] = [];
 function fakeApi(url: string, init?: RequestInit) {
   if (/\/staff\/(locations|team|next-steps)/.test(url))
     return collectionApi(url, init);
+  if (url.includes('/staff/revisions?'))
+    return json(200, {
+      data: [
+        {
+          id: 'rev-1',
+          version: 1,
+          createdAt: '2026-11-12T21:00:00.000Z',
+          by: 'Office Admin',
+          restoredFromVersion: null,
+          data: defaultPages.about,
+        },
+        {
+          id: 'rev-0',
+          version: 0,
+          createdAt: '2026-11-12T20:00:00.000Z',
+          by: 'Office Admin',
+          restoredFromVersion: null,
+          data: { ...defaultPages.about, story: 'An older story.' },
+        },
+      ],
+    });
+  if (url.includes('/staff/revisions/')) {
+    restores.push({
+      url,
+      version: new Headers(init?.headers).get('if-match'),
+    });
+    restoredAbout = { ...defaultPages.about, story: 'An older story.' };
+    return json(200, { data: restoredAbout, version: 2 });
+  }
+  if (
+    url.endsWith('/staff/pages/about') &&
+    init?.method !== 'PATCH' &&
+    restoredAbout
+  )
+    return json(200, { data: restoredAbout, version: 2 });
   const resource = url.replace('/api/v1/staff/', '').replace('pages/', '');
   const schema =
     resource === 'site' ? siteSettingsSchema : pageSchemas[resource as PageKey];
@@ -124,6 +162,8 @@ const tab = (name: string) =>
 beforeEach(() => {
   failing = new Set();
   patches.length = 0;
+  restoredAbout = null;
+  restores.length = 0;
   collectionCalls.length = 0;
   staleSaves = false;
   collections = {
@@ -325,5 +365,62 @@ describe('campuses, journeys and leadership save one record at a time', () => {
     expect(
       within(panel).getByRole('button', { name: 'Delete' }),
     ).toBeDisabled();
+  });
+});
+
+describe('version history and restore', () => {
+  it('restores one page as a new version and leaves other unsaved drafts alone', async () => {
+    await renderCms();
+    // An unsaved edit on the Home tab.
+    edit('Verse text', 'An unsaved verse.');
+    fireEvent.click(tab('About'));
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }));
+    const panel = screen.getByRole('dialog', { name: 'Version history' });
+    expect(await within(panel).findByText('Current')).toBeInTheDocument();
+    expect(
+      within(panel).queryByRole('button', { name: 'Restore version 1' }),
+    ).toBeNull();
+    expect(within(panel).getByText(/Changed: Story/)).toBeInTheDocument();
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Restore version 0' }),
+    );
+    // It asks first; nothing is sent yet.
+    expect(restores).toEqual([]);
+    const confirm = screen.getByRole('alertdialog', {
+      name: 'Restore version 0?',
+    });
+    expect(
+      within(confirm).getByText(/Page headings stay as they are/),
+    ).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('button', { name: 'Restore' }));
+    });
+    await waitFor(() =>
+      expect(restores).toEqual([
+        { url: '/api/v1/staff/revisions/rev-0/restore', version: '"1"' },
+      ]),
+    );
+    await waitFor(() =>
+      expect(context.content.site.story).toBe('An older story.'),
+    );
+    // The restore is published; the Home draft stays unsaved and untouched.
+    expect(patches).toEqual([]);
+    expect(tab('About')).toHaveTextContent(/^About$/);
+    expect(tab('Home')).toHaveTextContent('Home •');
+    expect(context.content.site.homeVerseText).toBe(
+      defaultPages.home.verse.text,
+    );
+  });
+
+  it('will not restore over unsaved changes to the same page', async () => {
+    await renderCms();
+    fireEvent.click(tab('About'));
+    edit('History', 'Unsaved story.');
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }));
+    const panel = screen.getByRole('dialog', { name: 'Version history' });
+    expect(
+      await within(panel).findByRole('button', { name: 'Restore version 0' }),
+    ).toBeDisabled();
+    expect(within(panel).getByText(/Save or discard them/)).toBeInTheDocument();
   });
 });

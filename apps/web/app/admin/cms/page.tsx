@@ -35,6 +35,11 @@ import {
 } from '../../components/editor-kit/collection-section';
 import { SidePanel } from '../../components/editor-kit/side-panel';
 import {
+  HistoryButton,
+  HistoryPanel,
+  type HistoryTarget,
+} from '../../components/editor-kit/history-panel';
+import {
   KitPhoto,
   KitText,
   ListRow,
@@ -297,6 +302,7 @@ export default function CmsPage() {
   const [conflict, setConflict] = useState(false);
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [confirm, setConfirm] = useState<null | 'remove' | 'discard'>(null);
+  const [history, setHistory] = useState(false);
 
   /** Loads the latest published content and versions (staff only). */
   const load = useCallback(async () => {
@@ -364,6 +370,39 @@ export default function CmsPage() {
     const page = pageFieldPage[key];
     if (page) markDirty(page);
   };
+
+  // Version history for this tab's page (and the shared site details).
+  const historyTargets: HistoryTarget[] = tabResources[tab].map((resource) => ({
+    label:
+      resource === 'site'
+        ? 'Site details (shared by several pages)'
+        : `${resourceLabel[resource]} page`,
+    entityType: resource === 'site' ? 'site' : 'page',
+    entityKey: resource,
+    version: versions[resource],
+    blocked: dirty.has(resource)
+      ? 'You have unsaved changes here. Save or discard them before restoring.'
+      : undefined,
+    restoreNote:
+      'The website changes straight away for everyone. Page headings stay as they are.',
+  }));
+  /** After a restore: that resource becomes the published state; other
+   * unsaved changes stay as they are. */
+  async function adoptRestored(target: HistoryTarget) {
+    const resource = target.entityKey as Resource;
+    const result = await api<SiteSettings | PageContentMap[PageKey]>(
+      resource === 'site' ? '/staff/site' : `/staff/pages/${resource}`,
+    );
+    const patch = resourceToLegacy(resource, result.data);
+    applyPublished(patch);
+    setDraft((current) => current && mergePatch(current, patch));
+    setConfirmed((current) => ({ ...current, [resource]: result.data }));
+    setVersions((current) => ({ ...current, [resource]: result.version }));
+    toast.push(
+      `${target.label} restored as version ${result.version}.`,
+      'success',
+    );
+  }
 
   const pending = tabResources[tab].filter((resource) => dirty.has(resource));
   async function save() {
@@ -633,8 +672,19 @@ export default function CmsPage() {
         </Link>
         <header className="kit-page-head">
           <h1>Website content</h1>
-          <SaveStatus state={saveState} />
+          <div className="kit-head-actions">
+            {historyTargets.length > 0 && (
+              <HistoryButton onClick={() => setHistory(true)} />
+            )}
+            <SaveStatus state={saveState} />
+          </div>
         </header>
+        <HistoryPanel
+          open={history}
+          targets={historyTargets}
+          onClose={() => setHistory(false)}
+          onRestored={adoptRestored}
+        />
         {loadError && (
           <div className="publishing-errors" role="alert">
             <p>Website content couldn’t be loaded. {loadError}</p>

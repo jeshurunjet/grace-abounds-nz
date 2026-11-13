@@ -904,3 +904,69 @@
   width: 100%;
   margin-bottom: 0.75rem;
 }
+
+/* Version history (Phase 2C) */
+.kit-history-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-mid);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.kit-history-button:hover {
+  background: var(--active-bg);
+  color: var(--ink-strong);
+}
+.kit-history {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kit-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.kit-history-text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.kit-history-text strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.kit-history-text small {
+  color: var(--ink-soft);
+}
+.kit-history-item .button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.88rem;
+}
+.kit-page-head .kit-history-button {
+  align-self: center;
+}
+.kit-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}

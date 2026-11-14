@@ -151,4 +151,6 @@ export type PublicContentBundle = {
   pages: PageContentMap;
   /** Published campuses, Next steps journeys and leadership (Phase 2B). */
   collections?: PublicCollections;
+  /** The content generation this bundle was read at (Phase 2C). */
+  generation?: number;
 };

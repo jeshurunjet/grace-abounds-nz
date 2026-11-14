@@ -21,9 +21,12 @@ export type OutboxHandler = (events: OutboxEventRow[]) => Promise<void>;
 
 const MAX_BACKOFF_SECONDS = 300;
 
+type Log = { warn: (object: object, message: string) => void };
+
 export async function drainOutbox(
   handlers: Record<string, OutboxHandler>,
   batch = 50,
+  log?: Log,
 ): Promise<number> {
   return prisma.$transaction(
     async (tx) => {
@@ -39,7 +42,12 @@ export async function drainOutbox(
       for (const [topic, events] of byTopic) {
         const ids = events.map((event) => event.id);
         try {
-          await handlers[topic]?.(events);
+          // An event nobody handles is kept and retried, never acknowledged:
+          // registering its handler later still delivers it.
+          const handler = handlers[topic];
+          if (!handler)
+            throw new Error(`No handler for outbox topic "${topic}".`);
+          await handler(events);
           await tx.outboxEvent.updateMany({
             where: { id: { in: ids } },
             data: {
@@ -49,6 +57,11 @@ export async function drainOutbox(
             },
           });
         } catch (error) {
+          // Only the topic, ids and message are logged; never payloads.
+          log?.warn(
+            { topic, ids, error: String((error as Error)?.message ?? error) },
+            'Outbox delivery failed; it will be retried.',
+          );
           for (const event of events) {
             const delay = Math.min(
               2 ** (event.attempts + 1),
@@ -104,16 +117,13 @@ export function contentRevalidator(
 }
 
 /** Runs the dispatcher every few seconds in the API process. */
-export function startOutboxDispatcher(
-  log: { warn: (object: object, message: string) => void },
-  everyMs = 3_000,
-) {
+export function startOutboxDispatcher(log: Log, everyMs = 3_000) {
   const handlers = { [CONTENT_CHANGED]: contentRevalidator() };
   let running = false;
   const timer = setInterval(() => {
     if (running) return;
     running = true;
-    drainOutbox(handlers)
+    drainOutbox(handlers, 50, log)
       .catch((error) => log.warn({ err: error }, 'Outbox dispatch failed.'))
       .finally(() => {
         running = false;

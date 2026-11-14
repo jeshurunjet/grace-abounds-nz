@@ -48,6 +48,11 @@ type ContentContextValue = {
   /** True when published content could not be loaded from the server. */
   contentUnavailable: boolean;
   /**
+   * The content generation of the published bundle being shown, or null if
+   * none was loaded. Freshness checks compare it with the server's latest.
+   */
+  generation: number | null;
+  /**
    * Shows one resource the server has just confirmed as published (the
    * canonical data from its save response). Nothing else changes.
    */
@@ -168,6 +173,7 @@ export function ContentProvider({
       storageError,
       retrySave: () => setSaveAttempt((current) => current + 1),
       contentUnavailable: initialContent === null && !hasPublished,
+      generation: initialContent?.generation ?? null,
       applyPublished(patch) {
         setContent((current) => mergePatch(current, patch));
       },
@@ -213,6 +219,7 @@ export function useContent() {
       retrySave: () => {},
       update: async () => false,
       contentUnavailable: false,
+      generation: null,
       applyPublished: () => {},
     }
   );

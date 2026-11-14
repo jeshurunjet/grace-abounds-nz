@@ -447,3 +447,13 @@ model OutboxEvent {
   @@index([topic, id])
   @@index([processedAt, availableAt])
 }
+
+/// The published-content generation (one row, id "content"). Every content
+/// write increments it in its own transaction; the row lock orders writers,
+/// so generations follow commit order. Public bundles carry the generation
+/// they were read at, and open pages refresh until they render the latest.
+model ContentGeneration {
+  id    String @id
+  value Int    @default(0)
+}
+

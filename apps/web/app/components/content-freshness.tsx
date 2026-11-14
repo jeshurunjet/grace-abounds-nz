@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useContent } from './content-provider';
 
 const PUBLIC_PAGES = new Set([
   '/',
@@ -41,43 +42,52 @@ export function ContentFreshness() {
     document.addEventListener('visibilitychange', refresh);
     return () => document.removeEventListener('visibilitychange', refresh);
   }, [router]);
-  // While a public page stays open, check a tiny change stamp once a
-  // minute and refetch only when published content has changed.
-  usePublishedChanges(pathname, () => router.refresh());
+  // While a public page stays open, compare the server's latest content
+  // generation with the one this page is showing, once a minute.
+  const { generation } = useContent();
+  usePublishedChanges(pathname, generation, () => router.refresh());
   return null;
 }
 
 const STAMP_EVERY_MS = 60_000;
-async function readStamp(): Promise<string | null> {
+async function latestGeneration(): Promise<number | null> {
   try {
     const response = await fetch('/api/v1/public/content/stamp', {
       cache: 'no-store',
     });
     if (!response.ok) return null;
-    const body = (await response.json()) as { data?: { stamp?: string } };
-    return body.data?.stamp ?? null;
+    const body = (await response.json()) as {
+      data?: { generation?: unknown };
+    };
+    const value = body.data?.generation;
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
   } catch {
     return null;
   }
 }
-/** Calls onChange when the server's content-change stamp moves on. */
+/**
+ * Calls onBehind whenever the server has a newer content generation than
+ * the one rendered. Nothing is remembered between checks: the rendered
+ * bundle's own generation is the reference, so a change saved before the
+ * first check is caught, and a refresh that still gets stale (for example
+ * cached) content is simply retried at the next check until the page shows
+ * the latest generation.
+ */
 export function usePublishedChanges(
   pathname: string,
-  onChange: () => void,
+  rendered: number | null,
+  onBehind: () => void,
   everyMs = STAMP_EVERY_MS,
 ) {
-  const changed = useRef(onChange);
-  changed.current = onChange;
+  const behind = useRef(onBehind);
+  behind.current = onBehind;
   useEffect(() => {
-    if (!isPublicPage(pathname)) return;
-    let last: string | null = null;
+    if (!isPublicPage(pathname) || rendered === null) return;
     let stopped = false;
     const check = async () => {
       if (document.visibilityState === 'hidden') return;
-      const stamp = await readStamp();
-      if (stopped || stamp === null) return;
-      if (last !== null && stamp !== last) changed.current();
-      last = stamp;
+      const latest = await latestGeneration();
+      if (!stopped && latest !== null && latest > rendered) behind.current();
     };
     void check();
     const timer = window.setInterval(() => void check(), everyMs);
@@ -85,5 +95,5 @@ export function usePublishedChanges(
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [pathname, everyMs]);
+  }, [pathname, rendered, everyMs]);
 }

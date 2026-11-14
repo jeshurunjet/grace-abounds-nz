@@ -15,6 +15,10 @@ import {
 } from '@grace-abounds/validation';
 import { buildApp } from './app.js';
 import { drainOutbox } from './lib/outbox.js';
+import {
+  contentGeneration,
+  recordContentChange,
+} from './lib/content-change.js';
 
 /*
  * Phase 2C: revision history, versioned audited restore and the
@@ -333,7 +337,8 @@ describe.skipIf(!dbTestsEnabled)(
     it('the outbox records committed changes only and delivers them with retries', async () => {
       const admin = await as('ADMIN');
       const stamp = async () =>
-        (await call('GET', '/v1/public/content/stamp')).json().data.stamp;
+        (await call('GET', '/v1/public/content/stamp')).json().data
+          .generation as number;
       const before = await stamp();
       const about = defaultPages.about as Record<string, unknown>;
       // A refused save leaves no event.
@@ -374,6 +379,106 @@ describe.skipIf(!dbTestsEnabled)(
       ).toBe(0);
       // The stamp is about change, not delivery: unchanged.
       expect(await stamp()).toBe(after);
+    });
+
+    it('generations follow commit order, and the bundle says which one it shows', async () => {
+      const admin = await as('ADMIN');
+      const stamp = async () =>
+        (await call('GET', '/v1/public/content/stamp')).json().data
+          .generation as number;
+      const bundleGeneration = async () =>
+        (await call('GET', '/v1/public/content')).json().data
+          .generation as number;
+      expect([await stamp(), await bundleGeneration()]).toEqual([0, 0]);
+
+      // Transaction 1 records a change and stays open; transaction 2 starts
+      // afterwards. Transaction 2 cannot commit first: it waits for the
+      // generation row, so it can never publish generation 2 while 1 is
+      // still invisible (the reversed-commit case).
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let recorded!: () => void;
+      const firstRecorded = new Promise<void>(
+        (resolve) => (recorded = resolve),
+      );
+      const first = prisma.$transaction(
+        async (tx) => {
+          const generation = await recordContentChange(tx, 'page', 'home', 2);
+          recorded();
+          await held;
+          return generation;
+        },
+        { timeout: 10_000 },
+      );
+      await firstRecorded;
+      let secondDone = false;
+      const second = prisma
+        .$transaction((tx) => recordContentChange(tx, 'page', 'about', 2), {
+          timeout: 10_000,
+        })
+        .then((generation) => {
+          secondDone = true;
+          return generation;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(secondDone).toBe(false);
+      expect(await stamp()).toBe(0);
+      release();
+      const [one, two] = await Promise.all([first, second]);
+      expect([one, two]).toEqual([1, 2]);
+      expect(await stamp()).toBe(2);
+
+      // A real save moves the generation, and the bundle reports it.
+      const about = defaultPages.about as Record<string, unknown>;
+      await savePage(admin, 1, { ...about, story: 'Changed.' });
+      expect(await contentGeneration()).toBe(3);
+      expect(await bundleGeneration()).toBe(3);
+      // A refused save does not.
+      await savePage(admin, 1, about);
+      expect(await stamp()).toBe(3);
+    });
+
+    it('an outbox event with no handler is kept and retried, not acknowledged', async () => {
+      const event = await prisma.outboxEvent.create({
+        // Due already (Postgres rounds stored times to the millisecond, so
+        // "now" could otherwise be a fraction of a millisecond in the future).
+        data: {
+          topic: 'library.changed',
+          payload: { id: 'x' },
+          availableAt: new Date(0),
+        },
+      });
+      const warnings: string[] = [];
+      await drainOutbox({}, 50, {
+        warn: (_object, message) => warnings.push(message),
+      });
+      let row = await prisma.outboxEvent.findUniqueOrThrow({
+        where: { id: event.id },
+      });
+      expect(row.processedAt).toBeNull();
+      expect(row.attempts).toBe(1);
+      expect(row.lastError).toMatch(
+        /No handler for outbox topic "library.changed"/,
+      );
+      expect(warnings).toHaveLength(1);
+
+      // Once a handler exists, the same event is delivered.
+      await prisma.outboxEvent.update({
+        where: { id: event.id },
+        data: { availableAt: new Date(0) },
+      });
+      const delivered: number[] = [];
+      await drainOutbox({
+        'library.changed': async (events) => {
+          delivered.push(...events.map((item) => item.id));
+        },
+      });
+      row = await prisma.outboxEvent.findUniqueOrThrow({
+        where: { id: event.id },
+      });
+      expect(delivered).toEqual([event.id]);
+      expect(row.processedAt).not.toBeNull();
+      expect(row.lastError).toBeNull();
     });
   },
 );

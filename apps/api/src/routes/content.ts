@@ -21,7 +21,10 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { requireRole, type Actor } from '../lib/identity.js';
-import { CONTENT_CHANGED, recordContentChange } from '../lib/content-change.js';
+import {
+  contentGeneration,
+  recordContentChange,
+} from '../lib/content-change.js';
 import { parseRestored } from '../lib/restore.js';
 import { publicCollections } from './collections.js';
 
@@ -75,6 +78,10 @@ function withVersion(reply: FastifyReply, version: number) {
 export function registerContentRoutes(app: FastifyInstance) {
   // ---------- Public ----------
   app.get('/v1/public/content', async (_request, reply) => {
+    // Read the generation before the content: the bundle then holds at
+    // least that generation's changes, never claims more than it has. A
+    // change committed meanwhile only causes one extra refresh later.
+    const generation = await contentGeneration();
     const [site, pages] = await Promise.all([
       prisma.siteSettings.findUnique({
         where: { id: 'site' },
@@ -93,23 +100,19 @@ export function registerContentRoutes(app: FastifyInstance) {
         site: site.data,
         pages: Object.fromEntries(pages.map((page) => [page.key, page.data])),
         collections,
+        generation,
       },
     };
   });
 
   /**
-   * A cheap freshness check for open browsers: the newest content-change
-   * event. It changes whenever published content may have changed, so a
-   * page only refetches the full bundle when needed. It carries no content.
+   * A cheap freshness check for open browsers: the latest committed content
+   * generation. A page compares it with the generation of the bundle it is
+   * showing and refreshes while it is behind. It carries no content.
    */
   app.get('/v1/public/content/stamp', async (_request, reply) => {
-    const last = await prisma.outboxEvent.findFirst({
-      where: { topic: CONTENT_CHANGED },
-      orderBy: { id: 'desc' },
-      select: { id: true },
-    });
     reply.header('cache-control', 'no-store');
-    return { data: { stamp: String(last?.id ?? 0) } };
+    return { data: { generation: await contentGeneration() } };
   });
 
   app.get('/v1/public/site', async (_request, reply) => {

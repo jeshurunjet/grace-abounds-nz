@@ -85,15 +85,15 @@ Baseline code limits: 10-minute expiry, 5 requests/hour per normalized email and
 
 Each slice includes its contracts, meaningful permission/data/failure tests, accurate frontend states and a short update here. Coded/verified/owner-accepted are separate statuses. Owner preview and Codex review occur at slice boundaries; do not repeat successful provider setup or unrelated full audits.
 
-| Phase | Scope                                                                                       | Status                                                                                                                                                           |
-| ----- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                      |
-| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.              |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1, 2A and 2B accepted (2B pushed at `2802e00`). **2C (history/restore/freshness) coded at `7003a95`; awaiting Codex review.** 2D not started. |
-| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                            |
-| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                         |
-| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                              |
-| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                          |
+| Phase | Scope                                                                                       | Status                                                                                                                                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                                                              |
+| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                                                      |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1, 2A and 2B accepted (2B pushed at `2802e00`). **2C review fixes at `f9cdbff` (content generation, unhandled outbox events); tests, lint and build pass; awaiting Codex re-review.** 2D not started. |
+| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                                                    |
+| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                                                                 |
+| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                                                      |
+| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                                                  |
 
 ### Phase 2 — finish the CMS and shared content foundation
 
@@ -1606,3 +1606,37 @@ Implements "2C. Revision history, preview and freshness" as authorized by the ow
 **Fresh Codex checks:** revalidation/freshness/CMS focused suites **17 passed across 3 files**; workspace typecheck, lint including repository Prettier and whitespace check passed. Restored generated tracked tsbuildinfo from typecheck. Owner's post-fix DB/regular/lint/stopped-server-build result of "done" is recorded as reported success without exact counts, not independently rerun/converted into counts here. No application code changes, DB reset/migration, production build, push, merge or deployment in this review.
 
 **Current next Claude instruction:** Address only these two freshness/outbox findings using the smallest reliable protocol and focused deterministic tests. Keep accepted restore behavior, theme/UI, no-store default and preview deferral intact. Update this sole handover with exact new check results and a short owner acceptance check for an already-open page changing after save/restore. Return for focused Codex review before 2D. No broad rewrite, cache enablement, push/merge/deployment.
+
+### Phase 2C review fixes — Claude, 14 November 2026, head `f9cdbff`
+
+Addresses only the two findings in "Codex Phase 2C review". Restore behaviour, UI, the no-store default and the preview deferral are unchanged; caching stays off.
+
+**Commits:** `eec44e8` (review recorded), `f9cdbff` (fixes). Migration `20261114000136_phase2c_content_generation` (owner-applied to dev and test) adds the single-row `ContentGeneration` table.
+
+**[P2] Content-generation protocol (replaces the outbox-id stamp):**
+
+- Every content write transaction calls `recordContentChange`, which increments `ContentGeneration.value` with `INSERT … ON CONFLICT DO UPDATE … RETURNING`. The row lock is held until that transaction ends, so a second writer waits and gets the next number: generations follow commit order, and a reader can never see generation N+1 while N is uncommitted (the reversed-commit case). The outbox event carries the same generation.
+- `GET /v1/public/content` reads the generation **before** the content and returns it as `generation`, so a bundle never claims more than it holds (a change committed in between causes at most one extra refresh). `GET /v1/public/content/stamp` returns `{ generation }`.
+- The website keeps the rendered bundle's generation (`useContent().generation`). Open public pages check the stamp on load and once a minute while visible, and refresh whenever the server's generation is greater than the one **rendered**. Nothing is remembered between checks, so a save before the first check is caught, and a refresh that still returns stale (e.g. cached, revalidation delayed) content is retried at the next check until the page renders the latest generation. Workspaces and pages without a loaded bundle are not polled. The existing refresh on public navigation and tab return is kept.
+
+**[P2] Unhandled outbox topics:** `drainOutbox` now requires a registered handler. An event with no handler is kept unprocessed with `attempts`, `lastError` ("No handler for outbox topic …") and backoff, a warning is logged (topic, ids and message only, never payloads), and it is delivered once a handler is registered. No dashboard or new queue.
+
+**Regression tests:**
+
+- `revisions.test.ts` (+2, DB): "generations follow commit order": transaction 1 records a change and stays open, transaction 2 is shown to block (not settled after 150 ms, stamp still 0), then they commit as generations 1 and 2 and the stamp reads 2; a real save moves the generation and the bundle reports it; a refused save does not. "An outbox event with no handler is kept and retried": unprocessed with attempts 1, error and one warning; delivered once the handler exists. The existing outbox test now reads the generation stamp.
+- `content-freshness.test.tsx` (+4, replacing the earlier stamp test): save before the first check triggers a refresh; a page showing the latest generation does nothing; a refresh that still gets stale content is retried until the rendered generation catches up; workspaces and pages without a bundle are not polled.
+- One test timing flaw found and fixed during the owner's run: the unhandled-topic test created and drained an event within one millisecond, and Postgres's millisecond rounding could make it look a fraction of a millisecond in the future; the test now creates it already due (the real dispatcher runs every 3 seconds).
+
+**Evidence (owner's Mac, 14 Nov, exact output):**
+
+- `pnpm test`: **Test Files 27 passed | 12 skipped (39); Tests 101 passed | 103 skipped (204)** (includes `content-freshness.test.tsx` 7 tests, `revalidation.test.ts` 2).
+- `pnpm test:db`, first run: 112 of 113 passed (the timing flaw above). After the test fix: **Test Files 15 passed (15); Tests 113 passed (113)** (includes `revisions.test.ts` 7, `library.test.ts` 6, `sermons.test.ts` 7).
+- `pnpm lint`: ESLint for media-worker, api and web passed; "All matched files use Prettier code style!"
+- `pnpm build` (dev server stopped): all packages built; `next build` completed. The owner is reminded to remove `apps/web/.next` before restarting `pnpm dev`.
+- Typecheck (api, web, validation) clean after the migration.
+
+**Owner acceptance check (short):** with `pnpm dev` and the API running, open `/about` in a private window and leave it open. In another window, as Admin, change the About history text and select Save (or restore an older About version from Version history). Within about a minute, without touching the private window, it should show the new text. Also check that switching back to that tab updates it at once.
+
+**Current next instruction:**
+
+> Codex: focused re-review of `eec44e8..f9cdbff` for the two 2C findings. Owner: run the acceptance check above. Claude: no 2D (uploads) until accepted. No push, merge or deployment.

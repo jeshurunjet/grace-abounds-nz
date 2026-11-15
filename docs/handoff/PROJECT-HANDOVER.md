@@ -1666,3 +1666,43 @@ Run on the owner's Mac against the local dev servers. An anonymous (signed-out) 
 **Current next instruction:**
 
 > Owner: authorize Phase 2D (S3/CloudFront upload library) and, separately, any push of `backend-phase-2`. Claude: on 2D authorization, start with a reviewed provider-configuration guide (bucket, CloudFront, IAM least privilege, CORS, encryption, lifecycle) for the owner to create and to enter secrets themselves; then verified staff uploads with drag-and-drop and keyboard file picker, queue/progress/retry, and protected member downloads, keeping Pastor video approval and library/private boundaries. Caching stays off; no automation or chat. No merge, push or deployment without authorization.
+
+### Phase 2D step 1 — S3/CloudFront provider plan for review (Claude, 15 November 2026)
+
+The owner authorized Phase 2D and a push of `backend-phase-2` (15 Nov). The push could not be made from Claude's workspace (the network proxy refuses GitHub), so the owner pushes from the Mac. As the plan requires, provisioning starts with this configuration plan; **no AWS resources, secrets or application code yet.** The owner (and Codex) review it; after approval Claude guides the owner through creating it, and the owner enters the keys into `.env` themselves.
+
+**Region.** Asia Pacific (New Zealand), `ap-southeast-6` (Auckland), generally available with three Availability Zones. It is an opt-in Region: enable it once under Account → AWS Regions before creating anything. S3 is available there; CloudFront is global and already has Auckland edge locations. (Confirm on the AWS "Services by Region" page at provisioning time.)
+
+**Account hygiene (before anything else).** Church-owned AWS account; root user with MFA, never used day to day and never with access keys; billing contact; an AWS Budget with email alerts (suggested NZ$20/month for development); a named IAM admin user (with MFA) for the console work below.
+
+**Buckets (one per environment; development first).**
+
+- `grace-abounds-dev-files` in `ap-southeast-6` (staging/production get their own later). Object Ownership "bucket owner enforced" (ACLs off), **Block Public Access on (all four)**, default encryption SSE-S3, versioning on.
+- One private bucket, three prefixes:
+  - `incoming/` — where the browser uploads; unverified, never served to anyone;
+  - `files/` — verified files; served only through the API's short-lived download links;
+  - `public/` — verified files that are deliberately public (website photos, approved public media); later served through CloudFront.
+- Lifecycle rules: abort incomplete multipart uploads after 1 day; expire `incoming/` objects after 2 days (abandoned or rejected uploads); expire non-current versions after 30 days (recoverable removal window); keep current versions.
+- CORS (development): allow `PUT` and `POST` from `http://localhost:3000` with headers `content-type`, `content-length`, `x-amz-*`; expose `ETag`; max age 3000 s. Production origins are added when the domain is chosen. No `GET` CORS is needed (downloads are ordinary navigations).
+
+**Application credentials (least privilege).** An IAM user `grace-abounds-dev-app` (programmatic access only) with one inline policy limited to this bucket: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on `arn:aws:s3:::grace-abounds-dev-files/*` and nothing else (no `ListBucket`, no bucket-policy or ACL actions, no other buckets). Production uses a host role instead of long-lived keys. New `.env` names (documented in `.env.example`; values typed by the owner, never pasted to Claude): `S3_REGION=ap-southeast-6`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Without them, uploads show as unavailable (no fake success).
+
+**CloudFront (staging/production, not needed for development).** One distribution with Origin Access Control to the bucket, restricted by bucket policy to `public/*` only; HTTPS only; no private or `incoming/` access. Members-only and staff-only files are never served by CloudFront; they use API-issued presigned links. Development serves public files through the same presigned links, so behaviour can be tested without CloudFront.
+
+**Upload and verification flow (to build after approval).**
+
+1. Staff choose files (drag and drop or a keyboard-accessible picker). The queue shows each file, its checks and progress; nothing is sent until **Upload**.
+2. For each file the API checks role, type and size against the policy, creates a `PENDING` Asset, and returns a presigned PUT for one exact `incoming/` key with the declared type and size.
+3. The browser uploads straight to S3 with progress; a failure can be retried without creating a duplicate.
+4. The API completes it: confirms the object exists with the declared size, reads its first bytes to check the real file type matches, copies it to `files/` (or `public/` when deliberately public), deletes the `incoming/` copy, and marks the Asset `VERIFIED`. Mismatches become `REJECTED` and are never served.
+5. Members open or download through `GET` endpoints that authorise the request and return a presigned link valid for 5 minutes, with `Content-Disposition` set (inline only for PDF, images, audio and video; attachment for everything else) and the stored content type.
+
+**File policy (proposed; owner to confirm).** Documents (PDF, Word, ODT, RTF, TXT) up to 25 MB; spreadsheets (Excel, ODS, CSV) 25 MB; presentations (PowerPoint, ODP) 100 MB; images (JPEG, PNG, WebP, GIF) 20 MB; audio (MP3, M4A, WAV) 200 MB; ZIP archives 200 MB; video (MP4, MOV, M4V, WebM) up to 2 GB, **only through Sermons & videos** (Pastor approval unchanged; never as a library file). Refused: HTML, SVG, scripts, executables and anything not listed. Virus scanning (Amazon GuardDuty Malware Protection for S3) is optional and paid; recommended before production, not required for development.
+
+**Boundaries kept.** Members never upload, edit or delete; video assets stay staff-only until the Pastor approves the sermon; the library's Pastor-only outside-link rule stays; no credentials in browser payloads (only single-use presigned URLs); caching stays off; no automation or chat.
+
+**Owner decisions requested:** (1) approve this plan or change it; (2) confirm the file types and size limits; (3) confirm the `ap-southeast-6` Region and the bucket name; (4) development budget alert amount.
+
+**Current next instruction:**
+
+> Owner: push `backend-phase-2` from the Mac (`git push origin backend-phase-2`); review and approve the provider plan above (and the four decisions). Codex: optional focused review of the plan. Claude: after approval, guide the owner through provisioning step by step, then build the upload/download slice against a storage interface with deterministic tests. No merge or deployment.

@@ -371,3 +371,108 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Uploads (Phase 2D): drop zone and queue, staff only */
+.lib-main {
+  position: relative;
+}
+.lib-drop {
+  position: absolute;
+  inset: 0.5rem;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  border: 2px dashed var(--gold);
+  border-radius: var(--radius);
+  background: var(--highlight);
+  color: var(--ink-strong);
+  font-weight: 600;
+  pointer-events: none;
+}
+.lib-uploads {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.lib-uploads-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.lib-uploads-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: auto;
+  color: var(--ink-mid);
+  font-size: 0.9rem;
+}
+.lib-uploads-choice select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.upload-queue {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.upload-item {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  padding: 0.45rem 0.25rem;
+  border-top: 1px solid var(--line);
+}
+.upload-icon {
+  color: var(--ink-soft);
+}
+.upload-done .upload-icon {
+  color: var(--success-ink);
+}
+.upload-refused .upload-icon,
+.upload-failed .upload-icon {
+  color: var(--danger-ink);
+}
+.upload-name {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.upload-name small,
+.upload-status {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.upload-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+.upload-progress {
+  grid-column: 2 / -1;
+  width: 100%;
+  height: 0.4rem;
+  accent-color: var(--gold);
+}
+@media (max-width: 640px) {
+  .upload-item {
+    grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  }
+  .upload-status {
+    grid-column: 2 / 3;
+  }
+}

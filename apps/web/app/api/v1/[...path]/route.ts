@@ -91,6 +91,9 @@ async function proxy(
         headers,
         body,
         cache: 'no-store',
+        // File links answer with a redirect to a short-lived storage URL;
+        // pass it to the browser rather than streaming the file through here.
+        redirect: 'manual',
       },
     );
   } catch {

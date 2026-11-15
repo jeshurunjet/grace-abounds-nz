@@ -970,3 +970,34 @@
   align-items: center;
   gap: 0.6rem;
 }
+
+/* Sermon recording upload (Phase 2D) */
+.kit-field-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-mid);
+}
+.sermon-recording {
+  padding: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+.sermon-recording.is-dropping {
+  border-color: var(--gold);
+  background: var(--highlight);
+}
+.sermon-upload,
+.sermon-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.sermon-file span {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sermon-file small {
+  color: var(--ink-soft);
+}

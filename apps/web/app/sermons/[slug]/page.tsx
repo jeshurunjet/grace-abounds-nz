@@ -5,6 +5,7 @@ import { notFound, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useContent } from '../../components/content-provider';
 import { Breadcrumbs } from '../../components/breadcrumbs';
+import { isFileHref } from '@grace-abounds/validation';
 export default function SermonDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { status } = useSession();
@@ -28,7 +29,8 @@ export default function SermonDetailPage() {
             { label: item.title },
           ]}
         />
-        {item.mediaUrl?.startsWith('https://') ? (
+        {item.mediaUrl &&
+        (item.mediaUrl.startsWith('https://') || isFileHref(item.mediaUrl)) ? (
           <video
             className="sermon-player"
             controls

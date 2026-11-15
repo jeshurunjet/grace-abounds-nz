@@ -1,4 +1,5 @@
 import {
+  fileHref,
   pageKeys,
   type PageContentMap,
   type PageKey,
@@ -219,7 +220,8 @@ export function collectionsToLegacy(
       summary: item.summary,
       status: 'published',
       progress: 100,
-      mediaUrl: item.mediaUrl,
+      // An uploaded recording plays through the API's checked file link.
+      mediaUrl: item.mediaAssetId ? fileHref(item.mediaAssetId) : item.mediaUrl,
     })),
   };
 }

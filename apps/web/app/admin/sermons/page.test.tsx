@@ -40,6 +40,7 @@ const base: StaffSermon = {
   reviewNote: '',
   archived: false,
   live: null,
+  mediaFile: null,
   changedSinceApproval: false,
   everApproved: false,
   version: 1,
@@ -59,8 +60,69 @@ const json = (status: number, body: unknown) =>
       headers: { 'content-type': 'application/json' },
     }),
   );
+const recordingAsset = {
+  id: 'rec1',
+  fileName: 'Sunday.mp4',
+  size: 12,
+  contentType: 'video/mp4',
+  purpose: 'sermon',
+  inline: true,
+  status: 'verified',
+  rejectReason: '',
+  href: '/api/v1/files/rec1',
+  createdAt: '2026-11-15T00:00:00.000Z',
+};
+let uploadsAvailable = false;
+const uploadCalls: string[] = [];
+/** Storage's side of a presigned part upload (no network in tests). */
+class FakeUpload {
+  status = 0;
+  upload: { onprogress?: (event: { loaded: number }) => void } = {};
+  onload?: () => void;
+  onabort?: () => void;
+  open(method: string, url: string) {
+    uploadCalls.push(`${method} ${url}`);
+  }
+  send() {
+    setTimeout(() => {
+      this.status = 200;
+      this.onload?.();
+    });
+  }
+  getResponseHeader() {
+    return '"etag-1"';
+  }
+  abort() {
+    this.onabort?.();
+  }
+}
 function fakeApi(url: string, init?: RequestInit) {
   const method = init?.method ?? 'GET';
+  if (url.endsWith('/staff/uploads/status'))
+    return json(200, {
+      data: {
+        available: uploadsAvailable,
+        maxLibraryBytes: 500 * 1024 * 1024,
+        maxSermonBytes: 5 * 1024 ** 3,
+      },
+    });
+  if (url.startsWith('/api/v1/staff/uploads')) {
+    uploadCalls.push(`${method} ${url}`);
+    if (url === '/api/v1/staff/uploads')
+      return json(201, {
+        data: {
+          asset: { ...recordingAsset, status: 'pending' },
+          partSize: 10 * 1024 * 1024,
+          partCount: 1,
+        },
+      });
+    if (url.endsWith('/parts'))
+      return json(200, {
+        data: { urls: [{ partNumber: 1, url: 'https://storage.test/p1' }] },
+      });
+    if (url.endsWith('/complete')) return json(200, { data: recordingAsset });
+    return json(200, {});
+  }
   if (method === 'GET') return json(200, { data: rows });
   const body = init?.body ? JSON.parse(String(init.body)) : undefined;
   calls.push({
@@ -101,7 +163,10 @@ beforeEach(() => {
   state.role = 'admin';
   rows = [base];
   calls.length = 0;
+  uploadCalls.length = 0;
+  uploadsAvailable = false;
   vi.stubGlobal('fetch', vi.fn(fakeApi));
+  vi.stubGlobal('XMLHttpRequest', FakeUpload);
 });
 const panel = () => screen.getByRole('dialog');
 
@@ -263,10 +328,93 @@ describe('Sermons & videos', () => {
       );
       expect(within(panel()).getByRole('button', { name })).toBeDisabled();
       expect(
-        within(panel()).getByText(/Add the recording link and Save/),
+        within(panel()).getByText(/upload it or paste a link\) and Save/),
       ).toBeInTheDocument();
       view.unmount();
     }
+    expect(calls).toEqual([]);
+  });
+  it('uploads a recording into the working copy; Save keeps it, and approval needs it', async () => {
+    uploadsAvailable = true;
+    rows = [{ ...base, mediaUrl: '' }];
+    render(<SermonsPage />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit Walking in the Spirit' }),
+    );
+    await waitFor(() =>
+      expect(
+        within(panel()).getByRole('button', { name: /Choose recording/ }),
+      ).toBeEnabled(),
+    );
+    fireEvent.change(
+      within(panel()).getByLabelText('Choose the recording file'),
+      {
+        target: { files: [new File(['recording'], 'Sunday.mp4')] },
+      },
+    );
+    // Nothing is sent until Upload.
+    expect(uploadCalls).toEqual([]);
+    await act(async () => {
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Upload' }));
+    });
+    await waitFor(() =>
+      expect(within(panel()).getByText('Sunday.mp4')).toBeInTheDocument(),
+    );
+    expect(uploadCalls).toEqual([
+      'POST /api/v1/staff/uploads',
+      'POST /api/v1/staff/uploads/rec1/parts',
+      'PUT https://storage.test/p1',
+      'POST /api/v1/staff/uploads/rec1/complete',
+    ]);
+    expect(within(panel()).getByLabelText('Recording preview')).toHaveAttribute(
+      'src',
+      '/api/v1/files/rec1',
+    );
+    // The upload is part of the unsaved edit; Save sends it.
+    await act(async () => {
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() =>
+      expect(calls.at(-1)).toMatchObject({
+        method: 'PATCH',
+        body: { mediaAssetId: 'rec1', mediaUrl: '' },
+      }),
+    );
+    expect(
+      within(panel()).getByRole('button', {
+        name: /Ask the Pastor to approve/,
+      }),
+    ).toBeEnabled();
+  });
+
+  it('a recording uploaded but not saved is discarded when removed', async () => {
+    uploadsAvailable = true;
+    rows = [{ ...base, mediaUrl: '' }];
+    render(<SermonsPage />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit Walking in the Spirit' }),
+    );
+    await waitFor(() =>
+      expect(
+        within(panel()).getByRole('button', { name: /Choose recording/ }),
+      ).toBeEnabled(),
+    );
+    fireEvent.change(
+      within(panel()).getByLabelText('Choose the recording file'),
+      {
+        target: { files: [new File(['recording'], 'Sunday.mp4')] },
+      },
+    );
+    await act(async () => {
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Upload' }));
+    });
+    await waitFor(() =>
+      expect(within(panel()).getByText('Sunday.mp4')).toBeInTheDocument(),
+    );
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Remove' }));
+    await waitFor(() =>
+      expect(uploadCalls.at(-1)).toBe('DELETE /api/v1/staff/uploads/rec1'),
+    );
     expect(calls).toEqual([]);
   });
 });

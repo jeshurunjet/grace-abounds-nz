@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -36,8 +37,12 @@ import {
 } from 'lucide-react';
 import {
   classifyLink,
+  fileHref,
+  fileTypeLabel,
+  formatBytes,
   safeLinkHref,
   type StaffSermon,
+  type UploadsStatus,
 } from '@grace-abounds/validation';
 import { MemberShell } from '../../components/member-shell';
 import { useToast } from '../../components/toast';
@@ -54,6 +59,7 @@ import {
 import { api, ApiError, errorMessage } from '../../lib/api-client';
 import { formatSermonDate } from '../../lib/content-adapter';
 import { sermonBadge } from '../../lib/sermon-status';
+import { UploadQueueList, useUploadQueue } from '../../components/upload-queue';
 
 /*
  * The Gallery: one Drive-style file manager for every role (owner decision,
@@ -65,8 +71,13 @@ import { sermonBadge } from '../../lib/sermon-status';
  * "Videos & sermons" is always a top-level section. It lists sermons from
  * the Sermon records (approved ones for members; staff also see drafts and
  * pending ones, with a route to the approval editor). File actions here can
- * never publish a video. Uploads (drag and drop, file picker) arrive with
- * verified S3 storage in Phase 2D; until then Upload is shown as unavailable.
+ * never publish a video.
+ *
+ * Uploads (Phase 2D, staff only): drop files on the file area or select
+ * Upload (a keyboard-accessible file picker). Files are checked as they are
+ * added and wait in a queue until Upload; each goes straight to storage, is
+ * checked by the server, then appears here as a library item in the folder
+ * that was open when it was added. Members have no upload or drop handlers.
  */
 
 const SERMONS = '#sermons';
@@ -116,6 +127,7 @@ const resourceBlank = {
   type: 'Document',
   url: '',
   sermonId: null,
+  assetId: null,
   folderId: null,
   visibility: 'members',
   status: 'draft',
@@ -217,6 +229,7 @@ function RowMenu({ label, items }: { label: string; items: MenuItem[] }) {
 
 type FolderMode = 'new' | 'rename' | 'move';
 type FileMode = 'new' | 'edit' | 'move';
+type Publish = 'members' | 'public' | 'draft';
 
 export default function GalleryPage() {
   const { data, status: sessionStatus } = useSession();
@@ -244,6 +257,12 @@ export default function GalleryPage() {
     row: Row;
     name: string;
   } | null>(null);
+  const [uploads, setUploads] = useState<UploadsStatus | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [publish, setPublish] = useState<Publish>('members');
+  const publishRef = useRef(publish);
+  publishRef.current = publish;
+  const picker = useRef<HTMLInputElement>(null);
 
   // A remembered list/grid choice is a per-browser convenience only.
   useEffect(() => {
@@ -267,11 +286,14 @@ export default function GalleryPage() {
     setError('');
     try {
       if (staff) {
-        const [folderRows, resourceRows, sermonRows] = await Promise.all([
-          api<Row[]>('/staff/folders'),
-          api<Row[]>('/staff/resources'),
-          api<StaffSermon[]>('/staff/sermons'),
-        ]);
+        const [folderRows, resourceRows, sermonRows, uploadStatus] =
+          await Promise.all([
+            api<Row[]>('/staff/folders'),
+            api<Row[]>('/staff/resources'),
+            api<StaffSermon[]>('/staff/sermons'),
+            api<UploadsStatus>('/staff/uploads/status').catch(() => null),
+          ]);
+        setUploads(uploadStatus?.data ?? null);
         const slugs = new Map(
           sermonRows.data.map((item) => [item.id, item.slug] as const),
         );
@@ -289,9 +311,11 @@ export default function GalleryPage() {
             title: String(row.title),
             description: String(row.description ?? ''),
             type: String(row.type ?? ''),
-            href: row.sermonId
-              ? `/sermons/${slugs.get(String(row.sermonId)) ?? ''}`
-              : String(row.url ?? ''),
+            href: row.assetId
+              ? fileHref(String(row.assetId))
+              : row.sermonId
+                ? `/sermons/${slugs.get(String(row.sermonId)) ?? ''}`
+                : String(row.url ?? ''),
             folderId: (row.folderId as string | null) ?? null,
             visibility: String(row.visibility),
             status: String(row.status),
@@ -347,6 +371,38 @@ export default function GalleryPage() {
   useEffect(() => {
     if (sessionStatus !== 'loading') void load();
   }, [load, sessionStatus]);
+
+  // ---------- Uploads (staff) ----------
+  const queue = useUploadQueue<{ folderId: string | null }>(
+    'library',
+    async (asset, item) => {
+      const name = item.file.name.replace(/\.[^.]+$/, '') || item.file.name;
+      const choice = publishRef.current;
+      await api<Row>('/staff/resources', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: name.slice(0, 160),
+          description: '',
+          type: fileTypeLabel(item.file.name),
+          url: '',
+          sermonId: null,
+          assetId: asset.id,
+          folderId: item.extra.folderId,
+          visibility: choice === 'public' ? 'public' : 'members',
+          status: choice === 'draft' ? 'draft' : 'published',
+        }),
+      });
+      void load();
+    },
+  );
+  const canUpload = staff && !!uploads?.available;
+  // Leaving the page would stop uploads in progress; ask first.
+  useEffect(() => {
+    if (!queue.busy) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [queue.busy]);
 
   // ---------- Where we are ----------
   const byId = useMemo(
@@ -456,6 +512,7 @@ export default function GalleryPage() {
     kind: 'select',
     options: [['', 'Library (top level)'], ...folderChoices()],
   };
+  const editingUpload = !!filePanel.request?.row?.assetId;
   const fileFields: FieldSpec[] =
     filePanel.mode === 'move'
       ? [folderSelect]
@@ -468,19 +525,23 @@ export default function GalleryPage() {
             kind: 'text',
             hint: 'For example PDF, Slides, Spreadsheet, Audio.',
           },
-          {
-            key: 'url',
-            label: 'Link',
-            kind: 'text',
-            hint: 'A site path such as /next-steps, or an https:// link. Links to other websites are published by the Pastor. Videos go in Sermons & videos.',
-          },
-          {
-            key: 'sermonId',
-            label: 'Or an approved sermon',
-            kind: 'select',
-            hint: 'Every approved sermon is already in Videos & sermons. Use this to also place one in a folder; it shows only while the sermon is on the website.',
-            options: [['', 'None'], ...liveSermons],
-          },
+          ...(editingUpload
+            ? []
+            : ([
+                {
+                  key: 'url',
+                  label: 'Link',
+                  kind: 'text',
+                  hint: 'A site path such as /next-steps, or an https:// link. Links to other websites are published by the Pastor. Videos go in Sermons & videos.',
+                },
+                {
+                  key: 'sermonId',
+                  label: 'Or an approved sermon',
+                  kind: 'select',
+                  hint: 'Every approved sermon is already in Videos & sermons. Use this to also place one in a folder; it shows only while the sermon is on the website.',
+                  options: [['', 'None'], ...liveSermons],
+                },
+              ] satisfies FieldSpec[])),
           folderSelect,
           {
             key: 'visibility',
@@ -574,6 +635,10 @@ export default function GalleryPage() {
         setConfirm({ kind: 'delete-folder', row, name: folder.name }),
     },
   ];
+
+  const readyCount = queue.items.filter(
+    (item) => item.state === 'ready',
+  ).length;
 
   // ---------- Rendering ----------
   const go = (target: Place) => {
@@ -700,7 +765,37 @@ export default function GalleryPage() {
             )}
           </nav>
 
-          <section className="lib-main" aria-label="Files">
+          <section
+            className={`lib-main${dragging ? ' lib-dropping' : ''}`}
+            aria-label="Files"
+            {...(canUpload &&
+              at !== SERMONS && {
+                onDragOver: (event: DragEvent) => {
+                  if (!event.dataTransfer.types.includes('Files')) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'copy';
+                  setDragging(true);
+                },
+                onDragLeave: (event: DragEvent) => {
+                  if (
+                    !event.currentTarget.contains(event.relatedTarget as Node)
+                  )
+                    setDragging(false);
+                },
+                onDrop: (event: DragEvent) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  if (event.dataTransfer.files.length)
+                    queue.add(event.dataTransfer.files, { folderId: here });
+                },
+              })}
+          >
+            {dragging && (
+              <div className="lib-drop" aria-hidden="true">
+                <Upload size={28} />
+                Drop to upload to {pathOf(here)}
+              </div>
+            )}
             <div className="lib-toolbar">
               <nav className="lib-crumbs" aria-label="Folder path">
                 {search ? (
@@ -765,12 +860,25 @@ export default function GalleryPage() {
                     <button
                       type="button"
                       className="button button-outline"
-                      disabled
+                      disabled={!folders || !canUpload}
                       aria-describedby="lib-upload-note"
+                      onClick={() => picker.current?.click()}
                     >
                       <Upload aria-hidden="true" size={16} />
                       Upload
                     </button>
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      hidden
+                      aria-label="Choose files to upload"
+                      onChange={(event) => {
+                        if (event.target.files?.length)
+                          queue.add(event.target.files, { folderId: here });
+                        event.target.value = '';
+                      }}
+                    />
                   </>
                 )}
                 <div className="lib-view" role="group" aria-label="View">
@@ -797,8 +905,68 @@ export default function GalleryPage() {
             </div>
             {staff && at !== SERMONS && (
               <p id="lib-upload-note" className="lib-note">
-                File uploads are not available yet. Add a link for now.
+                {!uploads
+                  ? 'Checking whether uploads are available…'
+                  : !uploads.available
+                    ? 'File uploads aren’t set up on this server yet. Add a link for now.'
+                    : `Drop files here or select Upload. Files up to ${formatBytes(uploads.maxLibraryBytes)}; videos go in Sermons & videos.`}
               </p>
+            )}
+            {staff && queue.items.length > 0 && (
+              <section className="lib-uploads" aria-label="Uploads">
+                <div className="lib-uploads-head">
+                  <label className="lib-uploads-choice">
+                    After uploading
+                    <select
+                      value={publish}
+                      disabled={queue.busy}
+                      onChange={(event) =>
+                        setPublish(event.target.value as Publish)
+                      }
+                    >
+                      <option value="members">
+                        Publish for signed-in members
+                      </option>
+                      <option value="public">Publish for anyone</option>
+                      <option value="draft">
+                        Keep as a draft (staff only)
+                      </option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={queue.busy || !readyCount}
+                    onClick={() => void queue.start()}
+                  >
+                    <Upload aria-hidden="true" size={16} />
+                    {readyCount === 1
+                      ? 'Upload 1 file'
+                      : `Upload ${readyCount} files`}
+                  </button>
+                  {queue.items.some(
+                    (item) => item.state === 'done' || item.state === 'refused',
+                  ) && (
+                    <button
+                      type="button"
+                      className="button button-outline"
+                      onClick={queue.clearFinished}
+                    >
+                      Clear finished
+                    </button>
+                  )}
+                </div>
+                <p className="lib-note">
+                  Each file goes to the folder that was open when you added it,
+                  and opens for people only once the server has checked it.
+                </p>
+                <UploadQueueList
+                  items={queue.items}
+                  onRetry={(id) => void queue.run(id)}
+                  onCancel={queue.cancel}
+                  onRemove={queue.remove}
+                />
+              </section>
             )}
             {at === SERMONS && !search && (
               <p className="lib-note">
@@ -823,7 +991,9 @@ export default function GalleryPage() {
                   {search
                     ? 'Nothing matches your search.'
                     : staff
-                      ? 'This folder is empty. Add a link or a folder here.'
+                      ? canUpload
+                        ? 'This folder is empty. Drop files here, upload, or add a link or a folder.'
+                        : 'This folder is empty. Add a link or a folder here.'
                       : 'This folder is empty.'}
                 </p>
               </div>

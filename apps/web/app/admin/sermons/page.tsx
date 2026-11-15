@@ -2,7 +2,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type DragEvent,
+} from 'react';
 import {
   Archive,
   ArrowLeft,
@@ -13,12 +20,18 @@ import {
   Send,
   Trash,
   Undo2,
+  Upload,
   Video,
 } from 'lucide-react';
 import {
+  fileHref,
+  formatBytes,
+  hasRecording,
   isMediaRef,
+  SERMON_FILE_ACCEPT,
   type SermonInput,
   type StaffSermon,
+  type UploadsStatus,
 } from '@grace-abounds/validation';
 import { AdminShell } from '../../components/admin-shell';
 import { useToast } from '../../components/toast';
@@ -39,6 +52,8 @@ import { api, ApiError, errorMessage } from '../../lib/api-client';
 import { formatSermonDate } from '../../lib/content-adapter';
 import { getRoleNavigation } from '../../lib/role-navigation';
 import { sermonBadge } from '../../lib/sermon-status';
+import { cancelUpload } from '../../lib/uploader';
+import { UploadQueueList, useUploadQueue } from '../../components/upload-queue';
 
 /*
  * Sermons & videos. Save keeps changes private. The Pastor approves each
@@ -56,6 +71,7 @@ const blank = (): SermonInput => ({
   image: '',
   summary: '',
   mediaUrl: '',
+  mediaAssetId: null,
 });
 const editable = (row: StaffSermon): SermonInput => ({
   title: row.title,
@@ -66,6 +82,7 @@ const editable = (row: StaffSermon): SermonInput => ({
   image: row.image,
   summary: row.summary,
   mediaUrl: row.mediaUrl,
+  mediaAssetId: row.mediaAssetId ?? null,
 });
 
 type Panel = {
@@ -106,6 +123,22 @@ export default function SermonsPage() {
   const [rejecting, setRejecting] = useState(false);
   const [history, setHistory] = useState(false);
   const [note, setNote] = useState('');
+  const [uploads, setUploads] = useState<UploadsStatus | null>(null);
+  const [dragging, setDragging] = useState(false);
+  /** Names of recordings uploaded in this editor (not saved yet). */
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, { fileName: string; size: number }>
+  >({});
+  const recordingPicker = useRef<HTMLInputElement>(null);
+  // Recordings uploaded but not saved; discarded when the editor is left.
+  const unsaved = useRef(new Set<string>());
+  // Which editor an upload belongs to, so a finished upload never lands in
+  // a different sermon opened meanwhile.
+  const editorSession = useRef(0);
+  const discardUnsaved = (keep: string | null = null) => {
+    for (const id of unsaved.current) if (id !== keep) void cancelUpload(id);
+    unsaved.current.clear();
+  };
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -114,18 +147,67 @@ export default function SermonsPage() {
     } catch (failure) {
       setLoadError(errorMessage(failure));
     }
+    try {
+      setUploads((await api<UploadsStatus>('/staff/uploads/status')).data);
+    } catch {
+      setUploads(null);
+    }
   }, []);
+
+  const recording = useUploadQueue<{ session: number }>(
+    'sermon',
+    async (asset, item) => {
+      if (item.extra.session !== editorSession.current) {
+        void cancelUpload(asset.id);
+        throw new Error('The sermon was closed before the upload finished.');
+      }
+      unsaved.current.add(asset.id);
+      setUploadedFiles((files) => ({
+        ...files,
+        [asset.id]: { fileName: asset.fileName, size: asset.size },
+      }));
+      setPanel(
+        (state) =>
+          state && {
+            ...state,
+            value: { ...state.value, mediaAssetId: asset.id, mediaUrl: '' },
+          },
+      );
+    },
+  );
+  /** Leaving an editor: stop its upload and discard unsaved recordings. */
+  function resetRecording() {
+    discardUnsaved();
+    editorSession.current += 1;
+    for (const item of recording.items)
+      if (item.state === 'uploading') recording.cancel(item.id);
+      else recording.remove(item.id);
+  }
+  const addRecording = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    recording.clearFinished();
+    recording.add([file], { session: editorSession.current });
+  };
+  useEffect(() => {
+    if (!recording.busy) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [recording.busy]);
   useEffect(() => {
     void load();
   }, [load]);
   // The Gallery links here as /admin/sermons?sermon=<id>: open that one.
   const linked = useRef(false);
+  // The latest open(), so the deep link below runs once per page load.
+  const openLatest = useRef<(row: StaffSermon) => void>(() => undefined);
   useEffect(() => {
     if (!rows || linked.current) return;
     linked.current = true;
     const id = new URLSearchParams(window.location.search).get('sermon');
     const row = id ? rows.find((item) => item.id === id) : undefined;
-    if (row) open(row);
+    if (row) openLatest.current(row);
     // A one-time deep link; later list reloads never reopen it.
   }, [rows]);
 
@@ -135,7 +217,9 @@ export default function SermonsPage() {
   const dirty =
     !!panel && JSON.stringify(panel.value) !== JSON.stringify(panel.original);
 
+  openLatest.current = (row) => open(row);
   function open(row: StaffSermon | null) {
+    resetRecording();
     const value = row ? editable(row) : blank();
     setPanel({ id: row?.id ?? null, value, original: value });
     setPanelError('');
@@ -163,6 +247,8 @@ export default function SermonsPage() {
       value: editable(saved),
       original: editable(saved),
     });
+    // The saved recording is kept; other unsaved uploads are discarded.
+    discardUnsaved(saved.mediaAssetId);
   }
   function fail(failure: unknown) {
     if (failure instanceof ApiError && failure.code === 'VERSION_CONFLICT') {
@@ -297,6 +383,23 @@ export default function SermonsPage() {
     !!current && !current.live && (current.archived || !current.everApproved);
   const errorFor = (key: string) => fieldErrors[key];
   const playable = panel && isMediaRef(panel.value.mediaUrl);
+  const recordingId = panel?.value.mediaAssetId ?? null;
+  const recordingFile = recordingId
+    ? (uploadedFiles[recordingId] ??
+      (current?.mediaAssetId === recordingId ? current.mediaFile : null))
+    : null;
+  const readyRecording = recording.items.some((item) => item.state === 'ready');
+  function removeRecording() {
+    if (recordingId && unsaved.current.has(recordingId)) {
+      unsaved.current.delete(recordingId);
+      void cancelUpload(recordingId);
+    }
+    recording.clearFinished();
+    setPanel(
+      (state) =>
+        state && { ...state, value: { ...state.value, mediaAssetId: null } },
+    );
+  }
 
   function reviewBlock() {
     if (!current) return null;
@@ -306,7 +409,7 @@ export default function SermonsPage() {
       current.review !== 'pending' &&
       (!live || current.changedSinceApproval);
     // The server refuses approval without a saved recording; say so here.
-    const noRecording = !isMediaRef(current.mediaUrl);
+    const noRecording = !hasRecording(current);
     return (
       <section className="sermon-review" aria-label="Publishing">
         <p className="sermon-review-state">
@@ -340,7 +443,8 @@ export default function SermonsPage() {
           noRecording &&
           !current.archived && (
             <p className="kit-hint">
-              Add the recording link and Save before it can be approved.
+              Add the recording (upload it or paste a link) and Save before it
+              can be approved.
             </p>
           )
         )}
@@ -561,7 +665,10 @@ export default function SermonsPage() {
           eyebrow="Sermons & videos"
           dirty={dirty}
           busy={busy}
-          onClose={() => setPanel(null)}
+          onClose={() => {
+            resetRecording();
+            setPanel(null);
+          }}
           footer={(requestClose) => (
             <>
               {panel?.id && (
@@ -660,14 +767,130 @@ export default function SermonsPage() {
                 value={panel.value.image}
                 onChange={change('image')}
               />
-              <KitText
-                label="Recording link"
-                hint="An https:// link to an MP4, WebM, MP3 or M4A file. Uploads come later. Changing it needs the Pastor’s approval again."
-                value={panel.value.mediaUrl}
-                error={errorFor('mediaUrl')}
-                onChange={change('mediaUrl')}
-              />
-              {playable && (
+              <div
+                className={`kit-field sermon-recording${dragging ? ' is-dropping' : ''}`}
+                {...(!recordingId &&
+                  uploads?.available && {
+                    onDragOver: (event: DragEvent) => {
+                      if (!event.dataTransfer.types.includes('Files')) return;
+                      event.preventDefault();
+                      setDragging(true);
+                    },
+                    onDragLeave: (event: DragEvent) => {
+                      if (
+                        !event.currentTarget.contains(
+                          event.relatedTarget as Node,
+                        )
+                      )
+                        setDragging(false);
+                    },
+                    onDrop: (event: DragEvent) => {
+                      event.preventDefault();
+                      setDragging(false);
+                      addRecording(event.dataTransfer.files);
+                    },
+                  })}
+              >
+                <span className="kit-field-label">Recording</span>
+                <small className="kit-hint">
+                  Upload the edited recording, or paste a link. Changing it
+                  needs the Pastor’s approval again.
+                </small>
+                {recordingId ? (
+                  <>
+                    <div className="sermon-file">
+                      <Video aria-hidden="true" size={18} />
+                      <span>
+                        {recordingFile?.fileName ?? 'Uploaded recording'}
+                        {recordingFile && (
+                          <small> · {formatBytes(recordingFile.size)}</small>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        className="button button-outline"
+                        onClick={removeRecording}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <video
+                      className="sermon-preview"
+                      controls
+                      preload="metadata"
+                      src={fileHref(recordingId)}
+                      aria-label="Recording preview"
+                    >
+                      Your browser can’t play this recording.
+                    </video>
+                  </>
+                ) : (
+                  <>
+                    <div className="sermon-upload">
+                      <button
+                        type="button"
+                        className="button button-outline"
+                        disabled={!uploads?.available || recording.busy}
+                        onClick={() => recordingPicker.current?.click()}
+                      >
+                        <Upload aria-hidden="true" size={16} />
+                        Choose recording
+                      </button>
+                      <small className="kit-hint">
+                        {uploads?.available
+                          ? `MP4, MOV, WebM, MP3 or M4A, up to ${formatBytes(uploads.maxSermonBytes)}. You can also drop it here.`
+                          : 'Uploads aren’t set up on this server yet; paste a link instead.'}
+                      </small>
+                      <input
+                        ref={recordingPicker}
+                        type="file"
+                        accept={SERMON_FILE_ACCEPT}
+                        hidden
+                        aria-label="Choose the recording file"
+                        onChange={(event) => {
+                          addRecording(event.target.files);
+                          event.target.value = '';
+                        }}
+                      />
+                    </div>
+                    {recording.items.length > 0 && (
+                      <>
+                        <UploadQueueList
+                          items={recording.items}
+                          onRetry={(id) => void recording.run(id)}
+                          onCancel={recording.cancel}
+                          onRemove={recording.remove}
+                        />
+                        {readyRecording && (
+                          <button
+                            type="button"
+                            className="button"
+                            onClick={() => void recording.start()}
+                          >
+                            <Upload aria-hidden="true" size={16} />
+                            Upload
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+                {errorFor('mediaAssetId') && (
+                  <small className="kit-error" role="alert">
+                    {errorFor('mediaAssetId')}
+                  </small>
+                )}
+              </div>
+              {!recordingId && (
+                <KitText
+                  label="Or a recording link"
+                  hint="An https:// link to an MP4, WebM, MP3 or M4A file."
+                  value={panel.value.mediaUrl}
+                  error={errorFor('mediaUrl')}
+                  onChange={change('mediaUrl')}
+                />
+              )}
+              {!recordingId && playable && (
                 <video
                   className="sermon-preview"
                   controls

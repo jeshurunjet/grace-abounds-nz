@@ -38,6 +38,8 @@ type Revision = {
 
 const LABELS: Record<string, string> = {
   mediaUrl: 'Recording link',
+  mediaAssetId: 'Uploaded recording',
+  assetId: 'Uploaded file',
   url: 'Link',
   folderId: 'Folder',
   parentId: 'Folder',
@@ -61,6 +63,7 @@ const IGNORED = new Set([
   'everApproved',
   'archived',
   'hero',
+  'mediaFile',
 ]);
 const label = (key: string) =>
   LABELS[key] ??

@@ -56,6 +56,43 @@ const approvedSermon = {
   date: '2026-10-04',
   href: '/sermons/walking-in-the-spirit',
 };
+const uploadedAsset = {
+  id: 'a1',
+  fileName: 'Prayer guide.pdf',
+  size: 9,
+  contentType: 'application/pdf',
+  purpose: 'library',
+  inline: true,
+  status: 'verified',
+  rejectReason: '',
+  href: '/api/v1/files/a1',
+  createdAt: '2026-11-15T00:00:00.000Z',
+};
+/** Storage's side of a presigned part upload (no network in tests). */
+class FakeUpload {
+  status = 0;
+  upload: { onprogress?: (event: { loaded: number }) => void } = {};
+  onload?: () => void;
+  onerror?: () => void;
+  onabort?: () => void;
+  open(method: string, url: string) {
+    storagePuts.push(`${method} ${url}`);
+  }
+  send(body: Blob) {
+    setTimeout(() => {
+      this.upload.onprogress?.({ loaded: body.size });
+      this.status = 200;
+      this.onload?.();
+    });
+  }
+  getResponseHeader(name: string) {
+    return name.toLowerCase() === 'etag' ? '"etag-1"' : null;
+  }
+  abort() {
+    this.onabort?.();
+  }
+}
+let storagePuts: string[] = [];
 let library: Record<string, unknown> = {};
 let staffData: Record<string, unknown[]> = {};
 const calls: {
@@ -108,6 +145,8 @@ const sermonRow = (over: object) => ({
 beforeEach(() => {
   state.role = 'member';
   calls.length = 0;
+  storagePuts = [];
+  vi.stubGlobal('XMLHttpRequest', FakeUpload);
   library = {
     folders: [folder],
     resources: [
@@ -136,12 +175,28 @@ beforeEach(() => {
     vi.fn((url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       if (method !== 'GET') {
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         calls.push({
           method,
           url,
           version: new Headers(init?.headers).get('if-match'),
-          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+          body,
         });
+        if (url === '/api/v1/staff/uploads')
+          return json({
+            data: {
+              asset: { ...uploadedAsset, status: 'pending' },
+              partSize: 10 * 1024 * 1024,
+              partCount: 1,
+            },
+          });
+        if (url.endsWith('/parts'))
+          return json({
+            data: {
+              urls: [{ partNumber: 1, url: 'https://storage.test/part-1' }],
+            },
+          });
+        if (url.endsWith('/complete')) return json({ data: uploadedAsset });
         return json({ data: {} });
       }
       calls.push({ method, url, version: null });
@@ -171,6 +226,12 @@ describe('Gallery file manager', () => {
     ).toHaveAttribute('href', romans.url);
     for (const name of ['New folder', 'Add link', 'Upload'])
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    // No file picker and no drop handling for members.
+    expect(screen.queryByLabelText('Choose files to upload')).toBeNull();
+    fireEvent.drop(files, {
+      dataTransfer: { files: [new File(['x'], 'a.pdf')], types: ['Files'] },
+    });
+    expect(screen.queryByRole('list', { name: 'Files to upload' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Actions for/ })).toBeNull();
     expect(calls.some((call) => call.url.includes('/staff/'))).toBe(false);
     fireEvent.click(within(crumbs).getByRole('button', { name: 'Library' }));
@@ -230,17 +291,24 @@ describe('Gallery file manager', () => {
     expect(screen.queryByRole('link', { name: 'Prepare a sermon' })).toBeNull();
   });
 
-  it('staff manage the same records in place; Upload is shown as unavailable', async () => {
+  it('staff manage the same records in place; Upload is unavailable until storage is set up', async () => {
     state.role = 'admin';
+    staffData['uploads/status'] = {
+      available: false,
+      maxLibraryBytes: 500 * 1024 * 1024,
+      maxSermonBytes: 5 * 1024 ** 3,
+    } as never;
     render(<GalleryPage />);
     expect(
       await screen.findByRole('button', { name: /New folder/ }),
     ).toBeEnabled();
     expect(screen.getByRole('button', { name: /Add link/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Upload/ })).toBeDisabled();
-    expect(
-      screen.getByText(/File uploads are not available yet/),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/File uploads aren’t set up on this server yet/),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^Upload$/ })).toBeDisabled();
     // The draft is visible to staff, with its state.
     expect(screen.getByText('Draft')).toBeInTheDocument();
 
@@ -331,5 +399,83 @@ describe('Gallery file manager', () => {
       screen.queryByRole('button', { name: /Actions for For the City/ }),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: /Upload/ })).toBeNull();
+  });
+  it('staff upload files: checked as added, sent only on Upload, then listed in the open folder', async () => {
+    state.role = 'admin';
+    staffData['uploads/status'] = {
+      available: true,
+      maxLibraryBytes: 500 * 1024 * 1024,
+      maxSermonBytes: 5 * 1024 ** 3,
+    } as never;
+    render(<GalleryPage />);
+    const files = await screen.findByRole('region', { name: 'Files' });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Upload$/ })).toBeEnabled(),
+    );
+    fireEvent.click(within(files).getByRole('button', { name: 'Study notes' }));
+
+    // The picker (behind the Upload button) and drag and drop both queue.
+    fireEvent.change(screen.getByLabelText('Choose files to upload'), {
+      target: {
+        files: [
+          new File(['%PDF-1.7'], 'Prayer guide.pdf'),
+          new File(['MZ'], 'setup.exe'),
+        ],
+      },
+    });
+    fireEvent.drop(files, {
+      dataTransfer: {
+        files: [new File(['x'], 'clip.mp4')],
+        types: ['Files'],
+      },
+    });
+    const queue = screen.getByRole('list', { name: 'Files to upload' });
+    expect(within(queue).getByText('Ready to upload')).toBeInTheDocument();
+    expect(
+      within(queue).getByText(
+        'Programs, scripts and web pages can’t be uploaded.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(queue).getByText(/Upload videos in Sermons & videos/),
+    ).toBeInTheDocument();
+    // Nothing is sent before Upload.
+    expect(calls.filter((call) => call.method !== 'GET')).toEqual([]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Upload 1 file' }));
+    });
+    await waitFor(() =>
+      expect(within(queue).getByText('Uploaded')).toBeInTheDocument(),
+    );
+    expect(storagePuts).toEqual(['PUT https://storage.test/part-1']);
+    expect(
+      calls.filter((call) => call.method !== 'GET').map((call) => call.url),
+    ).toEqual([
+      '/api/v1/staff/uploads',
+      '/api/v1/staff/uploads/a1/parts',
+      '/api/v1/staff/uploads/a1/complete',
+      '/api/v1/staff/resources',
+    ]);
+    expect(
+      calls.find((call) => call.url === '/api/v1/staff/uploads')?.body,
+    ).toEqual({ fileName: 'Prayer guide.pdf', size: 8, purpose: 'library' });
+    // Then it becomes a library item in the folder that was open.
+    expect(
+      calls.find(
+        (call) =>
+          call.method === 'POST' && call.url === '/api/v1/staff/resources',
+      )?.body,
+    ).toEqual({
+      title: 'Prayer guide',
+      description: '',
+      type: 'PDF',
+      url: '',
+      sermonId: null,
+      assetId: 'a1',
+      folderId: 'f1',
+      visibility: 'members',
+      status: 'published',
+    });
   });
 });

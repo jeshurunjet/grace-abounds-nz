@@ -318,7 +318,7 @@
   border: 1px solid var(--line);
   border-radius: 0.85rem;
   background: var(--surface-raised);
-  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35);
+  box-shadow: var(--shadow);
   animation: cal-card-in 140ms ease-out;
 }
 .cal-day-card:focus {

@@ -1650,3 +1650,13 @@ Addresses only the two findings in "Codex Phase 2C review". Restore behaviour, U
 **Closing action for owner:** perform the recorded private-window About save/restore check once and confirm both minute polling and tab-return refresh. Do not delete live `.next` output; stop the dev server before any needed clean rebuild/restart. If either behavior fails, return exact behavior for a focused fix, not another general audit. On success, mark Phase 2C closed and obtain owner go-ahead for 2D/S3 setup. Current push/merge/deployment requires authorization; this review does not issue one.
 
 **Next Claude instruction:** Codex accepted the 2C source/test checkpoint. Guide only the final short owner freshness check and record its actual result here. Once it passes and the owner authorizes 2D, begin the existing S3/CloudFront upload-library slice: reviewed provider configuration first, owner secret entry, then verified staff uploads/drag-drop and protected member downloads. Keep Pastor video approval and library/private boundaries. Do not redo identity/provider setup, enable caching or add automation/chat. No merge, push or deployment without authorization.
+
+### Phase 2C owner freshness check — Claude with the owner, 15 November 2026
+
+Run on the owner's Mac against the local dev servers. An anonymous (signed-out) `/about` page was left open in the Claude desktop browser pane and read with page scripts only (no clicks, reloads or navigation in that tab); the owner made the changes as Admin in their own browser.
+
+- **Save:** owner appended "- freshness test" to the About history and saved (server generation 0 → 1). The open page showed the new text without a reload (navigation record unchanged, RSC refresh request observed). For part of the wait the pane was hidden; as designed, hidden pages skip checks, and the first check after it became visible again refreshed the page.
+- **Restore:** a first restore round was not counted because the pane was reloaded meanwhile. Repeated cleanly: the owner restored the "freshness test" version from Version history (server generation 4); the pane, untouched and visible, polled at 1 s, 61 s and 121 s after load, detected the newer generation at 121 s, issued one RSC refresh and showed the restored text at 122 s, with no reload.
+- **Tab return:** not observed by Claude (the pane cannot be switched away from and back by page scripts); left for the owner to confirm in their own browser.
+
+**Result:** minute polling refreshes an already-open public page after a save and after a restore. Caching remained off; no code changed.

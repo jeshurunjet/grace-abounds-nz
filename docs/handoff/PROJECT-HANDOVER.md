@@ -1819,6 +1819,8 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 - Every fixture the tests reference (`audio-isom.m4a`, `audio.m4a`, `audio.ogg`, `video-faststart.mp4`, `video-m4a-brand.m4a`, `video.mov`, `video.mp4`, `video.ogg`) is in the Git index (`git ls-files --error-unmatch`).
 - Fresh checkout: `git clone` of the repository at `507d2b3` into an empty folder contains all eight fixtures, and the 17 policy tests run from that clone against its own files: 17 passed. The uploader tests (6) need vitest, which can't run in Claude's workspace; they don't read fixtures, and Codex's run passed them.
 
+**Checks (owner's Mac, 16 Nov):** `pnpm vitest run packages/validation/src/files.test.ts apps/web/app/lib/uploader.test.ts`: 2 files, 23 tests passed (policy 17, uploader 6).
+
 **Current next instruction:**
 
-> Owner: optionally run `pnpm vitest run packages/validation/src/files.test.ts apps/web/app/lib/uploader.test.ts` (expected: 2 files, 23 tests passed), then send this section to Codex. Codex: final packaging check for `507d2b3`, then close Phase 2D. Claude: no new phase, push, merge or deployment until then.
+> Owner: send this section to Codex. Codex: final packaging check for `507d2b3`, then close Phase 2D. Claude: no new phase, push, merge or deployment until then.

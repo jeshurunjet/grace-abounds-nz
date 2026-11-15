@@ -1,7 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   CalendarPlus,
   ChevronLeft,
@@ -10,6 +18,7 @@ import {
   List,
   Pencil,
   Plus,
+  X,
 } from 'lucide-react';
 import { useContent } from './content-provider';
 import {
@@ -179,7 +188,12 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
   const role = data?.user?.role;
   const staff = member && (role === 'pastor' || role === 'admin');
   const [month, setMonth] = useState(now.date.slice(0, 7));
-  const [selected, setSelected] = useState<string | null>(now.date);
+  // The day whose card is open, floating beside the date that was clicked.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [cardStyle, setCardStyle] = useState<CSSProperties>({});
+  const monthRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
   const [filter, setFilter] = useState(0);
   const [mine, setMine] = useState(false);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
@@ -277,8 +291,85 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
   function showMonth(target: string) {
     setMonth(target);
     setShowEarlier(false);
-    setSelected(target === now.date.slice(0, 7) ? now.date : `${target}-01`);
+    setSelected(null);
   }
+
+  function openDay(date: string, cell: HTMLButtonElement) {
+    if (date === selected) return closeDay();
+    anchorRef.current = cell;
+    setSelected(date);
+  }
+  function closeDay(returnFocus = false) {
+    setSelected(null);
+    if (returnFocus) anchorRef.current?.focus();
+  }
+
+  // Place the day card beside its date: to the right when there is room,
+  // otherwise to the left, otherwise just below; it opens upward from the
+  // lower rows. On phones calendar.css shows it under the grid instead.
+  const placeCard = useCallback(() => {
+    const box = monthRef.current?.getBoundingClientRect();
+    const cell = anchorRef.current?.getBoundingClientRect();
+    if (!box || !cell) return;
+    const gap = 8;
+    const width = Math.min(384, box.width);
+    const style: CSSProperties = { width };
+    const right = cell.right - box.left + gap;
+    const left = cell.left - box.left - gap - width;
+    if (right + width <= box.width) style.left = right;
+    else if (left >= 0) style.left = left;
+    else
+      style.left = Math.max(
+        0,
+        Math.min(cell.left - box.left, box.width - width),
+      );
+    const below = style.left !== right && style.left !== left;
+    const lower = cell.top - box.top > box.height / 2;
+    if (below) {
+      if (lower) style.bottom = box.bottom - cell.top + gap;
+      else style.top = cell.bottom - box.top + gap;
+    } else if (lower) style.bottom = box.bottom - cell.bottom;
+    else style.top = cell.top - box.top;
+    setCardStyle(style);
+  }, []);
+  useLayoutEffect(() => {
+    if (!selected) return;
+    placeCard();
+    // Focus the card without jumping the page; on phones, where it sits
+    // under the grid, bring it into view.
+    cardRef.current?.focus({ preventScroll: true });
+    if (window.matchMedia?.('(max-width: 720px)').matches)
+      cardRef.current?.scrollIntoView?.({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+  }, [selected, placeCard]);
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || editing) return;
+      setSelected(null);
+      anchorRef.current?.focus();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        cardRef.current?.contains(target) ||
+        anchorRef.current?.contains(target) ||
+        (target instanceof Element && target.closest('[role="dialog"]'))
+      )
+        return;
+      setSelected(null);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', placeCard);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', placeCard);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [selected, placeCard, editing]);
   const move = (offset: number) =>
     showMonth(addDays(first, offset > 0 ? 32 : -1).slice(0, 7));
   function saved(activity: StaffActivity, changed?: ActivityException[]) {
@@ -482,7 +573,7 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
 
       {view === 'calendar' ? (
         <div className="cal-body">
-          <div className="cal-month">
+          <div className="cal-month" ref={monthRef}>
             <div className="cal-weekdays" aria-hidden="true">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                 <span key={day}>{day}</span>
@@ -510,9 +601,10 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
                       date === now.date ? 'is-today' : '',
                       date < now.date ? 'is-past' : '',
                     ].join(' ')}
-                    aria-pressed={date === selected}
+                    aria-expanded={date === selected}
+                    aria-haspopup="dialog"
                     aria-label={`${formatDate(date)}, ${count} ${count === 1 ? 'item' : 'items'}`}
-                    onClick={() => setSelected(date)}
+                    onClick={(event) => openDay(date, event.currentTarget)}
                   >
                     <span className="cal-day">{+date.slice(8, 10)}</span>
                     {member && (
@@ -543,14 +635,29 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
                 );
               })}
             </div>
-          </div>
-          <aside className="cal-agenda" aria-live="polite">
-            {selected ? (
-              <>
-                <h3>
-                  {selected === now.date ? 'Today · ' : ''}
-                  {formatDate(selected, true)}
-                </h3>
+            {selected && (
+              <div
+                ref={cardRef}
+                className="cal-day-card"
+                role="dialog"
+                aria-labelledby="cal-day-card-title"
+                tabIndex={-1}
+                style={cardStyle}
+              >
+                <div className="cal-day-card-head">
+                  <h3 id="cal-day-card-title">
+                    {selected === now.date ? 'Today · ' : ''}
+                    {formatDate(selected, true)}
+                  </h3>
+                  <button
+                    type="button"
+                    className="cal-day-card-close"
+                    aria-label="Close"
+                    onClick={() => closeDay(true)}
+                  >
+                    <X aria-hidden="true" size={18} />
+                  </button>
+                </div>
                 {!forDay(selected).length && !rosterForDay(selected).length ? (
                   <p className="cal-empty">Nothing on this day.</p>
                 ) : (
@@ -559,11 +666,9 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
                     {roster(selected)}
                   </ul>
                 )}
-              </>
-            ) : (
-              <p className="cal-empty">Choose a day to see what’s on.</p>
+              </div>
             )}
-          </aside>
+          </div>
         </div>
       ) : (
         <div className="cal-list">

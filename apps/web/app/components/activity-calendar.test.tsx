@@ -254,4 +254,17 @@ describe('Home calendar for members', () => {
     expect(screen.queryByRole('button', { name: /^Edit / })).toBeNull();
     expect(calls).toEqual([]);
   });
+
+  it('opens a day card beside the date and closes it with Escape', () => {
+    state.role = 'member';
+    render(<ActivityCalendar member />);
+    const sunday = screen.getAllByRole('button', { name: /^Sun, \d+ / })[0]!;
+    fireEvent.click(sunday);
+    const card = screen.getByRole('dialog', { name: /Sun/ });
+    expect(within(card).getByText('Sunday Service')).toBeInTheDocument();
+    expect(sunday).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(sunday).toHaveFocus();
+  });
 });

@@ -7,6 +7,8 @@ import {
   type PublicContentBundle,
   type PublicNextStep,
   safeLinkHref,
+  type Activity,
+  type ActivityException,
   type SiteSettings,
 } from '@grace-abounds/validation';
 import type { ContentState, Sermon, SiteContent, TeamMember } from './content';
@@ -234,7 +236,12 @@ export function toLegacy(
   pages: LegacyPages;
   team: TeamMember[];
   sermons: Sermon[];
+  activities: Activity[];
+  activityExceptions: ActivityException[];
 } {
+  // Activities come only from the server (Phase 3A): published and live.
+  const activities = bundle?.collections?.activities ?? [];
+  const activityExceptions = bundle?.collections?.activityExceptions ?? [];
   let result = {
     site: { ...blankSite },
     pages: {
@@ -262,11 +269,12 @@ export function toLegacy(
     steps,
     resources: [],
   } as LegacyPages;
-  if (!bundle) return { ...result, team, sermons };
+  if (!bundle)
+    return { ...result, team, sermons, activities, activityExceptions };
   result = mergePatch(result, siteToLegacy(bundle.site));
   for (const key of pageKeys)
     result = mergePatch(result, pageToLegacy(key, bundle.pages[key]));
-  return { ...result, team, sermons };
+  return { ...result, team, sermons, activities, activityExceptions };
 }
 
 const verses = (text: string) =>

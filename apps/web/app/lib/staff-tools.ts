@@ -28,10 +28,10 @@ export function staffTools(role: string): StaffTool[] {
       tone: 'website',
     },
     {
-      href: '/admin/events',
+      href: role === 'pastor' ? '/pastor#calendar' : '/admin#calendar',
       title: 'Activities',
       description:
-        'Create and edit the services, groups, studies and teams that appear on the calendar.',
+        'Create and edit services, groups and events from the calendar on Home.',
       icon: CalendarCog,
       tone: 'activities',
     },

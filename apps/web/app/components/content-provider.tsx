@@ -27,14 +27,32 @@ const STORAGE_KEY = 'grace-abounds-content-v4';
 const LEGACY_EDITOR_KEY = 'grace-abounds-editor-v2';
 export type PublicContent = Pick<
   ContentState,
-  'site' | 'pages' | 'sermons' | 'team'
+  'site' | 'pages' | 'sermons' | 'team' | 'activities' | 'activityExceptions'
 >;
 const publicContent = ({
   site,
   pages,
   sermons,
   team,
-}: ContentState): PublicContent => ({ site, pages, sermons, team });
+  activities,
+  activityExceptions,
+}: ContentState): PublicContent => ({
+  site,
+  pages,
+  sermons,
+  team,
+  activities,
+  activityExceptions,
+});
+/** The server-owned parts of the published bundle. */
+const serverOwned = (published: PublicContent) => ({
+  site: published.site,
+  pages: published.pages,
+  team: published.team,
+  sermons: published.sermons,
+  activities: published.activities,
+  activityExceptions: published.activityExceptions,
+});
 type ContentContextValue = {
   content: ContentState;
   /**
@@ -59,10 +77,11 @@ type ContentContextValue = {
   applyPublished: (patch: PublishedPatch) => void;
 };
 /**
- * Published settings, page sections and the Phase 2B collections (campuses,
- * Next steps, leadership) come from the server. Browser storage keeps only
- * the parts that have not moved to the database yet (activities, sermons,
- * member records); it never supplies site, pages, team or sermons.
+ * Published settings, page sections, the Phase 2B collections (campuses,
+ * Next steps, leadership), sermons and (Phase 3A) activities with their
+ * changed dates come from the server. Browser storage keeps only the parts
+ * that have not moved to the database yet (participations until 3B, member
+ * records); it never supplies any server-owned part.
  */
 function localPart(content: ContentState) {
   const {
@@ -70,12 +89,16 @@ function localPart(content: ContentState) {
     pages: _pages,
     team: _team,
     sermons: _sermons,
+    activities: _activities,
+    activityExceptions: _activityExceptions,
     ...rest
   } = content;
   void _site;
   void _pages;
   void _team;
   void _sermons;
+  void _activities;
+  void _activityExceptions;
   return rest;
 }
 // Treat any unsupported visibility value as an unpublished draft.
@@ -126,29 +149,21 @@ export function ContentProvider({
     if (loaded.current) {
       if (bundleKey === 'null') return;
       setHasPublished(true);
-      // A newer published bundle: replace the server-owned site, pages,
-      // leadership and sermons; other browser-kept data stays.
-      setContent((current) => ({
-        ...current,
-        site: published.site,
-        pages: published.pages,
-        team: published.team,
-        sermons: published.sermons,
-      }));
+      // A newer published bundle: replace the server-owned parts; other
+      // browser-kept data stays.
+      setContent((current) => ({ ...current, ...serverOwned(published) }));
       return;
     }
     loaded.current = true;
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-      // Site, pages, leadership and sermons always come from the server; browser
-      // storage only supplies the parts that have not moved yet.
+      // Server-owned parts always come from the server (a value an older
+      // version left in browser storage is ignored); browser storage only
+      // supplies the parts that have not moved yet.
       const base: ContentState = {
         ...seedContent,
         ...(saved ?? {}),
-        site: published.site,
-        pages: published.pages,
-        team: published.team,
-        sermons: published.sermons,
+        ...serverOwned(published),
       };
       setContent(normalizeRecords(base));
       localStorage.removeItem?.(LEGACY_EDITOR_KEY);
@@ -180,15 +195,11 @@ export function ContentProvider({
       async update(recipe) {
         if (!ready) return false;
         const changed = recipe(content);
-        const staff = role === 'pastor' || role === 'admin';
         const next: ContentState = {
           ...changed,
-          // Website content and activities are edited by pastor/admin only.
-          ...(!staff && {
-            ...publicContent(content),
-            activities: content.activities,
-            activityExceptions: content.activityExceptions,
-          }),
+          // Server-owned content never changes here: it is edited through
+          // the API (and only by pastor/admin).
+          ...publicContent(content),
           // Only the pastor can change member accounts and roles.
           users: role === 'pastor' ? changed.users : content.users,
         };

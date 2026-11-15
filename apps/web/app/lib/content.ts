@@ -1,6 +1,9 @@
 import { publicPages } from './page-content';
 import type { Activity, ActivityException, Participation } from './activities';
-import { seedActivities, seedActivityExceptions } from './activity-seed';
+import {
+  defaultActivities as seedActivities,
+  defaultActivityExceptions as seedActivityExceptions,
+} from '@grace-abounds/validation';
 export type PublishStatus = 'draft' | 'published' | 'archived';
 export const publishStatuses: PublishStatus[] = [
   'draft',

@@ -1,11 +1,9 @@
 import type { MetadataRoute } from 'next';
 import { fetchPublicContent } from '../lib/server/public-content';
-import { seedContent } from './lib/content';
 
 /**
- * Public pages plus the published records behind them. Sermons come from the
- * database (Pastor-approved only). Activities are still browser-kept until
- * Phase 3, so their published seed records are listed until then.
+ * Public pages plus the published records behind them, all from the
+ * database: Pastor-approved sermons and published, live activities.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://example.org';
@@ -20,9 +18,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/sermons',
     '/privacy',
     '/terms',
-    ...seedContent.activities
-      .filter((item) => item.status === 'published')
-      .map((item) => `/events/${item.slug}`),
+    ...(content?.collections?.activities ?? []).map(
+      (item) => `/events/${item.slug}`,
+    ),
     ...(content?.collections?.sermons ?? []).map(
       (item) => `/sermons/${item.slug}`,
     ),

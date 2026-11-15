@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  defaultActivities,
   defaultLocations,
   defaultNextSteps,
   defaultPages,
@@ -37,6 +38,9 @@ const collections = {
       mediaUrl: '',
     },
   ],
+  // Published activities from the server (Phase 3A).
+  activities: defaultActivities.filter((item) => item.status === 'published'),
+  activityExceptions: [],
 } satisfies PublicCollections;
 const published: PublicContentBundle = {
   site: defaultSiteSettings,
@@ -142,8 +146,18 @@ describe('live website content', () => {
     state.role = 'pastor';
     const view = renderProvider();
     await waitFor(() => expect(context.ready).toBe(true));
+    const participation = {
+      id: 'p1',
+      activityId: 'group-1',
+      userId: 'u1',
+      date: '',
+      createdAt: '2026-11-01T00:00:00.000Z',
+    };
     await act(() =>
-      context.update((current) => ({ ...current, activities: [] })),
+      context.update((current) => ({
+        ...current,
+        participations: [participation],
+      })),
     );
     // Another browser publishes; router.refresh() delivers bundle B.
     const bundleB: PublicContentBundle = {
@@ -161,7 +175,11 @@ describe('live website content', () => {
           hero: { ...defaultPages.events.hero, title: 'Events B' },
         },
       },
-      collections: { ...collections, team: collections.team.slice(0, 1) },
+      collections: {
+        ...collections,
+        team: collections.team.slice(0, 1),
+        activities: collections.activities.slice(0, 2),
+      },
     };
     view.rerender(
       <ContentProvider initialContent={bundleB}>
@@ -172,7 +190,9 @@ describe('live website content', () => {
     expect(context.content.site.givingBank).toBe('Bank B');
     expect(context.content.pages.heroes['/events'].title).toBe('Events B');
     expect(context.content.team).toHaveLength(1);
-    expect(context.content.activities).toEqual([]);
+    // Activities follow the server; browser-only data (participations) stays.
+    expect(context.content.activities).toHaveLength(2);
+    expect(context.content.participations).toEqual([participation]);
   });
   it('recovers when content becomes available, and keeps it if a later refresh fails', async () => {
     const view = renderProvider(null);
@@ -196,6 +216,25 @@ describe('live website content', () => {
     await act(async () => {});
     expect(context.content.site.heroTitle).toBe('Grace');
     expect(context.contentUnavailable).toBe(false);
+  });
+  it('activities come only from the server, never from browser storage', async () => {
+    localStorage.setItem(
+      'grace-abounds-content-v4',
+      JSON.stringify({
+        activities: [{ ...defaultActivities[0], title: 'Stale browser copy' }],
+        activityExceptions: [{ id: 'old' }],
+      }),
+    );
+    renderProvider();
+    await waitFor(() => expect(context.ready).toBe(true));
+    expect(context.content.activities).toEqual(collections.activities);
+    expect(context.content.activityExceptions).toEqual([]);
+    await act(() => context.update((current) => current));
+    const stored = JSON.parse(
+      localStorage.getItem('grace-abounds-content-v4') ?? '{}',
+    );
+    expect(stored).not.toHaveProperty('activities');
+    expect(stored).not.toHaveProperty('activityExceptions');
   });
   it('ignores member attempts to alter public content or activities', async () => {
     state.role = 'member';

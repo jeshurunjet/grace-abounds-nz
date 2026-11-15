@@ -1001,3 +1001,113 @@
 .sermon-file small {
   color: var(--ink-soft);
 }
+
+/* Activity editor and calendar views (Phase 3A) */
+.kit-fieldset {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.kit-fieldset legend,
+.kit-days legend {
+  padding: 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-mid);
+}
+.kit-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+.kit-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.kit-days label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+.activity-dates-editor h3 {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+.activity-dates-editor ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity-dates-editor li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+}
+.activity-dates-editor li .cancelled {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+.activity-date-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.activity-date-form {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.activity-date-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.calendar-views {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.calendar-list section {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.4rem;
+}
+.calendar-list h3 {
+  grid-column: 1 / -1;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+.calendar-chip.draft {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.calendar-archived {
+  grid-column: 1 / -1;
+}
+.calendar-archived summary {
+  cursor: pointer;
+  color: var(--ink-mid);
+}

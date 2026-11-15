@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodType } from 'zod';
 import {
+  fileHref,
   folderInputSchema,
   isOutsideLink,
   locationInputSchema,
@@ -34,6 +35,7 @@ import { requireActor, requireRole, type Actor } from '../lib/identity.js';
 import { publicSermons } from './sermons.js';
 import { recordContentChange } from '../lib/content-change.js';
 import { parseRestored } from '../lib/restore.js';
+import { assetReferences, removeAsset, usableAsset } from '../lib/assets.js';
 
 /*
  * Phase 2B editorial collections. Every record saves on its own:
@@ -91,6 +93,8 @@ type Collection<I> = {
   toApi(row: Row): Record<string, unknown>;
   /** A reason the record cannot be deleted, or null. */
   blockDelete?(row: Row, tx: Tx): Promise<string | null>;
+  /** Clean-up in the same transaction after the record is deleted. */
+  afterDelete?(row: Row, tx: Tx): Promise<void>;
 };
 
 const slugify = (value: string) =>
@@ -226,6 +230,16 @@ const collections: Record<string, Collection<never>> = {
           'Some fields need attention.',
           { sermonId: 'That sermon no longer exists.' },
         );
+      if (input.assetId) {
+        const problem = await usableAsset(tx, input.assetId, 'library');
+        if (problem)
+          throw new AppError(
+            422,
+            'VALIDATION_FAILED',
+            'Some fields need attention.',
+            { assetId: problem },
+          );
+      }
       // A link to another website could serve anything, video included, so
       // only the Pastor publishes one (see PASTOR_LINK_MESSAGE). Admin may
       // keep a link the Pastor already published, unchanged.
@@ -246,6 +260,7 @@ const collections: Record<string, Collection<never>> = {
         type: input.type || 'Document',
         url: input.url,
         sermonId: input.sermonId,
+        assetId: input.assetId,
         folderId: input.folderId,
         visibility: input.visibility.toUpperCase(),
         status: toStatus(input.status),
@@ -257,10 +272,19 @@ const collections: Record<string, Collection<never>> = {
       type: row.type,
       url: row.url,
       sermonId: row.sermonId ?? null,
+      assetId: row.assetId ?? null,
       folderId: row.folderId,
       visibility: String(row.visibility).toLowerCase(),
       status: fromStatus(row.status),
     }),
+    // Deleting an uploaded file's library item removes the file too, unless
+    // something else still uses it.
+    async afterDelete(row, tx) {
+      const id = row.assetId as string | null;
+      if (!id || (await assetReferences(tx, id))) return;
+      const asset = await tx.asset.findUnique({ where: { id } });
+      if (asset) await removeAsset(tx, asset);
+    },
   } satisfies Collection<ResourceInput> as never,
   folders: {
     model: 'resourceFolder',
@@ -470,7 +494,11 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           return {
             id: row.id,
             ...rest,
-            href: sermon ? `/sermons/${sermon.slug}` : row.url,
+            href: sermon
+              ? `/sermons/${sermon.slug}`
+              : row.assetId
+                ? fileHref(row.assetId)
+                : row.url,
           };
         }),
         sermons: sermons.map((item) => ({
@@ -640,6 +668,7 @@ export function registerCollectionRoutes(app: FastifyInstance) {
           throw error;
         }
         if (deleted.count === 0) throw versionConflict();
+        await def.afterDelete?.(existing, tx);
         await recordAudit(tx, {
           actorId: actor.id,
           action: `content.${def.noun}_deleted`,

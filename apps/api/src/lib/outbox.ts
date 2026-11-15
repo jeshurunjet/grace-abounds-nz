@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { prisma } from '@grace-abounds/database';
 import { CONTENT_CHANGED } from './content-change.js';
+import { STORAGE_REMOVE, storageRemover } from './assets.js';
 
 /*
  * Outbox dispatcher (Phase 2C). Events are written in the same transaction
@@ -118,7 +119,11 @@ export function contentRevalidator(
 
 /** Runs the dispatcher every few seconds in the API process. */
 export function startOutboxDispatcher(log: Log, everyMs = 3_000) {
-  const handlers = { [CONTENT_CHANGED]: contentRevalidator() };
+  const handlers = {
+    [CONTENT_CHANGED]: contentRevalidator(),
+    // Removes stored files after their records are deleted (Phase 2D).
+    [STORAGE_REMOVE]: storageRemover(),
+  };
   let running = false;
   const timer = setInterval(() => {
     if (running) return;

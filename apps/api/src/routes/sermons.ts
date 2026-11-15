@@ -24,6 +24,7 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { requireRole, type Actor } from '../lib/identity.js';
+import { usableAsset } from '../lib/assets.js';
 import { recordContentChange } from '../lib/content-change.js';
 import { parseRestored } from '../lib/restore.js';
 
@@ -49,6 +50,13 @@ import { parseRestored } from '../lib/restore.js';
 
 type Tx = Prisma.TransactionClient;
 const ENTITY = 'sermons';
+/** The uploaded recording's name and size, for the editor. */
+const withMedia = {
+  mediaAsset: { select: { fileName: true, size: true } },
+} as const;
+type SermonRow = Sermon & {
+  mediaAsset?: { fileName: string; size: bigint } | null;
+};
 
 const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
 /** The public fields of the working copy. */
@@ -61,15 +69,20 @@ const working = (row: Sermon): SermonInput => ({
   image: row.image,
   summary: row.summary,
   mediaUrl: row.mediaUrl,
+  mediaAssetId: row.mediaAssetId ?? null,
 });
 const fields = Object.keys(sermonInputSchema.shape) as (keyof SermonInput)[];
 const sameContent = (a: SermonInput, b: SermonInput) =>
   fields.every((key) => a[key] === b[key]);
-const liveOf = (row: Sermon) => row.live as SermonInput | null;
+/** The approved copy; copies approved before uploads had no file field. */
+const liveOf = (row: Sermon): SermonInput | null => {
+  const live = row.live as SermonInput | null;
+  return live ? { ...live, mediaAssetId: live.mediaAssetId ?? null } : null;
+};
 const review = (value: SermonReview) =>
   value.toLowerCase() as SermonReviewState;
 
-function staffSermon(row: Sermon): StaffSermon {
+function staffSermon(row: SermonRow): StaffSermon {
   const live = liveOf(row);
   return {
     id: row.id,
@@ -85,8 +98,12 @@ function staffSermon(row: Sermon): StaffSermon {
             approvedAt: row.approvedAt.toISOString(),
             title: live.title,
             mediaUrl: live.mediaUrl,
+            mediaAssetId: live.mediaAssetId ?? null,
           }
         : null,
+    mediaFile: row.mediaAsset
+      ? { fileName: row.mediaAsset.fileName, size: Number(row.mediaAsset.size) }
+      : null,
     changedSinceApproval: !!live && !sameContent(live, working(row)),
     everApproved: !!row.approvedAt,
     version: row.version,
@@ -116,7 +133,7 @@ async function assertMediaReady(tx: Tx, row: Sermon) {
     const asset = await tx.asset.findUnique({
       where: { id: row.mediaAssetId },
     });
-    if (asset?.status !== 'VERIFIED')
+    if (asset?.status !== 'VERIFIED' || asset.purpose !== 'sermon')
       throw conflict(
         'MEDIA_NOT_READY',
         'The recording is still being checked. Try again when it is ready.',
@@ -148,7 +165,22 @@ export async function publicSermons(): Promise<PublicSermon[]> {
 type Apply = (
   row: Sermon,
   tx: Tx,
-) => Promise<Prisma.SermonUpdateManyMutationInput>;
+) => Promise<Prisma.SermonUncheckedUpdateManyInput>;
+
+/** A recording upload must be a verified sermon file. */
+async function assertRecording(tx: Tx, input: SermonInput) {
+  if (!input.mediaAssetId) return;
+  const problem = await usableAsset(tx, input.mediaAssetId, 'sermon');
+  if (problem)
+    throw new AppError(
+      422,
+      'VALIDATION_FAILED',
+      'Some fields need attention.',
+      {
+        mediaAssetId: problem,
+      },
+    );
+}
 type Metadata = (before: Sermon, after: Sermon) => Record<string, unknown>;
 
 /**
@@ -178,6 +210,7 @@ async function changeSermon(
     if (result.count === 0) throw versionConflict();
     const saved = (await tx.sermon.findUnique({
       where: { id: existing.id },
+      include: withMedia,
     }))!;
     await tx.contentRevision.create({
       data: {
@@ -240,7 +273,7 @@ export function restoreSermonVersion(
     target,
     actor,
     'version_restored',
-    async (row) => {
+    async (row, tx) => {
       const stored = (revision.data ?? {}) as Record<string, unknown>;
       const current = working(row) as Record<string, unknown>;
       const input = parseRestored(
@@ -252,6 +285,7 @@ export function restoreSermonVersion(
           ]),
         ),
       );
+      await assertRecording(tx, input);
       return workingUpdate(row, input);
     },
     () => ({ restoredFromVersion: revision.version }),
@@ -263,7 +297,7 @@ export function registerSermonRoutes(app: FastifyInstance) {
   const staff = (request: FastifyRequest) =>
     requireRole(request, Role.PASTOR, Role.ADMIN);
   const pastor = (request: FastifyRequest) => requireRole(request, Role.PASTOR);
-  const done = (reply: FastifyReply, row: Sermon) => {
+  const done = (reply: FastifyReply, row: SermonRow) => {
     reply.header('etag', `"${row.version}"`);
     reply.header('cache-control', 'private, no-store');
     return { data: staffSermon(row), version: row.version };
@@ -296,6 +330,7 @@ export function registerSermonRoutes(app: FastifyInstance) {
     staff(request);
     const rows = await prisma.sermon.findMany({
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      include: withMedia,
     });
     reply.header('cache-control', 'private, no-store');
     return { data: rows.map(staffSermon) };
@@ -305,6 +340,7 @@ export function registerSermonRoutes(app: FastifyInstance) {
     const actor = staff(request);
     const input = parse(sermonInputSchema, request.body ?? {});
     const row = await prisma.$transaction(async (tx) => {
+      await assertRecording(tx, input);
       const base = slugify(input.title);
       let slug = base;
       for (let n = 2; await tx.sermon.findUnique({ where: { slug } }); n++)
@@ -316,6 +352,7 @@ export function registerSermonRoutes(app: FastifyInstance) {
           slug,
           updatedById: actor.id,
         },
+        include: withMedia,
       });
       await tx.contentRevision.create({
         data: {
@@ -345,9 +382,10 @@ export function registerSermonRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const actor = staff(request);
       const input = parse(sermonInputSchema, request.body ?? {});
-      const row = await change(request, actor, 'saved', async (row) =>
-        workingUpdate(row, input),
-      );
+      const row = await change(request, actor, 'saved', async (row, tx) => {
+        await assertRecording(tx, input);
+        return workingUpdate(row, input);
+      });
       return done(reply, row);
     },
   );
@@ -416,6 +454,7 @@ export function registerSermonRoutes(app: FastifyInstance) {
         (before, after) => ({
           approvedVersion: after.liveVersion,
           mediaUrl: before.mediaUrl,
+          mediaAssetId: before.mediaAssetId,
           replacedVersion: before.liveVersion,
         }),
       );

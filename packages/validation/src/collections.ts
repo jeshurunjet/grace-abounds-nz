@@ -171,6 +171,8 @@ export const resourceInputSchema = z
     ),
     /** An approved sermon shown in the library (instead of a link). */
     sermonId: z.string().trim().min(1).max(40).nullable().default(null),
+    /** An uploaded, verified file (Phase 2D) instead of a link. */
+    assetId: z.string().trim().min(1).max(40).nullable().default(null),
     folderId: z.string().trim().min(1).max(40).nullable(),
     visibility: z.enum(resourceVisibilities),
     status,
@@ -182,6 +184,13 @@ export const resourceInputSchema = z
         code: 'custom',
         path: ['url'],
         message: 'Choose a sermon or a link, not both.',
+      });
+    if (resource.assetId && (resource.url || resource.sermonId))
+      context.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message:
+          'This item is an uploaded file; it can’t also have a link or a sermon.',
       });
   });
 
@@ -222,8 +231,18 @@ export const sermonInputSchema = z
         (value) => value === '' || isMediaRef(value),
         'Use an https:// link to an MP4, WebM, MP3 or M4A file.',
       ),
+    /** An uploaded, verified recording (Phase 2D) instead of a link. */
+    mediaAssetId: z.string().trim().min(1).max(40).nullable().default(null),
   })
-  .strict();
+  .strict()
+  .superRefine((sermon, context) => {
+    if (sermon.mediaAssetId && sermon.mediaUrl)
+      context.addIssue({
+        code: 'custom',
+        path: ['mediaUrl'],
+        message: 'Use the uploaded recording or a link, not both.',
+      });
+  });
 export const sermonReviewStates = [
   'draft',
   'pending',
@@ -234,9 +253,18 @@ export type SermonReviewState = (typeof sermonReviewStates)[number];
 export const sermonRejectSchema = z
   .object({ note: required(1000, 'a note for the editor') })
   .strict();
-export type SermonInput = z.infer<typeof sermonInputSchema>;
+/** Saved sermons always carry mediaAssetId (null for none); older copies may not. */
+export type SermonInput = Omit<
+  z.infer<typeof sermonInputSchema>,
+  'mediaAssetId'
+> & { mediaAssetId?: string | null };
 /** The public fields of a sermon, as approved by the Pastor. */
 export type PublicSermon = SermonInput & { id: string; slug: string };
+/** True when a sermon has a recording (an upload or a link) to approve. */
+export const hasRecording = (sermon: {
+  mediaUrl: string;
+  mediaAssetId?: string | null;
+}) => !!sermon.mediaAssetId || isMediaRef(sermon.mediaUrl);
 /** A sermon as staff see it: the working copy plus its review state. */
 export type StaffSermon = SermonInput & {
   id: string;
@@ -250,7 +278,10 @@ export type StaffSermon = SermonInput & {
     approvedAt: string;
     title: string;
     mediaUrl: string;
+    mediaAssetId: string | null;
   };
+  /** The uploaded recording of the working copy, if any. */
+  mediaFile: null | { fileName: string; size: number };
   /** True when the working copy differs from what is live. */
   changedSinceApproval: boolean;
   /** Ever approved: such a sermon is archived rather than deleted. */

@@ -366,21 +366,34 @@ enum AssetStatus {
   REJECTED
 }
 
-/// One stored file. Uploads arrive in Phase 2D; the model is defined now so
-/// resources and sermons refer to files by ID (one store, no copies). A file
-/// is never served until VERIFIED, and video access also needs an approved
-/// sermon.
+/// One stored file (Phase 2D). Resources and sermons refer to a file by ID
+/// (one store, no copies). A file is uploaded to `incoming/`, checked (size
+/// and first bytes) and only then moved to `files/` and marked VERIFIED;
+/// nothing is served before that. Who may open it comes from what refers to
+/// it: a published library resource, or a sermon the Pastor approved
+/// (sermon recordings are staff-only until then).
 model Asset {
-  id          String      @id @default(cuid())
-  storageKey  String      @unique
-  fileName    String
-  contentType String
-  size        Int
-  access      AssetAccess @default(PRIVATE)
-  status      AssetStatus @default(PENDING)
-  ownerId     String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  storageKey   String      @unique
+  fileName     String
+  /// The type it is served as: the checked type for files that open in the
+  /// browser, application/octet-stream for download-only files.
+  contentType  String
+  /// Bytes; up to 5 GB for sermon recordings.
+  size         BigInt
+  /// "library" (Gallery files) or "sermon" (recordings).
+  purpose      String      @default("library")
+  /// Opens in the browser (PDF, images, audio, video) instead of downloading.
+  inline       Boolean     @default(false)
+  /// The S3 multipart upload while PENDING.
+  uploadId     String?
+  rejectReason String      @default("")
+  verifiedAt   DateTime?
+  access       AssetAccess @default(PRIVATE)
+  status       AssetStatus @default(PENDING)
+  ownerId      String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   resources Resource[]
   sermons   Sermon[]   @relation("SermonMedia")

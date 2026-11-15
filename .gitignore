@@ -27,6 +27,10 @@ uploads/
 *.mov
 *.mkv
 *.webm
+# Exceptions: tiny ffmpeg-made test fixtures for the Phase 2D upload policy.
+!packages/validation/fixtures/media/video.mp4
+!packages/validation/fixtures/media/video-faststart.mp4
+!packages/validation/fixtures/media/video.mov
 *.srt
 *.vtt
 packages/database/prisma/dev.db*

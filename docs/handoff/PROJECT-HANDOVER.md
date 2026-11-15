@@ -1861,3 +1861,44 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 - Web: the content provider takes activities from the server bundle; browser storage is no longer their authority (participations stay browser-local until 3B). The Home calendar (all roles) gains a Calendar/List switch; staff get **Create activity** and an Edit panel (short form, explicit Save, dirty protection, history) from the same calendar and list, plus per-date cancel/change/restore. `/admin/events` becomes a redirect to the role's Home calendar; the Staff tools card points there. Public pages, campus lists and member calendars read the same records.
 - Existing data: `content:seed` imports the repository's prototype schedule into an empty activity table (stable ids/slugs; the scheduled event's NZ-local release time converted explicitly to UTC). Browser-stored prototype edits are **not** imported automatically; anything changed only in a browser would be re-entered through the editor (owner to confirm at the checkpoint).
 - Not in 3A: joining/booking/roster (3B), Google sync (3C), new scheduled-release editing (an existing scheduled record keeps its release time and can be published now).
+
+### Phase 3A checkpoint — Claude, 16 November 2026, head `31e61e0`
+
+**Commit range for review:** `f2fe65c..31e61e0` (local, not pushed).
+
+- `f2fe65c` docs: source mapping and scope (above).
+- `a7d38de` API: `Activity`/`ActivityException` tables (migration `20261116080000_phase3a_activities`), shared recurrence/validation module moved to `packages/validation` (`activities.ts`, `activity-defaults.ts`), staff routes `GET/POST /v1/staff/activities`, `PATCH/DELETE /v1/staff/activities/:id` (If-Match), `PUT/DELETE /v1/staff/activities/:id/exceptions/:date` (If-Match on the activity), revisions (kind `activity`), audit, content-change outbox, public bundle `activities`/`activityExceptions`, `content:seed` import into an empty table, 8 database tests.
+- `e8f4a26` web: content provider takes activities from the server bundle (never stored in the browser); one calendar with Calendar/List for all roles; staff Create activity and the Edit panel (explicit Save, history, delete, per-date change/cancel/restore); `/admin/events` redirects to the role's Home calendar; sitemap uses bundle activities; 4 calendar tests.
+- `a45cf40` web (owner UI feedback before testing: legacy styles bleeding in, list text too small, “This Sunday” cluttering, activities and bookings too long): Calendar & bookings becomes three tabs (Calendar, My plans, Join or book; `?tab=` kept in the address; old `?activity=`/`?join=` links open Join or book); calendar styles in their own `calendar.css` (old calendar rules removed from `editor-kit.css`); readable list starting at today with “Show earlier this month”; My plans shows the next four bookings and groups; Join or book is a searchable card grid, six at a time; “This Sunday” removed from the member calendar page only.
+- `a4445b5` web (owner suggestion): clicking a date opens a card beside it instead of a fixed side panel (right, else left, upward from lower rows; X, Escape with focus back to the date, click again or elsewhere to close; under the grid on phones). Test added.
+- `31e61e0` web: the day card uses the shared `--shadow` token (theme test).
+
+**Tests (owner's Mac):**
+
+- At `e8f4a26`: `pnpm test` first run 1 failed (the calendar test's `/^Cancel /` query matched two buttons), fixed with a weekday pattern, then passed; `pnpm test:db` **17 files, 134 tests passed**; `pnpm lint` clean; `pnpm build` passed (dev server stopped).
+- At `a4445b5`: `pnpm test` 1 failed (`theme.test.ts`: a colour value in `calendar.css`), fixed in `31e61e0`.
+- At `31e61e0`: `pnpm test` **31 files passed, 14 skipped (45); 141 tests passed, 124 skipped (265)**. `pnpm test:db` **17 files, 134 tests passed**. `pnpm lint`: no warnings.
+- `pnpm build` has **not** been rerun after `a45cf40..31e61e0` (web UI only, no new routes). Rerun with the dev server stopped before merge.
+- Claude: API and web typecheck clean at each commit; Prettier clean.
+
+**Migration and seed (owner, development):** migration applied to development and test; `content:seed` imported the 24 prototype activities and 3 Christmas exceptions into the empty table.
+
+**Browser checks (16 Nov, development, staff signed in as Bart):**
+
+- Owner: Home calendar shows the database records; created an activity (“Christmas Special”, Mon 16 Nov, Draft) and cancelled that date. The exception is stored (`kind: cancelled`), and staff see the date struck through in the month grid and Cancelled in the day card.
+- Claude, in the built-in browser: month, list and phone (375 px) layouts; tabs and `?tab=`; day card placement on left, right and lower dates; Escape closes; booked and cancelled a place in Join or book and My plans (browser-local); `/events` renders the same calendar in its public style.
+- Claude, public bundle fetched without cookies (`GET /api/v1/public/content`): 200, 21 activities, all `published`, 3 exceptions (the Christmas ones). The owner's draft and its 16 Nov cancellation are absent. Staff list: 25 records (21 published, 2 draft, 1 scheduled “A Thrill of Hope” 1 Dec 09:00 NZ, 1 archived). `GET /api/v1/staff/activities` without cookies: 401.
+- **Not yet done by the owner:** signed-out `/events` in the browser, and publishing an activity and seeing it there within about a minute. The cookie-free bundle check above covers the same data path; the owner can confirm both in the browser during review.
+
+**Remaining limits:**
+
+- Joining, booking and capacity counts (“16 of 16 places left”, My plans, Join or book) are still browser-local until 3B; nothing is enforced by the server yet.
+- A scheduled activity becomes public at read time once `publishAt` passes; open pages pick it up on reload or the existing content-stamp polling. Creating new scheduled releases in the editor is not built (an existing scheduled record keeps its time and can be published now).
+- Prototype activity edits made only in a browser's storage are not imported; anything changed that way would be re-entered through the editor. **Owner to confirm.**
+- “This Sunday” remains on the public `/events` page and the campus page.
+- The open day card covers nearby dates until it is closed (normal for a popover).
+- Cancelled dates in the month grid use a thin strike-through on small chips. The owner found it hard to see at first. Claude offered a clearer style (tinted chip with “Cancelled” and both Draft and Cancelled labels for staff, with the note under the title); not done unless the owner asks. For staff, a cancelled draft currently shows only “Draft” in the day card.
+
+**Current next instruction:**
+
+> Owner: hand Phase 3A to Codex. Codex: review `f2fe65c..31e61e0`: activity schema and migration, shared recurrence/validation (including the NZ daylight-saving rule and `nzLocalToUtc`), staff authorization, If-Match/412/428 handling, revisions/audit/outbox, public bundle filtering (drafts, scheduled, archived and their exceptions), the content provider no longer storing activities in the browser, the seed import, and the Calendar & bookings UI. Claude: no 3B work until Codex's review; no merge, push or deployment.

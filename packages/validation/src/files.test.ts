@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   checkUpload,
@@ -218,7 +219,8 @@ describe('decideStorage (after upload, from the first bytes)', () => {
  */
 const fixture = (name: string) =>
   new Uint8Array(
-    readFileSync(new URL(`../fixtures/media/${name}`, import.meta.url)),
+    // __dirname: test environments (jsdom) give import.meta.url a web URL.
+    readFileSync(join(__dirname, '../fixtures/media', name)),
   );
 /** The moov box, wherever it sits (what the API reads from storage). */
 function moovOf(bytes: Uint8Array) {

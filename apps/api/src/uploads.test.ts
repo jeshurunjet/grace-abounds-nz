@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { dbTestsEnabled } from '@grace-abounds/database/test-env';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
 import { prisma } from '@grace-abounds/database';
@@ -51,10 +52,7 @@ const MP4 = bytes(
 const media = (name: string) =>
   new Uint8Array(
     readFileSync(
-      new URL(
-        `../../../packages/validation/fixtures/media/${name}`,
-        import.meta.url,
-      ),
+      join(__dirname, '../../../packages/validation/fixtures/media', name),
     ),
   );
 

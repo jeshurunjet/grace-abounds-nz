@@ -1,8 +1,14 @@
+/**
+ * The prototype church schedule (services, groups, studies, ministries and
+ * events) with its Christmas exceptions. Development seed only: content:seed
+ * imports it into an empty activity table, keeping these ids and slugs so
+ * occurrence identity stays stable. Never a runtime fallback.
+ */
 import type {
   Activity,
   ActivityException,
   ActivitySchedule,
-} from './activities';
+} from './activities.ts';
 
 const image = (id: string) =>
   `https://images.unsplash.com/photo-${id}?w=900&h=600&fit=crop&auto=format`;
@@ -341,7 +347,7 @@ const events: Activity[] = (
   }),
 );
 
-export const seedActivities: Activity[] = [
+export const defaultActivities: Activity[] = [
   ...services,
   ...groups,
   ...studies,
@@ -349,7 +355,7 @@ export const seedActivities: Activity[] = [
   ...events,
 ];
 
-export const seedActivityExceptions: ActivityException[] = [
+export const defaultActivityExceptions: ActivityException[] = [
   {
     id: 'exception-henderson-christmas',
     activityId: 'service-henderson-sunday-service',

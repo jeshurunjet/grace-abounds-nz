@@ -33,6 +33,7 @@ import {
 } from '../lib/errors.js';
 import { requireActor, requireRole, type Actor } from '../lib/identity.js';
 import { publicSermons } from './sermons.js';
+import { publicActivities } from './activities.js';
 import { recordContentChange } from '../lib/content-change.js';
 import { parseRestored } from '../lib/restore.js';
 import { assetReferences, removeAsset, usableAsset } from '../lib/assets.js';
@@ -433,11 +434,12 @@ export const isCollectionName = (name: string) =>
 /** Published campuses, journeys and leadership for the public bundle. */
 export async function publicCollections(): Promise<PublicCollections> {
   const published = { where: { status: 'PUBLISHED' }, ...ordered };
-  const [locations, steps, team, sermons] = await Promise.all([
+  const [locations, steps, team, sermons, activities] = await Promise.all([
     delegate(prisma, 'location').findMany(published),
     delegate(prisma, 'nextStep').findMany(published),
     delegate(prisma, 'teamMember').findMany(published),
     publicSermons(),
+    publicActivities(),
   ]);
   const strip = (def: Collection<never>, row: Row) => {
     const { status: _status, ...rest } = def.toApi(row);
@@ -449,6 +451,7 @@ export async function publicCollections(): Promise<PublicCollections> {
     steps: steps.map((row) => strip(collections['next-steps']!, row)),
     team: team.map((row) => strip(collections.team!, row)),
     sermons,
+    ...activities,
   } as PublicCollections;
 }
 

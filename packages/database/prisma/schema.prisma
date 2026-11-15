@@ -470,3 +470,70 @@ model ContentGeneration {
   value Int    @default(0)
 }
 
+
+/// One activity (service, group, study, event or ministry team), Phase 3A.
+/// Its schedule is New Zealand local dates and times (Pacific/Auckland), so
+/// a 10:00am service stays at 10:00am across daylight saving. Occurrences are
+/// generated from the schedule; one occurrence is identified by the activity
+/// and its original local date. Public pages, every role's calendar and (in
+/// 3C) the church Google Calendar all read these records.
+model Activity {
+  id          String              @id @default(cuid())
+  slug        String              @unique
+  /// service | group | study | event | ministry
+  kind        String
+  title       String
+  summary     String              @default("")
+  leader      String              @default("")
+  tag         String              @default("")
+  /// A campus Location.key, or "" for off-site / several places.
+  locationKey String              @default("")
+  venue       String              @default("")
+  image       String              @default("")
+  /// once | weekly | fortnightly | monthly | ongoing
+  repeat      String
+  startDate   DateTime            @db.Date
+  untilDate   DateTime?           @db.Date
+  /// weekly/fortnightly weekdays, 0 = Sunday
+  days        Int[]
+  /// monthly: week 1–4 or -1 (last), and weekday
+  monthWeek   Int                 @default(1)
+  monthDay    Int                 @default(0)
+  /// "HH:mm" local, "" when not fixed (ongoing)
+  startTime   String              @default("")
+  endTime     String              @default("")
+  /// booking (per date) | membership (ongoing) | none
+  joinMode    String              @default("none")
+  capacity    Int?
+  status      ContentStatus       @default(DRAFT)
+  /// Optional release instant of a published activity; hidden until then.
+  publishAt   DateTime?
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  updatedById String?
+
+  exceptions ActivityException[]
+
+  @@index([status])
+}
+
+/// One original date of an activity, cancelled or changed (time/place/note).
+model ActivityException {
+  id         String   @id @default(cuid())
+  activityId String
+  /// The original local date of the occurrence (its stable identity).
+  date       DateTime @db.Date
+  /// cancelled | changed
+  kind       String
+  note       String   @default("")
+  startTime  String   @default("")
+  endTime    String   @default("")
+  venue      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, date])
+}

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IMAGE_REF_MESSAGE, isImageRef } from './content.ts';
+import type { Activity, ActivityException } from './activities.ts';
 
 /*
  * Phase 2B editorial collections: campuses, Next steps journeys, leadership
@@ -319,4 +320,7 @@ export type PublicCollections = {
   team: PublicTeamMember[];
   /** Pastor-approved sermons, newest first. */
   sermons?: PublicSermon[];
+  /** Published activities that are live now, and their changed dates. */
+  activities?: Activity[];
+  activityExceptions?: ActivityException[];
 };

@@ -10,6 +10,7 @@ import {
 } from './collections.js';
 import { savePage, saveSite, withCurrentHeading } from './content.js';
 import { restoreSermonVersion } from './sermons.js';
+import { restoreActivityVersion } from './activities.js';
 
 /*
  * Phase 2C: revision history and versioned, audited restore (staff only).
@@ -35,6 +36,7 @@ function entityKind(entityType: string, entityKey: string) {
   if (entityType === 'site' && entityKey === 'site') return 'site';
   if (entityType === 'page' && isPageKey(entityKey)) return 'page';
   if (entityType === 'sermons') return 'sermon';
+  if (entityType === 'activities') return 'activity';
   if (isCollectionName(entityType)) return 'collection';
   return null;
 }
@@ -115,6 +117,15 @@ export function registerRevisionRoutes(app: FastifyInstance) {
         );
         reply.header('etag', `"${saved.version}"`);
         return saved;
+      }
+      if (kind === 'activity') {
+        const row = await restoreActivityVersion(
+          { id: revision.entityKey, expected, requestId: request.id },
+          { ...from, data: revision.data },
+          actor,
+        );
+        reply.header('etag', `"${row.version}"`);
+        return { version: row.version };
       }
       if (kind === 'sermon') {
         const row = await restoreSermonVersion(

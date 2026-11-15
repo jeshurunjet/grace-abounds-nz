@@ -3,3 +3,5 @@ export * from './content-defaults.ts';
 export * from './collections.ts';
 export * from './collection-defaults.ts';
 export * from './files.ts';
+export * from './activities.ts';
+export * from './activity-defaults.ts';

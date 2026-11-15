@@ -6,12 +6,15 @@
  *   pnpm --filter @grace-abounds/database content:seed
  */
 import {
+  defaultActivities,
+  defaultActivityExceptions,
   defaultLocations,
   defaultNextSteps,
   defaultPages,
   defaultSermons,
   defaultSiteSettings,
   defaultTeam,
+  nzLocalToUtc,
   pageKeys,
 } from '@grace-abounds/validation';
 import { prisma } from '../src/index.ts';
@@ -127,6 +130,67 @@ await prisma.$transaction(async (tx) => {
       });
     }
     created.push('sermons (drafts)');
+  }
+  // Phase 3A activities: the prototype schedule, only into an empty table.
+  // Ids and slugs are kept so occurrence identity (activity + original date)
+  // stays stable; a scheduled release time (NZ local) is converted to UTC.
+  if ((await tx.activity.count()) === 0) {
+    for (const activity of defaultActivities) {
+      const { schedule } = activity;
+      const [publishDate = '', publishTime = ''] =
+        activity.publishAt.split('T');
+      const scheduled = activity.status === 'scheduled';
+      const row = await tx.activity.create({
+        data: {
+          id: activity.id,
+          slug: activity.slug,
+          kind: activity.kind,
+          title: activity.title,
+          summary: activity.summary,
+          leader: activity.leader,
+          tag: activity.tag,
+          locationKey: activity.locationId,
+          venue: activity.venue,
+          image: activity.image,
+          repeat: schedule.repeat,
+          startDate: new Date(`${schedule.date}T00:00:00Z`),
+          untilDate: schedule.until
+            ? new Date(`${schedule.until}T00:00:00Z`)
+            : null,
+          days: schedule.days,
+          monthWeek: schedule.monthWeek,
+          monthDay: schedule.monthDay,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          joinMode: activity.joinMode,
+          capacity: activity.joinMode === 'none' ? null : activity.capacity,
+          status: scheduled
+            ? 'PUBLISHED'
+            : (activity.status.toUpperCase() as
+                'DRAFT' | 'PUBLISHED' | 'ARCHIVED'),
+          publishAt:
+            scheduled && publishDate
+              ? nzLocalToUtc(publishDate, publishTime)
+              : null,
+        },
+      });
+      const exceptions = defaultActivityExceptions.filter(
+        (item) => item.activityId === row.id,
+      );
+      for (const { id: _id, activityId: _a, date, ...item } of exceptions) {
+        void _id;
+        void _a;
+        await tx.activityException.create({
+          data: {
+            ...item,
+            activityId: row.id,
+            date: new Date(`${date}T00:00:00Z`),
+          },
+        });
+      }
+      await revision('activities', row.id, { ...activity, exceptions });
+    }
+    created.push('activities');
   }
 });
 console.log(

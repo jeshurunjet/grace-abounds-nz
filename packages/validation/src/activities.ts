@@ -1,13 +1,16 @@
 /**
  * Activities: one model for services, connect groups, Bible studies, events
  * and ministry teams, plus the calendar engine that turns their schedules
- * into dated occurrences.
+ * into dated occurrences. Shared by the API (validation, public bundle) and
+ * the website (calendars, detail pages, editor) so both use one tested
+ * recurrence implementation (Phase 3A).
  *
  * All dates and times are New Zealand wall-clock values (Pacific/Auckland):
  * dates are 'YYYY-MM-DD', times 'HH:mm'. Storing local times (not UTC
  * instants) keeps a 10:00am service at 10:00am across daylight saving.
  */
-import { IMAGE_REF_MESSAGE, isImageRef } from '@grace-abounds/validation';
+import { z } from 'zod';
+import { IMAGE_REF_MESSAGE, isImageRef } from './content.ts';
 export const CHURCH_TIME_ZONE = 'Pacific/Auckland';
 
 export type ActivityKind = 'service' | 'group' | 'study' | 'event' | 'ministry';
@@ -311,45 +314,6 @@ export function spotsLeft(
   );
 }
 
-// ---------- Validation ----------
-export function validateActivity(activity: Activity, all: Activity[]) {
-  const errors: string[] = [];
-  const { schedule } = activity;
-  if (!activity.title.trim()) errors.push('Add a title.');
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(activity.slug))
-    errors.push('URL slug must be lowercase letters, numbers and hyphens.');
-  if (
-    all.some((item) => item.id !== activity.id && item.slug === activity.slug)
-  )
-    errors.push('Another activity already uses this URL slug.');
-  if (schedule.repeat !== 'ongoing') {
-    if (!isIsoDate(schedule.date))
-      errors.push(
-        schedule.repeat === 'once' ? 'Choose a date.' : 'Choose a start date.',
-      );
-    if (!schedule.startTime) errors.push('Choose a start time.');
-    if (schedule.endTime && schedule.endTime <= schedule.startTime)
-      errors.push('End time must be after the start time.');
-    if (schedule.until && schedule.until < schedule.date)
-      errors.push('End date must be after the start date.');
-  }
-  if (
-    ['weekly', 'fortnightly'].includes(schedule.repeat) &&
-    !schedule.days.length
-  )
-    errors.push('Choose at least one day of the week.');
-  if (
-    activity.capacity != null &&
-    (!Number.isInteger(activity.capacity) || activity.capacity < 1)
-  )
-    errors.push('Capacity must be a whole number of 1 or more, or blank.');
-  if (activity.status === 'scheduled' && !activity.publishAt)
-    errors.push('Choose when this activity goes live.');
-  if (activity.image && !isImageRef(activity.image))
-    errors.push(IMAGE_REF_MESSAGE);
-  return errors;
-}
-
 // ---------- Calendar export (iCalendar / Google / Microsoft) ----------
 const icsDays = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 /** RFC 5545 RRULE, as used by .ics files and the Google Calendar API. */
@@ -477,33 +441,6 @@ export function toIcs(
   return lines.join('\r\n');
 }
 
-/**
- * Where activities are mirrored for staff calendars. The site keeps its own
- * records (capacity, members, bookings); a provider only holds the schedule.
- *
- * - Google: events.insert/patch with recurrence [`RRULE:${toRRule()}`] and
- *   timeZone 'Pacific/Auckland'; cancel a date by patching that instance.
- * - Microsoft 365: POST /me/events with recurrence toGraphRecurrence();
- *   cancel a date by cancelling that occurrence.
- * Both need OAuth tokens held on the server, so they are added with the
- * backend. Until then the local provider keeps everything in this browser.
- */
-export interface ActivityCalendarProvider {
-  name: 'local' | 'google' | 'microsoft';
-  sync(
-    activity: Activity,
-    exceptions: ActivityException[],
-  ): Promise<{ externalId?: string }>;
-  remove(activity: Activity): Promise<void>;
-}
-export const localCalendarProvider: ActivityCalendarProvider = {
-  name: 'local',
-  async sync(activity) {
-    return { externalId: activity.externalId };
-  },
-  async remove() {},
-};
-
 // ---------- New records ----------
 export function blankSchedule(repeat: Repeat = 'once'): ActivitySchedule {
   return {
@@ -539,3 +476,216 @@ export function blankActivity(kind: ActivityKind): Activity {
     publishAt: '',
   };
 }
+
+// ---------- Saved records (Phase 3A) ----------
+export const activityKinds = [
+  'service',
+  'group',
+  'study',
+  'event',
+  'ministry',
+] as const;
+export const repeats = [
+  'once',
+  'weekly',
+  'fortnightly',
+  'monthly',
+  'ongoing',
+] as const;
+export const joinModes = ['booking', 'membership', 'none'] as const;
+/** Saved status; "scheduled" is a published record with a future publishAt. */
+export const activityStatuses = ['draft', 'published', 'archived'] as const;
+export type ActivityRecordStatus = (typeof activityStatuses)[number];
+
+/** A date that exists on the calendar (not 2026-02-30). */
+export const isRealDate = (value: string) =>
+  isIsoDate(value) && fromUtc(toUtc(value)) === value;
+const isTime = (value: string) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+/**
+ * New Zealand clocks skip 2:00–3:00am on the last Sunday of September and
+ * repeat it on the first Sunday of April. A time in that hour may not exist
+ * or may happen twice, so activities never start or end in it.
+ */
+export const inDaylightSavingHour = (time: string) =>
+  time >= '02:00' && time < '03:00';
+export const DAYLIGHT_SAVING_MESSAGE =
+  'Times from 2:00 to 3:00am can fall in a daylight saving change. Choose another time.';
+
+/** The UTC instant of a New Zealand local date and time. */
+export function nzLocalToUtc(date: string, time: string): Date {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  const target = toUtc(date) + (hours * 60 + minutes) * 60_000;
+  let guess = target - 12 * 3_600_000;
+  for (let step = 0; step < 3; step++) {
+    const local = nzNow(new Date(guess));
+    const [h = 0, m = 0] = local.time.split(':').map(Number);
+    guess += target - (toUtc(local.date) + (h * 60 + m) * 60_000);
+  }
+  return new Date(guess);
+}
+
+const text = (max: number) => z.string().trim().max(max);
+const scheduleSchema = z
+  .object({
+    repeat: z.enum(repeats),
+    date: z.string().trim(),
+    until: z.string().trim(),
+    days: z.array(z.number().int().min(0).max(6)).max(7),
+    monthWeek: z.number().int().min(-1).max(4),
+    monthDay: z.number().int().min(0).max(6),
+    startTime: z.string().trim(),
+    endTime: z.string().trim(),
+  })
+  .strict()
+  .superRefine((schedule, context) => {
+    const issue = (path: string, message: string) =>
+      context.addIssue({ code: 'custom', path: [path], message });
+    const dated = schedule.repeat !== 'ongoing';
+    if (!isRealDate(schedule.date))
+      issue(
+        'date',
+        schedule.repeat === 'once' ? 'Choose a date.' : 'Choose a start date.',
+      );
+    if (schedule.until && !isRealDate(schedule.until))
+      issue('until', 'Choose a real end date, or leave it blank.');
+    else if (schedule.until && schedule.until < schedule.date)
+      issue('until', 'The last date must be on or after the first date.');
+    if (dated && !isTime(schedule.startTime))
+      issue('startTime', 'Choose a start time.');
+    if (!dated && schedule.startTime && !isTime(schedule.startTime))
+      issue('startTime', 'Choose a start time, or leave it blank.');
+    if (schedule.endTime && !isTime(schedule.endTime))
+      issue('endTime', 'Choose an end time, or leave it blank.');
+    else if (
+      schedule.endTime &&
+      isTime(schedule.startTime) &&
+      schedule.endTime <= schedule.startTime
+    )
+      issue('endTime', 'The end time must be after the start time.');
+    for (const key of ['startTime', 'endTime'] as const)
+      if (isTime(schedule[key]) && inDaylightSavingHour(schedule[key]))
+        issue(key, DAYLIGHT_SAVING_MESSAGE);
+    if (
+      (schedule.repeat === 'weekly' || schedule.repeat === 'fortnightly') &&
+      !schedule.days.length
+    )
+      issue('days', 'Choose at least one day of the week.');
+    if (new Set(schedule.days).size !== schedule.days.length)
+      issue('days', 'Choose each day once.');
+    if (schedule.repeat === 'monthly' && schedule.monthWeek === 0)
+      issue('monthWeek', 'Choose which week of the month.');
+  });
+
+export const activityInputSchema = z
+  .object({
+    kind: z.enum(activityKinds),
+    title: z.string().trim().min(1, 'Enter a title.').max(120),
+    summary: text(1000),
+    leader: text(120),
+    tag: text(40),
+    /** A campus key (Locations), or '' for off-site / several places. */
+    locationId: text(40),
+    venue: text(120),
+    image: text(500).refine(
+      (value) => value === '' || isImageRef(value),
+      IMAGE_REF_MESSAGE,
+    ),
+    schedule: scheduleSchema,
+    joinMode: z.enum(joinModes),
+    capacity: z.number().int().min(1).max(100_000).nullable(),
+    status: z.enum(activityStatuses),
+    /** NZ local 'YYYY-MM-DDTHH:mm' release time of a published record, or ''. */
+    publishAt: z.string().trim(),
+  })
+  .strict()
+  .superRefine((activity, context) => {
+    if (activity.joinMode === 'none' && activity.capacity !== null)
+      context.addIssue({
+        code: 'custom',
+        path: ['capacity'],
+        message: 'Places apply only when people can join or book.',
+      });
+    if (activity.publishAt) {
+      const [date = '', time = ''] = activity.publishAt.split('T');
+      if (!isRealDate(date) || !isTime(time))
+        context.addIssue({
+          code: 'custom',
+          path: ['publishAt'],
+          message: 'Choose a real release date and time, or leave it blank.',
+        });
+      else if (activity.status !== 'published')
+        context.addIssue({
+          code: 'custom',
+          path: ['publishAt'],
+          message: 'Only a published activity has a release time.',
+        });
+    }
+  });
+export type ActivityInput = z.infer<typeof activityInputSchema>;
+
+/** Change or cancel one original date of an activity. */
+export const activityExceptionInputSchema = z
+  .object({
+    kind: z.enum(['cancelled', 'changed']),
+    note: text(300),
+    startTime: z.string().trim(),
+    endTime: z.string().trim(),
+    venue: text(120),
+  })
+  .strict()
+  .superRefine((exception, context) => {
+    for (const key of ['startTime', 'endTime'] as const) {
+      const value = exception[key];
+      if (value && !isTime(value))
+        context.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'Choose a time, or leave it blank to keep the usual one.',
+        });
+      else if (value && inDaylightSavingHour(value))
+        context.addIssue({
+          code: 'custom',
+          path: [key],
+          message: DAYLIGHT_SAVING_MESSAGE,
+        });
+    }
+    if (
+      exception.kind === 'changed' &&
+      !exception.startTime &&
+      !exception.endTime &&
+      !exception.venue &&
+      !exception.note
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['startTime'],
+        message: 'Change the time, place or note for this date.',
+      });
+  });
+export type ActivityExceptionInput = z.infer<
+  typeof activityExceptionInputSchema
+>;
+
+/** An activity as staff see it: every status, with its version. */
+export type StaffActivity = Activity & { version: number; updatedAt: string };
+export type StaffActivities = {
+  activities: StaffActivity[];
+  exceptions: ActivityException[];
+};
+
+/** The activity fields an editor holds (everything but identity). */
+export const activityInput = (activity: Activity): ActivityInput => ({
+  kind: activity.kind,
+  title: activity.title,
+  summary: activity.summary,
+  leader: activity.leader,
+  tag: activity.tag,
+  locationId: activity.locationId,
+  venue: activity.venue,
+  image: activity.image,
+  schedule: { ...activity.schedule },
+  joinMode: activity.joinMode,
+  capacity: activity.capacity,
+  status: activity.status === 'scheduled' ? 'published' : activity.status,
+  publishAt: activity.publishAt,
+});

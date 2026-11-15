@@ -1753,12 +1753,12 @@ The owner described the real workload and decided the following. Where it differ
 
 - `pnpm test`: first run 1 failed, 119 passed, 112 skipped (28 files passed, 13 skipped). The failure was in the new Gallery upload test, which read the last request instead of the library-item request (the Gallery reloads after an upload). Test fixed; rerun as part of `pnpm test && pnpm test:db`, which reached the database tests (so `pnpm test` passed).
 - `pnpm test:db`: **16 files, 122 tests passed**, including `uploads.test.ts` (9).
-- `pnpm lint`: first a warning (Sermons deep-link effect missing `open`), fixed with a ref; then only Claude's temporary typecheck file flagged by Prettier, removed. Final state clean (`prettier --check .`: all files formatted). Owner rerun of the full `pnpm lint` not yet confirmed.
+- `pnpm lint`: first a warning (Sermons deep-link effect missing `open`), fixed with a ref; then only Claude's temporary typecheck file flagged by Prettier, removed. Owner rerun of the full `pnpm lint` (16 Nov): clean.
 
-**Owner check with real AWS storage (16 Nov):** after restarting the app, the Gallery showed uploads available; a PDF "uploaded seamlessly" and opened. The Gallery refused a video and pointed to Sermons & videos (by design). The owner reported that everything else went well; a sermon recording upload with playback has not been separately confirmed yet.
+**Owner check with real AWS storage (16 Nov):** after restarting the app, the Gallery showed uploads available; a PDF "uploaded seamlessly" and opened. The Gallery refused a video and pointed to Sermons & videos (by design). Sermon recording (16 Nov): the owner uploaded a video in Sermons & videos; it played and saved ("video went well").
 
 **Owner decision (16 Nov):** keep videos only through Sermons & videos for now. Non-sermon videos (events, testimonies) are posted there too. Pastor-approved videos in Gallery folders is a possible later addition.
 
 **Current next instruction:**
 
-> Owner: confirm a sermon recording upload plays and saves in Sermons & videos, and rerun `pnpm lint`. Codex: review Phase 2D (`0899eec..5b72d1c`): upload policy, storage interface, access rules for files, the sermon/library boundaries, deletion and outbox clean-up, the gateway redirect, and the two deviations above. Claude: no further features until Codex's review; no merge, push or deployment.
+> Owner: hand Phase 2D to Codex. Codex: review Phase 2D (`0899eec..5b72d1c`): upload policy, storage interface, access rules for files, the sermon/library boundaries, deletion and outbox clean-up, the gateway redirect, and the two deviations above. Claude: no further features until Codex's review; no merge, push or deployment.

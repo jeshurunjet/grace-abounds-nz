@@ -17,6 +17,15 @@ import { ActivityCalendar } from './activity-ui';
  */
 
 const today = nzNow().date;
+
+/** The month as a list, including days earlier this month. */
+function showList() {
+  fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+  const earlier = screen.queryByRole('button', {
+    name: /^Show earlier this month/,
+  });
+  if (earlier) fireEvent.click(earlier);
+}
 const state = vi.hoisted(() => ({ role: 'admin' }));
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { role: state.role, email: 'x@y.z' } } }),
@@ -168,7 +177,7 @@ describe('Home calendar for staff', () => {
         screen.getByRole('button', { name: /Create activity/ }),
       ).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    showList();
     expect(screen.getAllByText('Planning night').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
     fireEvent.click(
@@ -198,7 +207,7 @@ describe('Home calendar for staff', () => {
         screen.getByRole('button', { name: /Create activity/ }),
       ).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    showList();
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Edit Sunday Service' })[0]!,
     );
@@ -236,7 +245,7 @@ describe('Home calendar for members', () => {
   it('shows published activities only, with no editing', async () => {
     state.role = 'member';
     render(<ActivityCalendar member />);
-    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    showList();
     expect(screen.getAllByText('Sunday Service').length).toBeGreaterThan(0);
     expect(screen.queryByText('Planning night')).toBeNull();
     expect(

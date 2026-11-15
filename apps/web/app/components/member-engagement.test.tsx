@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemberEngagement } from './member-engagement';
-import { MemberActivities } from './member-activities';
+import { JoinActivities, MyPlans } from './member-activities';
 import { MemberCalendar } from './member-calendar';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn() }));
@@ -71,10 +71,14 @@ describe('Home member tools', () => {
   });
 
   it('joining and bookings stay available with the calendar', () => {
-    render(<MemberActivities />);
-    expect(
-      screen.getByRole('heading', { name: 'Activities & bookings' }),
-    ).toBeInTheDocument();
+    const onFind = vi.fn();
+    render(<MyPlans onFind={onFind} />);
+    expect(screen.getByText('Nothing planned yet.')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Find something to join' }),
+    );
+    expect(onFind).toHaveBeenCalled();
+    render(<JoinActivities />);
     expect(
       screen.getByRole('searchbox', { name: 'Search activities' }),
     ).toBeInTheDocument();

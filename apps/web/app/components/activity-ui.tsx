@@ -2,7 +2,15 @@
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, LayoutGrid, List, Pencil, Plus } from 'lucide-react';
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Pencil,
+  Plus,
+} from 'lucide-react';
 import { useContent } from './content-provider';
 import {
   addDays,
@@ -156,10 +164,12 @@ const filters: { label: string; kinds: ActivityKind[] }[] = [
 ];
 
 /**
- * Month calendar of activity dates, with an accessible list view of the same
- * records. Member mode adds the member's plans. In the workspace, Pastor and
- * Admin also see drafts and scheduled activities and get Create activity and
- * Edit from the same calendar and list (Phase 3A: one calendar, one editor).
+ * The church calendar: a month grid with the chosen day's agenda beside it,
+ * or a plain list of the month. Members see published activities and their
+ * own plans; in the workspace, Pastor and Admin also see drafts and
+ * scheduled activities and get Create activity and Edit from the same
+ * calendar and list (Phase 3A: one calendar, one editor). Its own `cal-`
+ * styles (calendar.css) so older calendar rules can't leak in.
  */
 export function ActivityCalendar({ member = false }: { member?: boolean }) {
   const { content } = useContent();
@@ -169,10 +179,11 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
   const role = data?.user?.role;
   const staff = member && (role === 'pastor' || role === 'admin');
   const [month, setMonth] = useState(now.date.slice(0, 7));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(now.date);
   const [filter, setFilter] = useState(0);
   const [mine, setMine] = useState(false);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [showEarlier, setShowEarlier] = useState(false);
   const [staffData, setStaffData] = useState<StaffActivities | null>(null);
   const [staffError, setStaffError] = useState('');
   const [editing, setEditing] = useState<EditorTarget | null>(null);
@@ -234,11 +245,20 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
     { length: +last.slice(8, 10) },
     (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`,
   );
-  const cells = [...Array(weekdayOf(first)).fill(null), ...days] as (
-    string | null
-  )[];
-  // Activities without dates (ongoing teams) and, for staff, ones whose
-  // dates fall outside this month, are reachable from the list view.
+  const leading = [...Array(weekdayOf(first)).fill(null), ...days];
+  // Complete the last week so the grid has no ragged edge.
+  const cells = [
+    ...leading,
+    ...Array((7 - (leading.length % 7)) % 7).fill(null),
+  ] as (string | null)[];
+  // In this month's list, earlier days are tucked away until asked for.
+  const thisMonth = month === now.date.slice(0, 7);
+  const listDays = days.filter(
+    (date) => forDay(date).length || rosterForDay(date).length,
+  );
+  const earlier =
+    thisMonth && !showEarlier ? listDays.filter((date) => date < now.date) : [];
+  // Activities without dates (ongoing teams) are reachable from the list.
   const undated = source.filter(
     (item) =>
       item.schedule.repeat === 'ongoing' &&
@@ -248,11 +268,19 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
     staff && staffData
       ? staffData.activities.filter((item) => item.status === 'archived')
       : [];
-  function move(offset: number) {
-    const target = addDays(first, offset > 0 ? 32 : -1).slice(0, 7);
+  const monthName = new Date(`${first}T12:00:00Z`).toLocaleDateString('en-NZ', {
+    timeZone: 'UTC',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  function showMonth(target: string) {
     setMonth(target);
-    setSelected(null);
+    setShowEarlier(false);
+    setSelected(target === now.date.slice(0, 7) ? now.date : `${target}-01`);
   }
+  const move = (offset: number) =>
+    showMonth(addDays(first, offset > 0 ? 32 : -1).slice(0, 7));
   function saved(activity: StaffActivity, changed?: ActivityException[]) {
     setStaffData((state) => {
       const activities = state?.activities ?? [];
@@ -280,112 +308,127 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
     const record = staffRecord(activity.id);
     if (record) setEditing({ activity: record });
   };
+  const editButton = (activity: Activity) =>
+    staff && staffRecord(activity.id) ? (
+      <button
+        type="button"
+        className="cal-edit"
+        aria-label={`Edit ${activity.title}`}
+        onClick={() => edit(activity)}
+      >
+        <Pencil aria-hidden="true" size={16} />
+      </button>
+    ) : null;
 
+  /** One activity on one date: time, title, place and its status. */
   function entry(item: Occurrence) {
     const hidden = staff ? notLive(item.activity) : '';
-    const title = (
-      <>
-        {item.activity.title}
-        <small>
-          {item.cancelled
-            ? 'Cancelled'
-            : `${formatTime(item.startTime)} · ${place(item.activity, item.venue)}`}
-          {item.note && ` — ${item.note}`}
-        </small>
-      </>
-    );
+    const tag =
+      hidden ||
+      (item.cancelled
+        ? 'Cancelled'
+        : isMine(item)
+          ? 'You’re going'
+          : kindLabels[item.activity.kind]);
     return (
-      <p key={item.key} className={item.cancelled ? 'cancelled' : ''}>
-        {hidden ? (
-          <span>{title}</span>
-        ) : (
-          <Link href={`/events/${item.activity.slug}`}>{title}</Link>
-        )}
-        <em>
-          {hidden ||
-            (isMine(item) ? 'You’re going' : kindLabels[item.activity.kind])}
-        </em>
-        {staff && staffRecord(item.activity.id) && (
-          <button
-            type="button"
-            className="kit-icon-button"
-            aria-label={`Edit ${item.activity.title}`}
-            onClick={() => edit(item.activity)}
-          >
-            <Pencil aria-hidden="true" size={16} />
-          </button>
-        )}
-      </p>
+      <li
+        key={item.key}
+        className={`cal-entry cal-kind-${item.activity.kind}${item.cancelled ? ' is-cancelled' : ''}${hidden ? ' is-draft' : ''}`}
+      >
+        <span className="cal-entry-time">
+          {item.startTime ? formatTime(item.startTime) : 'All day'}
+        </span>
+        <span className="cal-entry-main">
+          {hidden ? (
+            <span className="cal-entry-title">{item.activity.title}</span>
+          ) : (
+            <Link
+              className="cal-entry-title"
+              href={`/events/${item.activity.slug}`}
+            >
+              {item.activity.title}
+            </Link>
+          )}
+          <span className="cal-entry-meta">
+            {place(item.activity, item.venue)}
+            {item.note && ` — ${item.note}`}
+          </span>
+        </span>
+        <span className={`cal-tag${isMine(item) && !hidden ? ' is-mine' : ''}`}>
+          {tag}
+        </span>
+        {editButton(item.activity)}
+      </li>
     );
   }
+  const roster = (date: string) =>
+    rosterForDay(date).map((item) => (
+      <li key={item.id} className="cal-entry cal-kind-roster">
+        <span className="cal-entry-time">{item.time}</span>
+        <span className="cal-entry-main">
+          <span className="cal-entry-title">Serving: {item.title}</span>
+          <span className="cal-entry-meta">{item.location}</span>
+        </span>
+        <span className="cal-tag">{item.status}</span>
+      </li>
+    ));
 
   return (
     <section
       id="calendar"
-      className={`panel pastor-calendar member-calendar ${member ? 'workspace-calendar' : 'public-event-calendar'}`}
-      aria-label={member ? 'Your planner' : 'Church calendar'}
+      className={`cal ${member ? 'cal-workspace' : 'cal-public'}`}
+      aria-label={member ? 'Church calendar and your plans' : 'Church calendar'}
     >
-      <header>
-        <div>
-          {member && <p className="eyebrow">Your planner</p>}
-          <h2>
-            {new Date(`${first}T12:00:00Z`).toLocaleDateString('en-NZ', {
-              timeZone: 'UTC',
-              month: 'long',
-              year: 'numeric',
-            })}
-          </h2>
-        </div>
-        <span>
-          <button aria-label="Previous month" onClick={() => move(-1)}>
-            ‹
+      <div className="cal-top">
+        <div className="cal-month-nav">
+          <button
+            type="button"
+            className="cal-round"
+            aria-label="Previous month"
+            onClick={() => move(-1)}
+          >
+            <ChevronLeft aria-hidden="true" size={18} />
           </button>
-          <button aria-label="Next month" onClick={() => move(1)}>
-            ›
+          <h2>{monthName}</h2>
+          <button
+            type="button"
+            className="cal-round"
+            aria-label="Next month"
+            onClick={() => move(1)}
+          >
+            <ChevronRight aria-hidden="true" size={18} />
           </button>
-        </span>
-      </header>
-      <div className="calendar-toolbar">
-        <div className="calendar-filters" role="group" aria-label="Show">
-          {filters.map((item, index) => (
+          {month !== now.date.slice(0, 7) && (
             <button
-              key={item.label}
-              aria-pressed={filter === index}
-              className={filter === index ? 'active' : ''}
-              onClick={() => setFilter(index)}
+              type="button"
+              className="cal-pill"
+              onClick={() => showMonth(now.date.slice(0, 7))}
             >
-              {item.label}
-            </button>
-          ))}
-          {member && (
-            <button
-              aria-pressed={mine}
-              className={mine ? 'active' : ''}
-              onClick={() => setMine((value) => !value)}
-            >
-              My plans only
+              Today
             </button>
           )}
         </div>
-        <div className="calendar-views" role="group" aria-label="View">
-          <button
-            type="button"
-            className="kit-icon-button"
-            aria-label="Calendar view"
-            aria-pressed={view === 'calendar'}
-            onClick={() => setView('calendar')}
-          >
-            <LayoutGrid aria-hidden="true" size={18} />
-          </button>
-          <button
-            type="button"
-            className="kit-icon-button"
-            aria-label="List view"
-            aria-pressed={view === 'list'}
-            onClick={() => setView('list')}
-          >
-            <List aria-hidden="true" size={18} />
-          </button>
+        <div className="cal-actions">
+          <div className="cal-switch" role="group" aria-label="View">
+            <button
+              type="button"
+              aria-label="Calendar view"
+              aria-pressed={view === 'calendar'}
+              onClick={() => setView('calendar')}
+            >
+              <LayoutGrid aria-hidden="true" size={16} />
+              <span aria-hidden="true">Month</span>
+            </button>
+            <button
+              type="button"
+              aria-label="List view"
+              aria-pressed={view === 'list'}
+              onClick={() => setView('list')}
+            >
+              <List aria-hidden="true" size={16} />
+              <span aria-hidden="true">List</span>
+            </button>
+          </div>
           {staff && (
             <button
               type="button"
@@ -399,6 +442,31 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
           )}
         </div>
       </div>
+
+      <div className="cal-filters" role="group" aria-label="Show">
+        {filters.map((item, index) => (
+          <button
+            key={item.label}
+            type="button"
+            className="cal-pill"
+            aria-pressed={filter === index}
+            onClick={() => setFilter(index)}
+          >
+            {item.label}
+          </button>
+        ))}
+        {member && (
+          <button
+            type="button"
+            className="cal-pill"
+            aria-pressed={mine}
+            onClick={() => setMine((value) => !value)}
+          >
+            My plans only
+          </button>
+        )}
+      </div>
+
       {staffError && (
         <div className="publishing-errors" role="alert">
           <p>Drafts couldn’t be loaded. {staffError}</p>
@@ -411,147 +479,196 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
           </button>
         </div>
       )}
+
       {view === 'calendar' ? (
-        <>
-          <div className="pastor-week">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <b key={day}>{day}</b>
-            ))}
-          </div>
-          <div className="pastor-calendar-grid">
-            {cells.map((date, index) => {
-              const count = date
-                ? forDay(date).length + rosterForDay(date).length
-                : 0;
-              return (
-                <button
-                  key={index}
-                  disabled={!date}
-                  aria-pressed={date === selected}
-                  className={[
-                    date === selected ? 'selected' : '',
-                    date === now.date ? 'today' : '',
-                  ].join(' ')}
-                  aria-label={
-                    date ? `${formatDate(date)}, ${count} items` : undefined
-                  }
-                  onClick={() => setSelected(date)}
-                >
-                  {date ? (
-                    <span className="calendar-day-number">
-                      {+date.slice(8, 10)}
-                    </span>
-                  ) : (
-                    ''
-                  )}
-                  {count > 0 && <i />}
-                  {/* Workspace calendar: up to three titles per day, Google-style. */}
-                  {member && date && (
-                    <span className="calendar-day-items" aria-hidden="true">
-                      {forDay(date)
-                        .slice(0, 3)
-                        .map((item) => (
-                          <span
-                            key={item.key}
-                            className={`calendar-chip calendar-chip-${item.activity.kind}${item.cancelled ? ' cancelled' : ''}${staff && notLive(item.activity) ? ' draft' : ''}`}
-                          >
-                            {formatTime(item.startTime)} {item.activity.title}
-                          </span>
-                        ))}
-                      {count > Math.min(3, forDay(date).length) && (
-                        <span className="calendar-more">
-                          {count - Math.min(3, forDay(date).length)} more
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {selected && (
-            <div className="pastor-day-detail">
-              <h3>{formatDate(selected, true)}</h3>
-              {!forDay(selected).length && !rosterForDay(selected).length && (
-                <p>Nothing on this day.</p>
-              )}
-              {forDay(selected).map(entry)}
-              {rosterForDay(selected).map((item) => (
-                <p key={item.id}>
-                  <span>
-                    Serving: {item.title}
-                    <small>
-                      {item.time} · {item.location}
-                    </small>
-                  </span>
-                  <em>{item.status}</em>
-                </p>
+        <div className="cal-body">
+          <div className="cal-month">
+            <div className="cal-weekdays" aria-hidden="true">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <span key={day}>{day}</span>
               ))}
             </div>
-          )}
-        </>
+            <div className="cal-grid">
+              {cells.map((date, index) => {
+                if (!date)
+                  return (
+                    <span
+                      key={index}
+                      className="cal-cell is-empty"
+                      aria-hidden="true"
+                    />
+                  );
+                const items = forDay(date);
+                const count = items.length + rosterForDay(date).length;
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    className={[
+                      'cal-cell',
+                      date === selected ? 'is-selected' : '',
+                      date === now.date ? 'is-today' : '',
+                      date < now.date ? 'is-past' : '',
+                    ].join(' ')}
+                    aria-pressed={date === selected}
+                    aria-label={`${formatDate(date)}, ${count} ${count === 1 ? 'item' : 'items'}`}
+                    onClick={() => setSelected(date)}
+                  >
+                    <span className="cal-day">{+date.slice(8, 10)}</span>
+                    {member && (
+                      <span className="cal-chips" aria-hidden="true">
+                        {items.slice(0, 2).map((item) => (
+                          <span
+                            key={item.key}
+                            className={`cal-chip cal-kind-${item.activity.kind}${item.cancelled ? ' is-cancelled' : ''}${staff && notLive(item.activity) ? ' is-draft' : ''}`}
+                          >
+                            {item.activity.title}
+                          </span>
+                        ))}
+                        {count > Math.min(2, items.length) && (
+                          <span className="cal-more">
+                            +{count - Math.min(2, items.length)} more
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {count > 0 && (
+                      <span className="cal-dots" aria-hidden="true">
+                        {Array.from({ length: Math.min(count, 3) }, (_, i) => (
+                          <i key={i} />
+                        ))}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <aside className="cal-agenda" aria-live="polite">
+            {selected ? (
+              <>
+                <h3>
+                  {selected === now.date ? 'Today · ' : ''}
+                  {formatDate(selected, true)}
+                </h3>
+                {!forDay(selected).length && !rosterForDay(selected).length ? (
+                  <p className="cal-empty">Nothing on this day.</p>
+                ) : (
+                  <ul className="cal-entries">
+                    {forDay(selected).map(entry)}
+                    {roster(selected)}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <p className="cal-empty">Choose a day to see what’s on.</p>
+            )}
+          </aside>
+        </div>
       ) : (
-        <div className="pastor-day-detail calendar-list">
-          {!shown.length && <p>Nothing on the calendar this month.</p>}
-          {days
-            .filter((date) => forDay(date).length)
+        <div className="cal-list">
+          {!shown.length && (
+            <p className="cal-empty">Nothing on the calendar this month.</p>
+          )}
+          {earlier.length > 0 && (
+            <button
+              type="button"
+              className="cal-earlier"
+              onClick={() => setShowEarlier(true)}
+            >
+              Show earlier this month ({earlier.length}{' '}
+              {earlier.length === 1 ? 'day' : 'days'})
+            </button>
+          )}
+          {listDays
+            .filter((date) => !earlier.includes(date))
             .map((date) => (
-              <section key={date} aria-label={formatDate(date, true)}>
-                <h3>{formatDate(date, true)}</h3>
-                {forDay(date).map(entry)}
+              <section
+                key={date}
+                className={`cal-list-day${date === now.date ? ' is-today' : ''}${date < now.date ? ' is-past' : ''}`}
+                aria-label={formatDate(date, true)}
+              >
+                <h3>
+                  <span className="cal-list-weekday">
+                    {formatDate(date).split(',')[0]}
+                  </span>
+                  <span className="cal-list-date">
+                    {formatDate(date, true).split(', ')[1]}
+                  </span>
+                  {date === now.date && (
+                    <span className="cal-list-today">Today</span>
+                  )}
+                </h3>
+                <ul className="cal-entries">
+                  {forDay(date).map(entry)}
+                  {roster(date)}
+                </ul>
               </section>
             ))}
           {!mine && undated.length > 0 && (
-            <section aria-label="Ongoing">
-              <h3>Ongoing</h3>
-              {undated.map((activity) => (
-                <p key={activity.id}>
-                  {staff && notLive(activity) ? (
-                    <span>{activity.title}</span>
-                  ) : (
-                    <Link href={`/events/${activity.slug}`}>
-                      {activity.title}
-                      <small>{place(activity)}</small>
-                    </Link>
-                  )}
-                  <em>
-                    {(staff && notLive(activity)) || kindLabels[activity.kind]}
-                  </em>
-                  {staff && staffRecord(activity.id) && (
-                    <button
-                      type="button"
-                      className="kit-icon-button"
-                      aria-label={`Edit ${activity.title}`}
-                      onClick={() => edit(activity)}
+            <section className="cal-list-day" aria-label="Ongoing">
+              <h3>
+                <span className="cal-list-weekday">Ongoing</span>
+                <span className="cal-list-date">
+                  Times arranged with the team
+                </span>
+              </h3>
+              <ul className="cal-entries">
+                {undated.map((activity) => {
+                  const hidden = staff ? notLive(activity) : '';
+                  return (
+                    <li
+                      key={activity.id}
+                      className={`cal-entry cal-kind-${activity.kind}${hidden ? ' is-draft' : ''}`}
                     >
-                      <Pencil aria-hidden="true" size={16} />
-                    </button>
-                  )}
-                </p>
-              ))}
+                      <span className="cal-entry-time">—</span>
+                      <span className="cal-entry-main">
+                        {hidden ? (
+                          <span className="cal-entry-title">
+                            {activity.title}
+                          </span>
+                        ) : (
+                          <Link
+                            className="cal-entry-title"
+                            href={`/events/${activity.slug}`}
+                          >
+                            {activity.title}
+                          </Link>
+                        )}
+                        <span className="cal-entry-meta">
+                          {place(activity)}
+                        </span>
+                      </span>
+                      <span className="cal-tag">
+                        {hidden || kindLabels[activity.kind]}
+                      </span>
+                      {editButton(activity)}
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
           {archived.length > 0 && (
-            <details className="calendar-archived">
-              <summary>Archived ({archived.length})</summary>
-              {archived.map((activity) => (
-                <p key={activity.id}>
-                  <span>{activity.title}</span>
-                  <em>Archived</em>
-                  <button
-                    type="button"
-                    className="kit-icon-button"
-                    aria-label={`Edit ${activity.title}`}
-                    onClick={() => edit(activity)}
-                  >
-                    <Pencil aria-hidden="true" size={16} />
-                  </button>
-                </p>
-              ))}
+            <details className="cal-archived">
+              <summary>Archived activities ({archived.length})</summary>
+              <ul className="cal-entries">
+                {archived.map((activity) => (
+                  <li key={activity.id} className="cal-entry is-draft">
+                    <span className="cal-entry-time">—</span>
+                    <span className="cal-entry-main">
+                      <span className="cal-entry-title">{activity.title}</span>
+                    </span>
+                    <span className="cal-tag">Archived</span>
+                    {editButton(activity)}
+                  </li>
+                ))}
+              </ul>
             </details>
           )}
         </div>
       )}
+
       {staff && (
         <ActivityEditor
           target={editing}

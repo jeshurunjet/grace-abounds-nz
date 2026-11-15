@@ -1,0 +1,826 @@
+/*
+ * Calendar & bookings (owner polish, 16 Nov 2026). Self-contained `cal-`,
+ * `hub-`, `plans-` and `join-` classes so older calendar rules can't leak
+ * in. Theme tokens only.
+ */
+
+/* ---------- Tabs ---------- */
+.hub-header {
+  margin-bottom: 1rem;
+}
+.hub-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 1rem;
+  padding: 0.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  width: max-content;
+  max-width: 100%;
+}
+.hub-tabs [role='tab'] {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.6rem;
+  padding: 0.45rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mid);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hub-tabs [role='tab']:hover {
+  color: var(--ink);
+}
+.hub-tabs [role='tab'][aria-selected='true'] {
+  background: var(--gold);
+  color: var(--on-gold);
+}
+.hub-tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.hub-count {
+  min-width: 1.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1.4rem;
+  text-align: center;
+}
+.hub-panel {
+  min-width: 0;
+}
+
+/* ---------- Shared pills ---------- */
+.cal-pill {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.cal-pill:hover {
+  border-color: var(--gold);
+}
+.cal-pill[aria-pressed='true'] {
+  border-color: var(--ink-strong);
+  background: var(--ink-strong);
+  color: var(--surface-raised);
+}
+
+/* ---------- Calendar ---------- */
+.cal {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.cal-public {
+  max-width: 64rem;
+  margin: 0 auto 3rem;
+}
+.cal-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.cal-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cal-month-nav h2 {
+  min-width: 10.5rem;
+  margin: 0;
+  font: 400 1.6rem var(--font-display);
+  text-align: center;
+}
+.cal-round {
+  display: inline-grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cal-round:hover {
+  border-color: var(--gold);
+}
+.cal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cal-switch {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.cal-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.2rem;
+  padding: 0.3rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mid);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cal-switch button[aria-pressed='true'] {
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.cal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Month grid with the chosen day's agenda beside it (wide) or below. */
+.cal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+.cal-month {
+  min-width: 0;
+}
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.cal-weekdays span {
+  padding: 0 0.35rem 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.cal-grid {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--line);
+}
+.cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
+  min-height: 6.25rem;
+  padding: 0.35rem;
+  border: 0;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cal-cell.is-empty {
+  background: var(--surface);
+  cursor: default;
+}
+.cal-cell.is-past .cal-day {
+  color: var(--ink-soft);
+}
+.cal-cell:hover:not(.is-empty) {
+  background: var(--active-bg);
+}
+.cal-cell.is-selected {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.cal-cell:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.cal-day {
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.cal-cell.is-today .cal-day {
+  background: var(--gold);
+  color: var(--on-gold);
+}
+.cal-chips {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.cal-chip {
+  display: block;
+  min-width: 0;
+  padding: 0.15rem 0.35rem;
+  overflow: hidden;
+  border-radius: 0.3rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--tile-website-bg);
+  color: var(--tile-website-ink);
+}
+.cal-chip.cal-kind-group,
+.cal-chip.cal-kind-ministry {
+  background: var(--tile-activities-bg);
+  color: var(--tile-activities-ink);
+}
+.cal-chip.cal-kind-study {
+  background: var(--tile-members-bg);
+  color: var(--tile-members-ink);
+}
+.cal-chip.cal-kind-event {
+  background: var(--tile-sermons-bg);
+  color: var(--tile-sermons-ink);
+}
+.cal-chip.is-cancelled {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.cal-chip.is-draft {
+  opacity: 0.65;
+  outline: 1px dashed currentColor;
+}
+.cal-more {
+  padding-left: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+.cal-dots {
+  display: none;
+  gap: 3px;
+  margin-top: auto;
+}
+.cal-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+/* Public calendar: dots only, compact cells. */
+.cal-public .cal-cell {
+  min-height: 3.5rem;
+  align-items: center;
+}
+.cal-public .cal-dots {
+  display: flex;
+}
+
+/* Agenda and list rows share one readable entry style. */
+.cal-agenda {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.cal-agenda h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.cal-empty {
+  margin: 0;
+  color: var(--ink-mid);
+  font-size: 0.95rem;
+}
+.cal-entries {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cal-entry {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tile-website-ink);
+  border-radius: 0.6rem;
+  background: var(--surface-raised);
+}
+.cal-entry.cal-kind-group,
+.cal-entry.cal-kind-ministry {
+  border-left-color: var(--tile-activities-ink);
+}
+.cal-entry.cal-kind-study {
+  border-left-color: var(--tile-members-ink);
+}
+.cal-entry.cal-kind-event {
+  border-left-color: var(--tile-sermons-ink);
+}
+.cal-entry.cal-kind-roster {
+  border-left-color: var(--olive);
+}
+.cal-entry.is-cancelled .cal-entry-title,
+.cal-entry.is-cancelled .cal-entry-time {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+.cal-entry.is-draft {
+  border-style: dashed;
+}
+.cal-entry-time {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cal-entry-main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.cal-entry-title {
+  color: var(--ink-strong);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.cal-entry-title:hover {
+  text-decoration: underline;
+}
+.cal-entry-meta {
+  color: var(--ink-mid);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+.cal-tag {
+  justify-self: end;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--neutral-badge-bg);
+  color: var(--ink-mid);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cal-tag.is-mine {
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+.cal-edit {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cal-edit:hover {
+  border-color: var(--gold);
+}
+/* In the narrow agenda the tag moves under the title. */
+.cal-agenda .cal-entry {
+  grid-template-columns: 4.2rem minmax(0, 1fr) auto;
+}
+.cal-agenda .cal-tag {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+}
+.cal-agenda .cal-edit {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+/* List view: the month as a readable agenda. */
+.cal-list {
+  display: grid;
+  gap: 1.1rem;
+}
+.cal-list-day {
+  display: grid;
+  gap: 0.5rem;
+}
+.cal-list-day h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.05rem;
+}
+.cal-list-weekday {
+  font-weight: 700;
+}
+.cal-list-date {
+  color: var(--ink-mid);
+  font-weight: 400;
+}
+.cal-list-today {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--on-gold);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.cal-list-day.is-past {
+  opacity: 0.7;
+}
+.cal-archived summary {
+  color: var(--ink-mid);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.cal-archived .cal-entries {
+  margin-top: 0.6rem;
+}
+
+/* ---------- My plans ---------- */
+.plans {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.plans-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem;
+  color: var(--ink-mid);
+  text-align: center;
+}
+.plans-empty p {
+  max-width: 28rem;
+  margin: 0;
+}
+.plans-section {
+  display: grid;
+  gap: 0.6rem;
+}
+.plans-section h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.plans-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plans-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.plans-item.is-cancelled .plans-main a {
+  text-decoration: line-through;
+}
+.plans-date {
+  display: grid;
+  justify-items: center;
+  width: 3.4rem;
+  padding: 0.3rem 0;
+  border-radius: 0.6rem;
+  background: var(--surface);
+  line-height: 1.15;
+}
+.plans-date small {
+  color: var(--ink-mid);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+.plans-date b {
+  font-size: 1.25rem;
+}
+.plans-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 0.6rem;
+  background: var(--tile-activities-bg);
+  color: var(--tile-activities-ink);
+}
+.plans-main {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.plans-main a {
+  color: var(--ink-strong);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.plans-main a:hover {
+  text-decoration: underline;
+}
+.plans-main > span {
+  color: var(--ink-mid);
+  font-size: 0.875rem;
+}
+.plans-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+.plans-leave {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--danger-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.plans-more {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--maple);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plans-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+/* ---------- Join or book ---------- */
+.join {
+  display: grid;
+  gap: 1rem;
+}
+.join-controls {
+  display: grid;
+  gap: 0.75rem;
+}
+.join-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: min(100%, 28rem);
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+}
+.join-search:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.join-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+}
+.join-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.join-count {
+  margin: 0;
+  color: var(--ink-mid);
+  font-size: 0.9rem;
+}
+.join-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.9rem;
+}
+.join-card {
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--tile-website-ink);
+  border-radius: 0.8rem;
+  background: var(--surface-raised);
+}
+.join-card.cal-kind-group,
+.join-card.cal-kind-ministry {
+  border-top-color: var(--tile-activities-ink);
+}
+.join-card.cal-kind-study {
+  border-top-color: var(--tile-members-ink);
+}
+.join-card.cal-kind-event {
+  border-top-color: var(--tile-sermons-ink);
+}
+.join-card.is-focus {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+.join-kind {
+  color: var(--ink-mid);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.join-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+.join-card h3 a {
+  color: var(--ink-strong);
+  text-decoration: none;
+}
+.join-card h3 a:hover {
+  text-decoration: underline;
+}
+.join-card p {
+  margin: 0;
+  color: var(--ink-mid);
+  font-size: 0.875rem;
+}
+.join-card .join-spots {
+  align-self: end;
+  color: var(--ink);
+  font-weight: 600;
+}
+.join-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.join-action label {
+  flex: 1 1 9rem;
+}
+.join-action select {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+}
+.join-done {
+  color: var(--success-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.join-more {
+  justify-self: center;
+}
+
+/* ---------- Narrow screens ---------- */
+@media (max-width: 1100px) {
+  .cal-body {
+    grid-template-columns: 1fr;
+  }
+  .cal-agenda {
+    position: static;
+  }
+}
+@media (max-width: 720px) {
+  .cal {
+    padding: 0.9rem;
+  }
+  .cal-month-nav h2 {
+    min-width: 0;
+    font-size: 1.3rem;
+  }
+  .cal-cell {
+    min-height: 3.4rem;
+    align-items: center;
+  }
+  .cal-chips {
+    display: none;
+  }
+  .cal-dots {
+    display: flex;
+  }
+  .cal-entry {
+    grid-template-columns: 4.2rem minmax(0, 1fr) auto;
+  }
+  .cal-entry .cal-tag {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .cal-entry .cal-edit {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+  .plans {
+    padding: 0.9rem;
+  }
+  .plans-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .plans-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .cal-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .cal-actions .button {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  .hub-tabs {
+    width: 100%;
+    scrollbar-width: none;
+  }
+  .hub-tabs [role='tab'] {
+    flex: 1 1 auto;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.9rem;
+  }
+}
+.cal-earlier {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--maple);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plans-actions .button {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  border-width: 1px;
+  font-size: 0.875rem;
+}

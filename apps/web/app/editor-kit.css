@@ -1078,36 +1078,3 @@
   align-items: center;
   gap: 0.5rem;
 }
-.calendar-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.calendar-views {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.calendar-list section {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 0.4rem;
-}
-.calendar-list h3 {
-  grid-column: 1 / -1;
-  margin: 0.5rem 0 0;
-  font-size: 0.9rem;
-}
-.calendar-chip.draft {
-  opacity: 0.6;
-  border-style: dashed;
-}
-.calendar-archived {
-  grid-column: 1 / -1;
-}
-.calendar-archived summary {
-  cursor: pointer;
-  color: var(--ink-mid);
-}

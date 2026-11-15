@@ -10,6 +10,7 @@ import './workspace-navigation.css';
 import './workspace-theme.css';
 import './editor-kit.css';
 import './library.css';
+import './calendar.css';
 
 const lora = localFont({
   variable: '--font-display',

@@ -1640,3 +1640,13 @@ Addresses only the two findings in "Codex Phase 2C review". Restore behaviour, U
 **Current next instruction:**
 
 > Codex: focused re-review of `eec44e8..f9cdbff` for the two 2C findings. Owner: run the acceptance check above. Claude: no 2D (uploads) until accepted. No push, merge or deployment.
+
+### Codex Phase 2C re-review — 14 November 2026, head `3ea7f0c`
+
+**Verdict: source/test checkpoint accepted; short owner freshness check remains before closing 2C and starting 2D.** Reviewed `f9cdbff`: the transactional singleton content-generation update serializes writers and rolls back with a refused save; the public bundle reads generation before data; the browser compares the latest committed generation against the rendered bundle and retries while behind. This addresses initial-poll, reversed-commit and delayed-invalidation cases. Unknown outbox topics now fail into retained retry/backoff with safe warnings and can be delivered once handled. No remaining blocking finding identified in this focused diff. Accepted restore/permission boundaries remain unchanged; caching must stay disabled until separately host-verified.
+
+**Fresh Codex tests:** freshness/revalidation/CMS history suites: **20 passed across 3 files**. Acknowledged the recorded exact owner results: 101 regular tests, 113 DB tests after the timing-fixture fix, clean lint and stopped-server production build; not independently repeated. No application changes, migrations, server restart, cache enablement, push, merge or deployment in this checkpoint.
+
+**Closing action for owner:** perform the recorded private-window About save/restore check once and confirm both minute polling and tab-return refresh. Do not delete live `.next` output; stop the dev server before any needed clean rebuild/restart. If either behavior fails, return exact behavior for a focused fix, not another general audit. On success, mark Phase 2C closed and obtain owner go-ahead for 2D/S3 setup. Current push/merge/deployment requires authorization; this review does not issue one.
+
+**Next Claude instruction:** Codex accepted the 2C source/test checkpoint. Guide only the final short owner freshness check and record its actual result here. Once it passes and the owner authorizes 2D, begin the existing S3/CloudFront upload-library slice: reviewed provider configuration first, owner secret entry, then verified staff uploads/drag-drop and protected member downloads. Keep Pastor video approval and library/private boundaries. Do not redo identity/provider setup, enable caching or add automation/chat. No merge, push or deployment without authorization.

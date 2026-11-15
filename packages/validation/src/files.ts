@@ -108,15 +108,27 @@ export function checkUpload(file: {
   return null;
 }
 
+/**
+ * What the first bytes say. Containers that can carry video tracks under
+ * any name (the MP4/QuickTime family and Ogg) are marked so their actual
+ * tracks are checked before a library file is accepted.
+ */
 type Sniffed =
-  { group: Inline['group']; mp4?: true } | { executable: true } | null;
+  | { group: Inline['group']; container?: 'mp4' | 'ogg' }
+  | { executable: true }
+  | null;
 
 const startsWith = (bytes: Uint8Array, ...values: number[]) =>
   values.every((value, index) => bytes[index] === value);
 const ascii = (bytes: Uint8Array, start: number, text: string) =>
   [...text].every((char, index) => bytes[start + index] === char.charCodeAt(0));
+const text4 = (bytes: Uint8Array, start: number) =>
+  String.fromCharCode(...bytes.slice(start, start + 4));
 
-/** Identifies a file from its first bytes (4 KB is plenty). */
+/** The first bytes needed to identify a file and read Ogg stream headers. */
+export const SNIFF_BYTES = 64 * 1024;
+
+/** Identifies a file from its first bytes. */
 export function sniffFile(bytes: Uint8Array): Sniffed {
   if (
     startsWith(bytes, 0x4d, 0x5a) || // Windows program (MZ)
@@ -138,48 +150,182 @@ export function sniffFile(bytes: Uint8Array): Sniffed {
     (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WEBP'))
   )
     return { group: 'image' };
+  // MP4 family (MP4, MOV, M4A, 3GP), with or without a brand box. The brand
+  // is only a hint: a video can carry an audio brand, so tracks decide.
   if (ascii(bytes, 4, 'ftyp')) {
-    // MP4 family (MP4, MOV, M4A): the brand says audio-only or video.
-    const brand = String.fromCharCode(...bytes.slice(8, 12));
-    return { group: /^M4[AB] $/.test(brand) ? 'audio' : 'video', mp4: true };
+    const brand = text4(bytes, 8);
+    return {
+      group: /^M4[AB] $/.test(brand) ? 'audio' : 'video',
+      container: 'mp4',
+    };
   }
-  if (startsWith(bytes, 0x1a, 0x45, 0xdf, 0xa3)) return { group: 'video' }; // WebM
+  if (/^(moov|mdat|wide|free|skip|pnot)$/.test(text4(bytes, 4)))
+    return { group: 'video', container: 'mp4' }; // older QuickTime
+  if (ascii(bytes, 0, 'OggS')) return { group: 'audio', container: 'ogg' };
+  // Containers that are video (no audio-only use worth allowing in the
+  // library): Matroska/WebM, AVI, FLV, Windows Media, MPEG, RealMedia.
+  if (
+    startsWith(bytes, 0x1a, 0x45, 0xdf, 0xa3) ||
+    (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'AVI ')) ||
+    ascii(bytes, 0, 'FLV') ||
+    startsWith(bytes, 0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11) ||
+    startsWith(bytes, 0x00, 0x00, 0x01, 0xba) ||
+    startsWith(bytes, 0x00, 0x00, 0x01, 0xb3) ||
+    (bytes[0] === 0x47 && bytes[188] === 0x47 && bytes[376] === 0x47) ||
+    ascii(bytes, 0, '.RMF')
+  )
+    return { group: 'video' };
   if (
     ascii(bytes, 0, 'ID3') ||
     (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0) || // MP3 frame
-    (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WAVE')) ||
-    ascii(bytes, 0, 'OggS')
+    (ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WAVE'))
   )
     return { group: 'audio' };
   return null;
 }
 
+/** Track handler types that are fine in an audio-only file. */
+const AUDIO_ONLY_TRACKS = new Set([
+  'soun', // audio
+  'text', // chapters (audiobooks, podcasts)
+  'sbtl',
+  'subt',
+  'meta',
+  'hint',
+  'tmcd',
+]);
+/** True when an MP4-family file's tracks include audio and no video. */
+export const isAudioOnlyTracks = (handlers: string[] | null | undefined) =>
+  !!handlers?.length &&
+  handlers.includes('soun') &&
+  handlers.every((handler) => AUDIO_ONLY_TRACKS.has(handler));
+
+const u32 = (bytes: Uint8Array, at: number) =>
+  ((bytes[at]! << 24) |
+    (bytes[at + 1]! << 16) |
+    (bytes[at + 2]! << 8) |
+    bytes[at + 3]!) >>>
+  0;
+/** Child boxes of an MP4 box payload: [type, start, end]. */
+function* boxes(bytes: Uint8Array, start: number, end: number) {
+  let at = start;
+  while (at + 8 <= end) {
+    let size = u32(bytes, at);
+    let header = 8;
+    if (size === 1) {
+      if (at + 16 > end) return;
+      size = u32(bytes, at + 8) * 2 ** 32 + u32(bytes, at + 12);
+      header = 16;
+    } else if (size === 0) size = end - at;
+    if (size < header || at + size > end) return;
+    yield [text4(bytes, at + 4), at + header, at + size] as const;
+    at += size;
+  }
+}
+
+/**
+ * The handler type of every track in an MP4/QuickTime `moov` box (the
+ * whole box, header included): "vide" for video, "soun" for audio, …
+ * A track without a readable handler counts as "????" (not audio-only).
+ */
+export function mp4HandlerTypes(moov: Uint8Array): string[] {
+  const top = [...boxes(moov, 0, moov.length)][0];
+  if (!top || top[0] !== 'moov') return [];
+  const handlers: string[] = [];
+  for (const [type, start, end] of boxes(moov, top[1], top[2])) {
+    if (type !== 'trak') continue;
+    let handler = '????';
+    for (const [inner, mStart, mEnd] of boxes(moov, start, end))
+      if (inner === 'mdia')
+        for (const [leaf, hStart, hEnd] of boxes(moov, mStart, mEnd))
+          // hdlr: version/flags (4), pre_defined (4), handler_type (4)
+          if (leaf === 'hdlr' && hStart + 12 <= hEnd)
+            handler = text4(moov, hStart + 8);
+    handlers.push(handler);
+  }
+  return handlers;
+}
+
+/** Ogg codecs that are audio (or stream metadata). */
+const OGG_AUDIO = [
+  '\x01vorbis',
+  'OpusHead',
+  '\x7fFLAC',
+  'Speex   ',
+  'fishead\0', // skeleton (metadata)
+  'fisbone\0',
+];
+/**
+ * True when an Ogg file's streams are all audio. Every stream starts with a
+ * "beginning of stream" page before any data, so the first bytes show them
+ * all; a video codec, an unknown codec, or not reaching the first data
+ * page means "not confirmed".
+ */
+export function oggAudioOnly(bytes: Uint8Array): boolean {
+  let at = 0;
+  let audio = false;
+  while (at + 27 <= bytes.length && ascii(bytes, at, 'OggS')) {
+    const segments = bytes[at + 26]!;
+    const payload = at + 27 + segments;
+    if (payload > bytes.length) return false;
+    let length = 0;
+    for (let i = 0; i < segments; i++) length += bytes[at + 27 + i]!;
+    const beginning = (bytes[at + 5]! & 0x02) !== 0;
+    if (!beginning) return audio; // all streams have been declared
+    const codec = OGG_AUDIO.find((magic) => ascii(bytes, payload, magic));
+    if (!codec) return false;
+    if (!codec.startsWith('fis')) audio = true;
+    at = payload + length;
+  }
+  return false;
+}
+
+/** A library file in the MP4 family must have its tracks checked. */
+export const needsTrackCheck = (file: {
+  purpose: UploadPurpose;
+  head: Uint8Array;
+}) => {
+  const sniffed = sniffFile(file.head);
+  return (
+    file.purpose === 'library' &&
+    !!sniffed &&
+    'group' in sniffed &&
+    sniffed.container === 'mp4'
+  );
+};
+
 export type StorageDecision =
   | { ok: true; contentType: string; inline: boolean }
   | { ok: false; reason: string };
 
+const NOT_AUDIO_ONLY = `${LIBRARY_VIDEO_MESSAGE} (This file contains video, or it couldn’t be confirmed as audio only.)`;
+
 /**
  * Decides, after upload, how a file is stored and served from its name,
- * purpose and first bytes. A file whose name says it opens in the browser
- * must really be that type; anything else is served as a download, and
- * video never enters the library under any name.
+ * purpose and first bytes (and, for MP4-family library files, its tracks).
+ * A file whose name says it opens in the browser must really be that type;
+ * anything else is served as a download. Video never enters the library
+ * under any name: containers that can hold video are accepted there only
+ * when their tracks are confirmed to be audio only.
  */
 export function decideStorage(file: {
   fileName: string;
   purpose: UploadPurpose;
   head: Uint8Array;
+  /** Track handler types, required for MP4-family library files. */
+  mp4Tracks?: string[] | null;
 }): StorageDecision {
   const sniffed = sniffFile(file.head);
   if (sniffed && 'executable' in sniffed)
     return { ok: false, reason: BLOCKED_FILE_MESSAGE };
   const ext = fileExtension(file.fileName);
   const claimed = INLINE[ext];
-  // MP4-family files are audio or video whatever their brand says.
+  // An MP4-family file can be audio or video whatever its brand says.
   const matches =
     !!claimed &&
     !!sniffed &&
     (sniffed.group === claimed.group ||
-      (!!sniffed.mp4 && /mp4|quicktime/.test(claimed.mime)));
+      (sniffed.container === 'mp4' && /mp4|quicktime/.test(claimed.mime)));
   if (file.purpose === 'sermon') {
     if (!claimed || (claimed.group !== 'video' && claimed.group !== 'audio'))
       return { ok: false, reason: SERMON_FILE_MESSAGE };
@@ -191,11 +337,25 @@ export function decideStorage(file: {
       };
     return { ok: true, contentType: claimed.mime, inline: true };
   }
-  const audioClaim = claimed?.group === 'audio' && matches;
-  if (claimed?.group === 'video' || (sniffed?.group === 'video' && !audioClaim))
+
+  // Library: no video, whatever the name, brand or container.
+  if (claimed?.group === 'video')
+    return { ok: false, reason: LIBRARY_VIDEO_MESSAGE };
+  if (sniffed?.container === 'mp4') {
+    if (!isAudioOnlyTracks(file.mp4Tracks))
+      return { ok: false, reason: NOT_AUDIO_ONLY };
+  } else if (sniffed?.container === 'ogg') {
+    if (!oggAudioOnly(file.head)) return { ok: false, reason: NOT_AUDIO_ONLY };
+  } else if (sniffed?.group === 'video')
     return { ok: false, reason: LIBRARY_VIDEO_MESSAGE };
   if (claimed) {
-    if (!matches)
+    // A confirmed audio-only MP4 or Ogg is served as what it is, so a name
+    // like "talk.mp3" on one of them is refused as a mismatch.
+    if (
+      !matches ||
+      (sniffed?.container === 'mp4' && claimed.mime !== 'audio/mp4') ||
+      (sniffed?.container === 'ogg' && claimed.mime !== 'audio/ogg')
+    )
       return {
         ok: false,
         reason: `This file’s contents don’t match its .${ext} name.`,

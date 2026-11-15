@@ -11,6 +11,8 @@ const MB = 1024 * 1024;
 type Call = { method: string; url: string; body?: Record<string, unknown> };
 let calls: Call[] = [];
 let completeResponse: { status: number; body: unknown };
+/** Completions whose response is lost (the request still reached the server). */
+let lostCompletions = 0;
 
 const json = (status: number, body: unknown) =>
   Promise.resolve(
@@ -35,6 +37,7 @@ const asset = {
 beforeEach(() => {
   calls = [];
   completeResponse = { status: 200, body: { data: asset } };
+  lostCompletions = 0;
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
@@ -57,8 +60,11 @@ beforeEach(() => {
             })),
           },
         });
-      if (url.endsWith('/complete'))
+      if (url.endsWith('/complete')) {
+        if (lostCompletions-- > 0)
+          return Promise.reject(new TypeError('Failed to fetch'));
         return json(completeResponse.status, completeResponse.body);
+      }
       return json(404, {});
     }),
   );
@@ -189,5 +195,35 @@ describe('uploadFile', () => {
     }).catch((error) => error);
     expect(failure.cancelled).toBe(true);
     expect(failure.state.assetId).toBe('a1');
+  });
+
+  // Codex Phase 2D review [P2]: the server verified the file but the
+  // response never arrived. Retry asks again (no parts re-sent) and gets the
+  // same verified file, which the page can then add to the library.
+  it('Retry after a lost completion response gets the verified file without re-sending parts', async () => {
+    lostCompletions = 1;
+    const sent: string[] = [];
+    const send: PartSender = async (url) => {
+      sent.push(url);
+      return `"etag-${url.slice(-1)}"`;
+    };
+    const failure = await uploadFile(file(), 'sermon', { send }).catch(
+      (error) => error,
+    );
+    expect(failure).toBeInstanceOf(UploadFailure);
+    expect(failure.retryable).toBe(true);
+    expect(Object.keys(failure.state.etags)).toHaveLength(3);
+    expect(sent).toHaveLength(3);
+
+    calls = [];
+    const result = await uploadFile(file(), 'sermon', {
+      state: failure.state,
+      send,
+    });
+    expect(result).toMatchObject({ id: 'a1', status: 'verified' });
+    expect(sent).toHaveLength(3);
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/v1/staff/uploads/a1/complete',
+    ]);
   });
 });

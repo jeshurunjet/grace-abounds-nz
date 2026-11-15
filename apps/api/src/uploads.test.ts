@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { dbTestsEnabled } from '@grace-abounds/database/test-env';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
 import { prisma } from '@grace-abounds/database';
@@ -45,6 +46,17 @@ const MP4 = bytes(
     typeof c === 'string' ? c.charCodeAt(0) : c,
   ),
 );
+
+/** Real media made with ffmpeg (packages/validation/fixtures/media). */
+const media = (name: string) =>
+  new Uint8Array(
+    readFileSync(
+      new URL(
+        `../../../packages/validation/fixtures/media/${name}`,
+        import.meta.url,
+      ),
+    ),
+  );
 
 const resource = {
   title: 'Guide',
@@ -573,5 +585,135 @@ describe.skipIf(!dbTestsEnabled)('verified uploads (PostgreSQL)', () => {
       admin,
     );
     expect(kept.statusCode).toBe(409);
+  });
+
+  // Codex Phase 2D review [P1]: a video renamed .m4a (or carrying an audio
+  // brand) must not become a library file an Admin can publish.
+  it('a real video renamed .m4a is refused and cannot be published from the library', async () => {
+    const [admin, member] = [await as('ADMIN'), await as('MEMBER')];
+    for (const name of ['video.mp4', 'video-m4a-brand.m4a', 'video.mov']) {
+      const { id, done } = await upload(admin, 'Sunday clip.m4a', media(name));
+      expect(done.statusCode).toBe(422);
+      expect(done.json().error.code).toBe('FILE_REJECTED');
+      expect(done.json().error.message).toMatch(/Sermons & videos/);
+      expect((await prisma.asset.findUnique({ where: { id } }))!.status).toBe(
+        'REJECTED',
+      );
+      const publish = await call(
+        'POST',
+        '/v1/staff/resources',
+        admin,
+        undefined,
+        {
+          ...resource,
+          assetId: id,
+        },
+      );
+      expect(publish.statusCode).toBe(422);
+      expect(publish.json().error.fieldErrors.assetId).toBeTruthy();
+      expect((await open(id, member)).statusCode).toBe(404);
+    }
+    expect(await prisma.resource.count()).toBe(0);
+
+    // The track list was found with small ranged reads, even at the end.
+    const reads = storage.reads.filter((read) => read.start > 0);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(Math.max(...reads.map((read) => read.length))).toBeLessThan(4096);
+  });
+
+  it('real audio-only M4A files are accepted and open for members once published', async () => {
+    const [admin, member] = [await as('ADMIN'), await as('MEMBER')];
+    for (const name of ['audio.m4a', 'audio-isom.m4a']) {
+      const { id, done } = await upload(admin, 'Podcast.m4a', media(name));
+      expect(done.statusCode).toBe(200);
+      expect(done.json().data).toMatchObject({
+        contentType: 'audio/mp4',
+        inline: true,
+      });
+      const item = await call('POST', '/v1/staff/resources', admin, undefined, {
+        ...resource,
+        assetId: id,
+      });
+      expect(item.statusCode).toBe(201);
+      expect((await open(id, member)).statusCode).toBe(302);
+    }
+    // A sermon recording may still be any real video.
+    const recording = await upload(
+      admin,
+      'Sunday.m4v',
+      media('video.mp4'),
+      'sermon',
+    );
+    expect(recording.done.statusCode).toBe(200);
+  });
+
+  // Codex Phase 2D review [P2]: completion succeeded but the response was
+  // lost; Retry must get the same verified file back.
+  it('completing again after a lost response returns the same verified file', async () => {
+    const [admin, other] = [await as('ADMIN'), await as('PASTOR')];
+    const { id, parts } = await send(admin, 'guide.pdf', PDF);
+    const complete = (who: Who) =>
+      call('POST', `/v1/staff/uploads/${id}/complete`, who, undefined, {
+        parts,
+      });
+    const first = await complete(admin);
+    expect(first.statusCode).toBe(200);
+    const objects = [...storage.objects.keys()];
+    const reads = storage.reads.length;
+
+    const again = await complete(admin);
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data).toEqual(first.json().data);
+    // Nothing was read, copied or audited a second time.
+    expect([...storage.objects.keys()]).toEqual(objects);
+    expect(storage.reads.length).toBe(reads);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'files.upload_verified', entityId: id },
+      }),
+    ).toBe(1);
+
+    // Still refused for anyone else, and parts stay pending-only.
+    expect((await complete(other)).statusCode).toBe(404);
+    const parts2 = await call(
+      'POST',
+      `/v1/staff/uploads/${id}/parts`,
+      admin,
+      undefined,
+      { partNumbers: [1] },
+    );
+    expect(parts2.statusCode).toBe(409);
+    expect(parts2.json().error.code).toBe('UPLOAD_FINISHED');
+  });
+
+  it('a repeated completion of a refused or cancelled upload stays refused', async () => {
+    const admin = await as('ADMIN');
+    const refused = await send(admin, 'notes.pdf', EXE);
+    const body = { parts: refused.parts };
+    const url = `/v1/staff/uploads/${refused.id}/complete`;
+    const first = await call('POST', url, admin, undefined, body);
+    expect(first.statusCode).toBe(422);
+    const again = await call('POST', url, admin, undefined, body);
+    expect(again.statusCode).toBe(422);
+    expect(again.json().error.message).toBe(first.json().error.message);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'files.upload_rejected', entityId: refused.id },
+      }),
+    ).toBe(1);
+
+    const cancelled = await send(admin, 'guide.pdf', PDF);
+    await call('DELETE', `/v1/staff/uploads/${cancelled.id}`, admin);
+    expect(
+      (
+        await call(
+          'POST',
+          `/v1/staff/uploads/${cancelled.id}/complete`,
+          admin,
+          undefined,
+          { parts: cancelled.parts },
+        )
+      ).statusCode,
+    ).toBe(404);
   });
 });

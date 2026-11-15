@@ -5,7 +5,10 @@ import {
   decideStorage,
   MAX_LIBRARY_FILE_BYTES,
   MAX_SERMON_FILE_BYTES,
+  mp4HandlerTypes,
+  needsTrackCheck,
   partSizeFor,
+  SNIFF_BYTES,
   uploadCompleteSchema,
   uploadPartsSchema,
   uploadStartSchema,
@@ -25,6 +28,7 @@ import {
   keySafeName,
   requireStorage,
   stored,
+  type Storage,
 } from '../lib/storage.js';
 
 /*
@@ -54,7 +58,39 @@ const DOWNLOAD_SECONDS = 5 * 60;
  * S3 checks the link on every request, so playback links last a service.
  */
 const PLAYBACK_SECONDS = 4 * 60 * 60;
-const SNIFF_BYTES = 4096;
+/** Limits for finding an MP4 file's track list (its `moov` box). */
+const MAX_TOP_LEVEL_BOXES = 64;
+const MAX_MOOV_BYTES = 32 * 1024 * 1024;
+
+/**
+ * The track types of an MP4/QuickTime file in storage, read with a few
+ * small ranged reads: the top-level box headers, then the `moov` box
+ * (which may sit at the end of the file). Null when it can't be found
+ * within the limits, which counts as "not confirmed audio only".
+ */
+async function readMp4Tracks(storage: Storage, key: string, size: number) {
+  let offset = 0;
+  for (let i = 0; i < MAX_TOP_LEVEL_BOXES && offset + 8 <= size; i++) {
+    const header = await storage.readRange(key, offset, 16);
+    if (header.length < 8) return null;
+    const view = new DataView(header.buffer, header.byteOffset, header.length);
+    let boxSize = view.getUint32(0);
+    const type = String.fromCharCode(...header.slice(4, 8));
+    let headerSize = 8;
+    if (boxSize === 1) {
+      if (header.length < 16) return null;
+      boxSize = Number(view.getBigUint64(8));
+      headerSize = 16;
+    } else if (boxSize === 0) boxSize = size - offset;
+    if (boxSize < headerSize || offset + boxSize > size) return null;
+    if (type === 'moov') {
+      if (boxSize > MAX_MOOV_BYTES) return null;
+      return mp4HandlerTypes(await storage.readRange(key, offset, boxSize));
+    }
+    offset += boxSize;
+  }
+  return null;
+}
 
 const partCountOf = (asset: Asset) =>
   Math.ceil(Number(asset.size) / partSizeFor(Number(asset.size)));
@@ -165,6 +201,22 @@ export function registerUploadRoutes(app: FastifyInstance) {
       const actor = staff(request);
       const storage = requireStorage();
       const { parts } = parse(uploadCompleteSchema, request.body ?? {});
+      // A repeated completion (the first response was lost) returns the
+      // outcome the first one recorded: no second copy, no second audit.
+      const earlier = await prisma.asset.findUnique({
+        where: { id: request.params.id },
+      });
+      if (earlier && earlier.ownerId === actor.id) {
+        if (earlier.status === 'VERIFIED') {
+          reply.header('cache-control', 'private, no-store');
+          return { data: staffAsset(earlier) };
+        }
+        if (earlier.status === 'REJECTED') {
+          const reason =
+            earlier.rejectReason || 'This file was refused. Upload it again.';
+          throw new AppError(422, 'FILE_REJECTED', reason, { file: reason });
+        }
+      }
       const asset = await ownPending(request.params.id, actor);
       const count = partCountOf(asset);
       const sorted = [...parts].sort((a, b) => a.partNumber - b.partNumber);
@@ -235,12 +287,21 @@ export function registerUploadRoutes(app: FastifyInstance) {
           'The file that arrived isn’t the size expected. Upload it again.',
         );
       const start = await stored(request.log, () =>
-        storage.readStart(asset.storageKey, SNIFF_BYTES),
+        storage.readRange(asset.storageKey, 0, SNIFF_BYTES),
       );
+      const purpose = asset.purpose as UploadPurpose;
+      // A library file in the MP4 family: its tracks decide, not its name
+      // or brand (a video renamed .m4a is still a video).
+      const mp4Tracks = needsTrackCheck({ purpose, head: start })
+        ? await stored(request.log, () =>
+            readMp4Tracks(storage, asset.storageKey, head.size),
+          )
+        : undefined;
       const decision = decideStorage({
         fileName: asset.fileName,
-        purpose: asset.purpose as UploadPurpose,
+        purpose,
         head: start,
+        mp4Tracks,
       });
       if (!decision.ok) return reject(decision.reason);
 
@@ -260,12 +321,16 @@ export function registerUploadRoutes(app: FastifyInstance) {
             verifiedAt: new Date(),
           },
         });
-        if (result.count === 0)
+        if (result.count === 0) {
+          // A simultaneous completion of the same upload got there first.
+          const now = await tx.asset.findUnique({ where: { id: asset.id } });
+          if (now?.status === 'VERIFIED') return now;
           throw new AppError(
             409,
             'UPLOAD_FINISHED',
             'This upload was finished or stopped elsewhere.',
           );
+        }
         await recordAudit(tx, {
           actorId: actor.id,
           action: 'files.upload_verified',

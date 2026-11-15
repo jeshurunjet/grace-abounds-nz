@@ -97,9 +97,14 @@ export class MemoryStorage implements Storage {
     return object ? { size: object.bytes.length } : null;
   }
 
-  async readStart(key: string, bytes: number) {
+  reads: { key: string; start: number; length: number }[] = [];
+  async readRange(key: string, start: number, length: number) {
     this.check();
-    return (this.objects.get(key)?.bytes ?? new Uint8Array()).slice(0, bytes);
+    this.reads.push({ key, start, length });
+    return (this.objects.get(key)?.bytes ?? new Uint8Array()).slice(
+      start,
+      start + length,
+    );
   }
 
   async copy(from: string, to: string, contentType: string) {

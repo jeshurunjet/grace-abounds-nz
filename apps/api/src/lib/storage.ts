@@ -36,8 +36,8 @@ export interface Storage {
   abortMultipart(key: string, uploadId: string): Promise<void>;
   /** The object's size, or null when it is not there. */
   head(key: string): Promise<{ size: number } | null>;
-  /** The first bytes of an object. */
-  readStart(key: string, bytes: number): Promise<Uint8Array>;
+  /** Up to `length` bytes of an object from `start` (fewer at its end). */
+  readRange(key: string, start: number, length: number): Promise<Uint8Array>;
   copy(from: string, to: string, contentType: string): Promise<void>;
   remove(key: string): Promise<void>;
   downloadUrl(
@@ -168,12 +168,12 @@ class S3Storage implements Storage {
     }
   }
 
-  async readStart(key: string, bytes: number) {
+  async readRange(key: string, start: number, length: number) {
     const result = await this.client.send(
       new GetObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Range: `bytes=0-${Math.max(0, bytes - 1)}`,
+        Range: `bytes=${start}-${start + Math.max(1, length) - 1}`,
       }),
     );
     return result.Body

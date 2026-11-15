@@ -1798,3 +1798,27 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Current next instruction:**
 
 > Owner: send this section to Codex. Codex: focused re-review of `a73c00e..5fee6ec` for the two findings and the recorded limitations. Claude: no new phase until Codex closes 2D; no push, merge or deployment.
+
+### Codex Phase 2D focused re-review — 16 November 2026, head `50b01f8`
+
+**Verdict: the two application fixes are accepted; one test-packaging correction remains before closing 2D.** Reviewed `efe90c7` and `5fee6ec`: library MP4-family files require bounded track inspection, ambiguous/video tracks fail closed, and the lost-response retry returns the uploader's already verified asset without another storage operation or audit. Owner isolation, pending-only part URLs and refused/cancelled upload behavior remain intact. The three limitations (issued-link expiry, same-tab-only resume, unverified production CDN/host-role paths) are recorded adequately. No additional application rewrite requested.
+
+**[P2] Commit the missing regression fixtures.** `video.mp4`, `video-faststart.mp4` and `video.mov` exist locally in `packages/validation/fixtures/media/`, but are absent from `git ls-files`. `git check-ignore -v` identifies the repository's general `*.mp4`/`*.mov` rules. Both policy and API tests read these files, so a fresh clone/CI fails with missing-file errors despite passing on this Mac. Add a narrowly scoped ignore exception for these three small test fixtures and commit them (or explicitly force-add just these fixtures). Do not loosen the general media ignore rules or add real church recordings. Verify all fixture paths referenced by the tests exist in the Git index/commit; re-run only the focused policy/uploader tests. This is the sole remaining correction for the checkpoint.
+
+**Fresh Codex evidence:** policy 17 tests and uploader 6 tests passed (23 across 2 files). Git tracking/ignore checks confirmed the missing fixtures. Owner-reported 126 DB tests including 13 upload tests, regular-test pass and clean lint acknowledged without repeating them. No application changes, database tests, build, AWS changes, push, merge or deployment performed. This handover entry is the only workspace edit.
+
+**Next Claude instruction:** commit the three missing test fixtures with the narrowly scoped tracking correction above, verify that all test fixtures are tracked, record the focused checks here, and return for the final packaging check. Both previous application findings are accepted; do not reopen or expand the upload implementation. No new phase, push, merge or deployment yet.
+
+### Phase 2D fixture packaging fix (Claude, 16 November 2026)
+
+**Commit:** `507d2b3`. `.gitignore` gains three narrow exceptions, `!packages/validation/fixtures/media/video.mp4`, `!…/video-faststart.mp4` and `!…/video.mov`, directly after the general media rules; those rules (`*.mp4`, `*.mov`, `*.mkv`, `*.webm`) are unchanged. The three fixtures (3,166, 3,166 and 3,217 bytes, made with ffmpeg; no church recordings) are now committed. No application code changed.
+
+**Checks (Claude):**
+
+- `git check-ignore -v` now points each of the three files at its exception; a test file elsewhere (`test.mp4`, `apps/web/public/x.mov`) is still ignored.
+- Every fixture the tests reference (`audio-isom.m4a`, `audio.m4a`, `audio.ogg`, `video-faststart.mp4`, `video-m4a-brand.m4a`, `video.mov`, `video.mp4`, `video.ogg`) is in the Git index (`git ls-files --error-unmatch`).
+- Fresh checkout: `git clone` of the repository at `507d2b3` into an empty folder contains all eight fixtures, and the 17 policy tests run from that clone against its own files: 17 passed. The uploader tests (6) need vitest, which can't run in Claude's workspace; they don't read fixtures, and Codex's run passed them.
+
+**Current next instruction:**
+
+> Owner: optionally run `pnpm vitest run packages/validation/src/files.test.ts apps/web/app/lib/uploader.test.ts` (expected: 2 files, 23 tests passed), then send this section to Codex. Codex: final packaging check for `507d2b3`, then close Phase 2D. Claude: no new phase, push, merge or deployment until then.

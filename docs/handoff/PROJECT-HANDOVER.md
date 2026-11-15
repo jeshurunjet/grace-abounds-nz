@@ -1728,6 +1728,37 @@ The owner described the real workload and decided the following. Where it differ
 
 **Not yet verified:** that the key works from the Mac. Checked once the storage adapter exists (an owner-run upload).
 
+### Phase 2D step 3 — verified uploads and protected file links (Claude, 15–16 November 2026)
+
+**Commits:** `316dfb5` (API, validation, migration), `5b72d1c` (web). Not pushed.
+
+**Migration:** `20261115060000_phase2d_uploads` — `Asset.size` becomes `BIGINT` (5 GB recordings); adds `purpose` (`library`/`sermon`), `inline`, `uploadId`, `rejectReason`, `verifiedAt`. Applied by the owner to development and test (outputs: "Applying migration `20261115060000_phase2d_uploads`", "Your database is now in sync with your schema", "All migrations have been successfully applied").
+
+**Packages:** `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` 3.1169.0 in `apps/api`, installed by the owner.
+
+**What was built**
+
+- **Policy** (`packages/validation/src/files.ts`, shared by API and web): any file type except programs, scripts and active web content (by extension, and by first bytes: `MZ`, ELF, Mach-O, universal binary, `#!`). PDF, JPEG/PNG/GIF/WebP and common audio open in the browser only when the first bytes confirm the type; a name that claims one of these but has other contents is refused; everything else is download-only (`attachment`, `application/octet-stream`). Library files up to 500 MB and never video, under any name. Sermon recordings (MP4, MOV, WebM, MP3, M4A, WAV, OGG) up to 5 GB, confirmed by first bytes.
+- **Storage interface** (`apps/api/src/lib/storage.ts`): S3 adapter from `.env` (`S3_REGION`, `S3_BUCKET`, keys, optional `S3_ENDPOINT`), SDK checksum parameters off so presigned part URLs work from browsers; `MemoryStorage` for tests. Without keys, uploads are shown as not set up (503 `UPLOADS_UNAVAILABLE`); nothing fakes success.
+- **Upload API** (`apps/api/src/routes/uploads.ts`, Pastor and Admin only): start (policy check, `PENDING` asset, multipart upload under `incoming/<uuid>`), presigned URL per part (1 hour), complete (joins parts, confirms the size, reads the first 4 KB, decides how it is served, copies to `files/library/…` or `files/sermons/…`, removes the `incoming/` copy, marks `VERIFIED` with audit `files.upload_verified`), or refuse (removes it, `REJECTED` with the reason, audit `files.upload_rejected`). Only the uploader continues their upload. Completing is idempotent, so Retry after a storage failure is safe. Cancel aborts the multipart upload (audit `files.upload_cancelled`).
+- **File links** (`GET /v1/files/:id`, website `/api/v1/files/:id`): authorises, then redirects to a presigned link. Access comes only from what refers to the file: staff always; anyone for a published public library item or a sermon the Pastor approved and that is live; signed-in people for a published members item (signed-out visitors get 401); everything else, including pending and refused files, is 404. The gateway now passes redirects through (`redirect: 'manual'`) instead of streaming files.
+- **Library and sermons:** `Resource.assetId` (library-purpose verified files only) and `SermonInput.mediaAssetId` (sermon-purpose verified files only; not together with a link). An approved sermon's `live` copy carries `mediaAssetId`, so the recording becomes public only on approval and private again on unpublish. A file used by a library item, a sermon working copy or an approved live copy cannot be deleted (409 `IN_USE`). Deleting a library item removes its file after commit (outbox topic `storage.remove`; the bucket keeps a recoverable version for 30 days). Approved copies from before uploads read as `mediaAssetId: null`.
+- **Web:** shared upload queue (`app/components/upload-queue.tsx`, `app/lib/uploader.ts`). In the Gallery, staff drop files on the file area or use **Upload** (a keyboard-accessible file picker); files are checked as they are added, nothing is sent until **Upload N files**, each shows progress, "Checking the file…", Uploaded or a reason, with Retry/Cancel/Remove; an "After uploading" choice publishes for members (default), for anyone, or keeps a draft; files go to the folder that was open when they were added. In Sermons & videos, **Choose recording** (or drop) then **Upload** puts the recording into the working copy with a player; Save stores it, approval follows the existing Pastor flow, and an upload that is removed or never saved is discarded. Members get no picker or drop handlers.
+
+**Deviations from the step 1 plan (for review):** audio/video playback links last 4 hours, not 5 minutes, because players keep requesting ranges while someone watches and S3 checks the link on every request; downloads and other files keep 5 minutes. Resume works while the page stays open (Retry continues from the parts that arrived); resuming after closing the page would need `s3:ListMultipartUploadParts` and is not built. An upload abandoned by closing the page is aborted by the bucket after 1 day.
+
+**Checks (Claude):** API, web and validation typecheck clean. The policy tests (11) also ran in Claude's workspace against the real module: 11 passed.
+
+**Tests (owner's Mac, 15 Nov):**
+
+- `pnpm test`: first run 1 failed, 119 passed, 112 skipped (28 files passed, 13 skipped). The failure was in the new Gallery upload test, which read the last request instead of the library-item request (the Gallery reloads after an upload). Test fixed; rerun as part of `pnpm test && pnpm test:db`, which reached the database tests (so `pnpm test` passed).
+- `pnpm test:db`: **16 files, 122 tests passed**, including `uploads.test.ts` (9).
+- `pnpm lint`: first a warning (Sermons deep-link effect missing `open`), fixed with a ref; then only Claude's temporary typecheck file flagged by Prettier, removed. Final state clean (`prettier --check .`: all files formatted). Owner rerun of the full `pnpm lint` not yet confirmed.
+
+**Owner check with real AWS storage (16 Nov):** after restarting the app, the Gallery showed uploads available; a PDF "uploaded seamlessly" and opened. The Gallery refused a video and pointed to Sermons & videos (by design). The owner reported that everything else went well; a sermon recording upload with playback has not been separately confirmed yet.
+
+**Owner decision (16 Nov):** keep videos only through Sermons & videos for now. Non-sermon videos (events, testimonies) are posted there too. Pastor-approved videos in Gallery folders is a possible later addition.
+
 **Current next instruction:**
 
-> Owner: install the AWS SDK packages when Claude gives the command. Codex: optional focused review of steps 1–2. Claude: build the upload/download slice against a storage interface with deterministic tests (staff queue with drag-and-drop and keyboard picker, presigned multipart uploads to `incoming/`, verification and move, protected 5-minute links, member read-only, video staff-only until Pastor approval); record results here and return for Codex review. No merge, push or deployment.
+> Owner: confirm a sermon recording upload plays and saves in Sermons & videos, and rerun `pnpm lint`. Codex: review Phase 2D (`0899eec..5b72d1c`): upload policy, storage interface, access rules for files, the sermon/library boundaries, deletion and outbox clean-up, the gateway redirect, and the two deviations above. Claude: no further features until Codex's review; no merge, push or deployment.

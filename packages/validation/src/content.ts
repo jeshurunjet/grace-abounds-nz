@@ -153,4 +153,9 @@ export type PublicContentBundle = {
   collections?: PublicCollections;
   /** The content generation this bundle was read at (Phase 2C). */
   generation?: number;
+  /**
+   * The latest scheduled release included in this bundle (epoch ms, 0 when
+   * none). It moves on when a release time passes, with no save (Phase 3A).
+   */
+  released?: number;
 };

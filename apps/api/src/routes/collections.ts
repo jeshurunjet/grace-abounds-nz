@@ -432,14 +432,16 @@ export const isCollectionName = (name: string) =>
   Object.prototype.hasOwnProperty.call(collections, name);
 
 /** Published campuses, journeys and leadership for the public bundle. */
-export async function publicCollections(): Promise<PublicCollections> {
+export async function publicCollections(
+  now = new Date(),
+): Promise<PublicCollections> {
   const published = { where: { status: 'PUBLISHED' }, ...ordered };
   const [locations, steps, team, sermons, activities] = await Promise.all([
     delegate(prisma, 'location').findMany(published),
     delegate(prisma, 'nextStep').findMany(published),
     delegate(prisma, 'teamMember').findMany(published),
     publicSermons(),
-    publicActivities(),
+    publicActivities(now),
   ]);
   const strip = (def: Collection<never>, row: Row) => {
     const { status: _status, ...rest } = def.toApi(row);

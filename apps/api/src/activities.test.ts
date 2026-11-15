@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { dbTestsEnabled } from '@grace-abounds/database/test-env';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { SignJWT } from 'jose';
 import { prisma } from '@grace-abounds/database';
 import {
@@ -8,6 +16,11 @@ import {
   createUser,
   resetIdentityTables,
 } from '@grace-abounds/database/testing';
+import {
+  defaultPages,
+  defaultSiteSettings,
+  pageKeys,
+} from '@grace-abounds/validation';
 import { buildApp } from './app.js';
 import { publicActivities } from './routes/activities.js';
 import { contentGeneration } from './lib/content-change.js';
@@ -107,6 +120,16 @@ describe.skipIf(!dbTestsEnabled)('activities (PostgreSQL)', () => {
   };
   const publicIds = async () =>
     (await publicActivities()).activities.map((item) => item.id);
+  const dateUrl = (id: string, date: string) =>
+    `/v1/staff/activities/${id}/exceptions/${date}`;
+  const changedDate = (times: { startTime?: string; endTime?: string }) => ({
+    kind: 'changed',
+    note: '',
+    startTime: '',
+    endTime: '',
+    venue: '',
+    ...times,
+  });
 
   it('only staff list and edit activities', async () => {
     const member = await as('MEMBER');
@@ -388,5 +411,209 @@ describe.skipIf(!dbTestsEnabled)('activities (PostgreSQL)', () => {
       status: 'PUBLISHED',
       version: 3,
     });
+  });
+
+  it('a release time passing reaches open pages with no save', async () => {
+    // The clock: 08:00 NZDT on 1 Dec 2099, an hour before the release.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2099-11-30T19:00:00Z'));
+      await prisma.siteSettings.create({
+        data: { id: 'site', data: defaultSiteSettings },
+      });
+      for (const key of pageKeys)
+        await prisma.pageContent.create({
+          data: { key, data: defaultPages[key] },
+        });
+      const admin = await as('ADMIN');
+      const live = await create(admin, {
+        title: 'Live now',
+        status: 'published',
+      });
+      const release = await create(admin, {
+        title: 'Christmas launch',
+        status: 'published',
+        publishAt: '2099-12-01T09:00',
+      });
+      const later = await create(admin, {
+        title: 'Later launch',
+        status: 'published',
+        publishAt: '2099-12-01T12:00',
+      });
+      const draft = await create(admin, { title: 'Still a draft' });
+      type Bundle = {
+        generation: number;
+        released: number;
+        collections: { activities: { id: string }[] };
+      };
+      const bundle = async () =>
+        (await call('GET', '/v1/public/content')).json().data as Bundle;
+      const stamp = async () =>
+        (await call('GET', '/v1/public/content/stamp')).json().data as {
+          generation: number;
+          released: number;
+        };
+      const ids = (data: Bundle) =>
+        data.collections.activities.map((item) => item.id).sort();
+
+      const before = await bundle();
+      expect(ids(before)).toEqual([live.id]);
+      expect(before.released).toBe(0);
+      expect(await stamp()).toEqual({
+        generation: before.generation,
+        released: 0,
+      });
+
+      // 09:30 NZDT: the release has passed and nobody has saved anything.
+      vi.setSystemTime(new Date('2099-11-30T20:30:00Z'));
+      const latest = await stamp();
+      expect(latest.generation).toBe(before.generation);
+      expect(latest.released).toBe(Date.parse('2099-11-30T20:00:00Z'));
+      expect(latest.released).toBeGreaterThan(before.released);
+      // The page refreshes and now shows the released activity.
+      const after = await bundle();
+      expect(ids(after)).toEqual([live.id, release.id].sort());
+      expect(after.released).toBe(latest.released);
+      // Drafts and later releases stay private, and nothing says when.
+      const text = JSON.stringify(after) + JSON.stringify(latest);
+      expect(text).not.toContain(later.id);
+      expect(text).not.toContain(draft.id);
+      expect(text).not.toContain('2099-11-30T23:00');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('new series times must keep every changed date valid', async () => {
+    const admin = await as('ADMIN');
+    const morning = {
+      ...activity.schedule,
+      startTime: '09:00',
+      endTime: '12:00',
+    };
+    const service = await create(admin, {
+      status: 'published',
+      schedule: morning,
+    });
+    // 27 Dec has its own end time; 3 Jan has its own start time.
+    expect(
+      (
+        await call(
+          'PUT',
+          dateUrl(service.id, '2026-12-27'),
+          admin,
+          1,
+          changedDate({ endTime: '10:00' }),
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await call(
+          'PUT',
+          dateUrl(service.id, '2027-01-03'),
+          admin,
+          2,
+          changedDate({ startTime: '08:00' }),
+        )
+      ).statusCode,
+    ).toBe(200);
+    const save = (startTime: string, endTime: string, version: number) =>
+      call('PATCH', `/v1/staff/activities/${service.id}`, admin, version, {
+        ...activity,
+        status: 'published',
+        schedule: { ...morning, startTime, endTime },
+      });
+
+    // 11:00 would make 27 Dec run 11:00–10:00: refused, naming the date.
+    const late = await save('11:00', '12:00', 3);
+    expect(late.statusCode).toBe(422);
+    expect(late.json().error.fieldErrors['schedule.startTime']).toMatch(
+      /27 Dec 2026/,
+    );
+    // 07:30 would make 3 Jan run 08:00–07:30: refused the same way.
+    const early = await save('06:00', '07:30', 3);
+    expect(early.statusCode).toBe(422);
+    expect(early.json().error.fieldErrors['schedule.endTime']).toMatch(
+      /3 Jan 2027/,
+    );
+    // Nothing was saved or discarded.
+    expect(
+      await prisma.activity.findUnique({ where: { id: service.id } }),
+    ).toMatchObject({ startTime: '09:00', endTime: '12:00', version: 3 });
+    expect(
+      await prisma.activityException.count({
+        where: { activityId: service.id },
+      }),
+    ).toBe(2);
+
+    // Times that suit both changed dates save; both dates are kept.
+    const fine = await save('09:30', '12:00', 3);
+    expect(fine.statusCode).toBe(200);
+    expect(fine.json().version).toBe(4);
+    expect(
+      await prisma.activityException.count({
+        where: { activityId: service.id },
+      }),
+    ).toBe(2);
+  });
+
+  it('restoring older times is refused while a changed date depends on them', async () => {
+    const admin = await as('ADMIN');
+    const late = { ...activity.schedule, startTime: '11:00', endTime: '12:00' };
+    const service = await create(admin, {
+      status: 'published',
+      schedule: late,
+    });
+    await call('PATCH', `/v1/staff/activities/${service.id}`, admin, 1, {
+      ...activity,
+      status: 'published',
+      schedule: { ...late, startTime: '09:00' },
+    });
+    expect(
+      (
+        await call(
+          'PUT',
+          dateUrl(service.id, '2026-12-27'),
+          admin,
+          2,
+          changedDate({ endTime: '10:00' }),
+        )
+      ).statusCode,
+    ).toBe(200);
+    const history = (
+      await call(
+        'GET',
+        `/v1/staff/revisions?entityType=activities&entityKey=${service.id}`,
+        admin,
+      )
+    ).json().data as { id: string; version: number }[];
+    const restore = (version: number) =>
+      call(
+        'POST',
+        `/v1/staff/revisions/${history.find((item) => item.version === version)!.id}/restore`,
+        admin,
+        3,
+      );
+
+    // Version 1 started at 11:00, after 27 Dec's own 10:00 end.
+    const refused = await restore(1);
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().error.message).toMatch(/27 Dec 2026/);
+    expect(
+      await prisma.activity.findUnique({ where: { id: service.id } }),
+    ).toMatchObject({ startTime: '09:00', version: 3 });
+    expect(
+      await prisma.activityException.count({
+        where: { activityId: service.id },
+      }),
+    ).toBe(1);
+
+    // Version 2 has the same times as now: restored as version 4.
+    const restored = await restore(2);
+    expect(restored.statusCode).toBe(200);
+    expect(
+      await prisma.activity.findUnique({ where: { id: service.id } }),
+    ).toMatchObject({ startTime: '09:00', version: 4 });
   });
 });

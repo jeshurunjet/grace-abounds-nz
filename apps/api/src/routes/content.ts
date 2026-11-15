@@ -27,6 +27,7 @@ import {
 } from '../lib/content-change.js';
 import { parseRestored } from '../lib/restore.js';
 import { publicCollections } from './collections.js';
+import { releasedThrough } from './activities.js';
 
 const unavailable = () =>
   new AppError(
@@ -82,6 +83,9 @@ export function registerContentRoutes(app: FastifyInstance) {
     // least that generation's changes, never claims more than it has. A
     // change committed meanwhile only causes one extra refresh later.
     const generation = await contentGeneration();
+    // One clock for the whole bundle: the scheduled activities it includes
+    // and its release marker agree.
+    const now = new Date();
     const [site, pages] = await Promise.all([
       prisma.siteSettings.findUnique({
         where: { id: 'site' },
@@ -93,7 +97,10 @@ export function registerContentRoutes(app: FastifyInstance) {
       }),
     ]);
     if (!site || pages.length !== pageKeys.length) throw unavailable();
-    const collections = await publicCollections();
+    const [collections, released] = await Promise.all([
+      publicCollections(now),
+      releasedThrough(now),
+    ]);
     reply.header('cache-control', 'no-store');
     return {
       data: {
@@ -101,18 +108,25 @@ export function registerContentRoutes(app: FastifyInstance) {
         pages: Object.fromEntries(pages.map((page) => [page.key, page.data])),
         collections,
         generation,
+        released,
       },
     };
   });
 
   /**
    * A cheap freshness check for open browsers: the latest committed content
-   * generation. A page compares it with the generation of the bundle it is
-   * showing and refreshes while it is behind. It carries no content.
+   * generation and the latest scheduled release that has passed. A page
+   * compares both with the bundle it is showing and refreshes while it is
+   * behind, so a release appears without anyone saving. No content, and no
+   * upcoming release times.
    */
   app.get('/v1/public/content/stamp', async (_request, reply) => {
     reply.header('cache-control', 'no-store');
-    return { data: { generation: await contentGeneration() } };
+    const [generation, released] = await Promise.all([
+      contentGeneration(),
+      releasedThrough(),
+    ]);
+    return { data: { generation, released } };
   });
 
   app.get('/v1/public/site', async (_request, reply) => {

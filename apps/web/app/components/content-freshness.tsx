@@ -21,8 +21,10 @@ export const isPublicPage = (path: string) =>
  * Keeps published website content fresh in an already-open browser. The root
  * layout fetches the content bundle, but it persists across client
  * navigation, so ask the server again when a visitor moves to another public
- * page or comes back to the tab, and when the change stamp (written by every
- * save or restore through the outbox) moves on. No realtime service needed.
+ * page or comes back to the tab, and when the change stamp moves on: either
+ * the generation (written by every save or restore through the outbox) or the
+ * latest scheduled release that has passed (which needs no save). No
+ * realtime service needed.
  */
 export function ContentFreshness() {
   const router = useRouter();
@@ -42,52 +44,68 @@ export function ContentFreshness() {
     document.addEventListener('visibilitychange', refresh);
     return () => document.removeEventListener('visibilitychange', refresh);
   }, [router]);
-  // While a public page stays open, compare the server's latest content
-  // generation with the one this page is showing, once a minute.
-  const { generation } = useContent();
-  usePublishedChanges(pathname, generation, () => router.refresh());
+  // While a public page stays open, compare the server's latest stamp with
+  // the bundle this page is showing, once a minute.
+  const { generation, released } = useContent();
+  usePublishedChanges(
+    pathname,
+    generation === null ? null : { generation, released },
+    () => router.refresh(),
+  );
   return null;
 }
 
 const STAMP_EVERY_MS = 60_000;
-async function latestGeneration(): Promise<number | null> {
+/** What a bundle (or the server's stamp) says about its freshness. */
+export type ContentStamp = { generation: number; released: number };
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+async function latestStamp(): Promise<ContentStamp | null> {
   try {
     const response = await fetch('/api/v1/public/content/stamp', {
       cache: 'no-store',
     });
     if (!response.ok) return null;
     const body = (await response.json()) as {
-      data?: { generation?: unknown };
+      data?: { generation?: unknown; released?: unknown };
     };
-    const value = body.data?.generation;
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    const { generation, released } = body.data ?? {};
+    if (!isNumber(generation)) return null;
+    return { generation, released: isNumber(released) ? released : 0 };
   } catch {
     return null;
   }
 }
 /**
- * Calls onBehind whenever the server has a newer content generation than
- * the one rendered. Nothing is remembered between checks: the rendered
- * bundle's own generation is the reference, so a change saved before the
- * first check is caught, and a refresh that still gets stale (for example
- * cached) content is simply retried at the next check until the page shows
- * the latest generation.
+ * Calls onBehind whenever the server has a newer content generation, or a
+ * later scheduled release has passed, than the bundle rendered. Nothing is
+ * remembered between checks: the rendered bundle is the reference, so a
+ * change saved (or a release passed) before the first check is caught, and a
+ * refresh that still gets stale (for example cached) content is simply
+ * retried at the next check until the page shows the latest content.
  */
 export function usePublishedChanges(
   pathname: string,
-  rendered: number | null,
+  rendered: ContentStamp | null,
   onBehind: () => void,
   everyMs = STAMP_EVERY_MS,
 ) {
   const behind = useRef(onBehind);
   behind.current = onBehind;
+  const generation = rendered?.generation ?? null;
+  const released = rendered?.released ?? 0;
   useEffect(() => {
-    if (!isPublicPage(pathname) || rendered === null) return;
+    if (!isPublicPage(pathname) || generation === null) return;
     let stopped = false;
     const check = async () => {
       if (document.visibilityState === 'hidden') return;
-      const latest = await latestGeneration();
-      if (!stopped && latest !== null && latest > rendered) behind.current();
+      const latest = await latestStamp();
+      if (
+        !stopped &&
+        latest !== null &&
+        (latest.generation > generation || latest.released > released)
+      )
+        behind.current();
     };
     void check();
     const timer = window.setInterval(() => void check(), everyMs);
@@ -95,5 +113,5 @@ export function usePublishedChanges(
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [pathname, rendered, everyMs]);
+  }, [pathname, generation, released, everyMs]);
 }

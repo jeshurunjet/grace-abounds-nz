@@ -71,6 +71,11 @@ type ContentContextValue = {
    */
   generation: number | null;
   /**
+   * The latest scheduled release in that bundle (epoch ms, 0 when none).
+   * Freshness checks refresh when a later release has passed.
+   */
+  released: number;
+  /**
    * Shows one resource the server has just confirmed as published (the
    * canonical data from its save response). Nothing else changes.
    */
@@ -189,6 +194,7 @@ export function ContentProvider({
       retrySave: () => setSaveAttempt((current) => current + 1),
       contentUnavailable: initialContent === null && !hasPublished,
       generation: initialContent?.generation ?? null,
+      released: initialContent?.released ?? 0,
       applyPublished(patch) {
         setContent((current) => mergePatch(current, patch));
       },
@@ -231,6 +237,7 @@ export function useContent() {
       update: async () => false,
       contentUnavailable: false,
       generation: null,
+      released: 0,
       applyPublished: () => {},
     }
   );

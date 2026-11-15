@@ -3,6 +3,8 @@ import {
   activityExceptionInputSchema,
   activityInputSchema,
   DAYLIGHT_SAVING_MESSAGE,
+  formatDate,
+  formatTime,
   inDaylightSavingHour,
   isRealDate,
   nzLocalToUtc,
@@ -122,6 +124,21 @@ export async function publicActivities(now = new Date()) {
   };
 }
 
+/**
+ * The latest scheduled release that has already passed, as epoch
+ * milliseconds (0 when none). A release changes what the public sees without
+ * any save, so the public bundle and the freshness stamp both carry this
+ * marker; an open page that sees it move on refreshes. It only ever names a
+ * moment that has passed, never an upcoming release.
+ */
+export async function releasedThrough(now = new Date()) {
+  const { _max } = await prisma.activity.aggregate({
+    where: { status: 'PUBLISHED', publishAt: { lte: now } },
+    _max: { publishAt: true },
+  });
+  return _max.publishAt?.getTime() ?? 0;
+}
+
 const invalid = (fieldErrors: Record<string, string>) =>
   new AppError(
     422,
@@ -173,6 +190,39 @@ async function toData(tx: Tx, input: ActivityInput) {
     status: input.status.toUpperCase() as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED',
     publishAt: input.publishAt ? nzLocalToUtc(publishDate, publishTime) : null,
   };
+}
+
+/**
+ * A changed date keeps its own start or end time and takes the other from
+ * the series, so new series times must still leave every changed date
+ * ending after it starts. Refused naming the date; never discarded.
+ */
+async function checkChangedDates(
+  tx: Tx,
+  activityId: string,
+  startTime: string,
+  endTime: string,
+) {
+  const changed = await tx.activityException.findMany({
+    where: { activityId, kind: 'changed' },
+    orderBy: { date: 'asc' },
+  });
+  for (const item of changed) {
+    const start = item.startTime || startTime;
+    const end = item.endTime || endTime;
+    if (!start || !end || end > start) continue;
+    const date = formatDate(toException(item).date, true);
+    const [field, message] = item.endTime
+      ? [
+          'schedule.startTime',
+          `${date} has its own end time (${formatTime(item.endTime)}), which would be before this start time. Change that date or set it back to the usual time first.`,
+        ]
+      : [
+          'schedule.endTime',
+          `${date} has its own start time (${formatTime(item.startTime)}), which would be after this end time. Change that date or set it back to the usual time first.`,
+        ];
+    throw new AppError(422, 'VALIDATION_FAILED', message, { [field]: message });
+  }
 }
 
 /** Revision snapshot: the activity and its changed dates. */
@@ -248,6 +298,7 @@ export async function saveActivity(
     if (!existing) throw notFound('Activity');
     if (existing.version !== target.expected) throw versionConflict();
     const data = await toData(tx, input(existing));
+    await checkChangedDates(tx, existing.id, data.startTime, data.endTime);
     const result = await tx.activity.updateMany({
       where: { id: existing.id, version: target.expected },
       data: { ...data, version: { increment: 1 }, updatedById: actor.id },

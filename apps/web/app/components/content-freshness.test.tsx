@@ -45,18 +45,26 @@ describe('published content freshness', () => {
 
   describe('content generation checks', () => {
     let latest = 0;
+    let latestReleased = 0;
     const fetchMock = vi.fn(async () =>
-      Response.json({ data: { generation: latest } }),
+      Response.json({ data: { generation: latest, released: latestReleased } }),
     );
     const onBehind = vi.fn();
     function Probe({
       path,
       rendered,
+      released = 0,
     }: {
       path: string;
       rendered: number | null;
+      released?: number;
     }) {
-      usePublishedChanges(path, rendered, onBehind, 1000);
+      usePublishedChanges(
+        path,
+        rendered === null ? null : { generation: rendered, released },
+        onBehind,
+        1000,
+      );
       return null;
     }
     const tick = (ms: number) =>
@@ -68,6 +76,7 @@ describe('published content freshness', () => {
       vi.stubGlobal('fetch', fetchMock);
       fetchMock.mockClear();
       onBehind.mockClear();
+      latestReleased = 0;
       Object.defineProperty(document, 'visibilityState', {
         value: 'visible',
         configurable: true,
@@ -106,6 +115,26 @@ describe('published content freshness', () => {
       expect(onBehind).toHaveBeenCalledTimes(2);
       // Generation 6 finally rendered: no more refreshes.
       view.rerender(<Probe path="/" rendered={6} />);
+      onBehind.mockClear();
+      await tick(3000);
+      expect(onBehind).not.toHaveBeenCalled();
+    });
+
+    it('a scheduled release passing refreshes the page with no save', async () => {
+      latest = 5;
+      const release = Date.parse('2026-12-01T20:00:00Z');
+      const view = render(<Probe path="/events" rendered={5} />);
+      await tick(1000);
+      expect(onBehind).not.toHaveBeenCalled();
+      // The release time passes; nobody saves, the generation stays 5.
+      latestReleased = release;
+      await tick(1000);
+      expect(onBehind).toHaveBeenCalledTimes(1);
+      // A refresh that still shows the old bundle is retried.
+      await tick(1000);
+      expect(onBehind).toHaveBeenCalledTimes(2);
+      // The refreshed bundle includes the release: no more refreshes.
+      view.rerender(<Probe path="/events" rendered={5} released={release} />);
       onBehind.mockClear();
       await tick(3000);
       expect(onBehind).not.toHaveBeenCalled();

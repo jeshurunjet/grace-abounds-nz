@@ -13,6 +13,7 @@ const links = [
   ['About', '/about'],
   ['Location', '/location'],
   ['Next Steps', '/next-steps'],
+  ['Events', '/events'],
   ['Give', '/give'],
 ] as const;
 export function Header() {

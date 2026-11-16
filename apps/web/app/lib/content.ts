@@ -109,6 +109,11 @@ export type ContentState = {
   /** Live data: edited by pastor/admin without the approval workflow. */
   activities: Activity[];
   activityExceptions: ActivityException[];
+  /**
+   * Prototype bookings from before Phase 3B, as some browsers saved them.
+   * Never read: joining and booking are server records now. Kept only so a
+   * browser's stored data is left as it was (never imported as bookings).
+   */
   participations: Participation[];
   team: TeamMember[];
   users: UserRecord[];

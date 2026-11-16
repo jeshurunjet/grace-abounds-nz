@@ -1970,3 +1970,30 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **New working agreement (owner-authorized):** Claude implements coherent features and fixes its own test failures; Codex reviews local commits, runs technical checks directly where possible and fixes small issues without bouncing them through the owner. Do not edit the same files concurrently. Keep one handover. The owner handles UI feedback, product decisions and credentials; passing test output need not be relayed. Run focused checks after small fixes, full required checks at meaningful checkpoints. Ask only when a concrete product/data decision, credential, cost or destructive action requires the owner. This supersedes the old requirement to return to the owner between every small fix.
 
 **Next Claude instruction — start 3B now:** use the already-agreed Phase 3B scope above: durable occurrences/participations; app-owned capacity with transactional locking; member Join/Cancel own booking; staff roster from the selected calendar activity; stable occurrence identities, cancellation history and safe schedule/capacity changes. Replace browser-local participation and misleading local counts everywhere, including My plans/Join or book and public activity details. Never import browser participation as trusted real bookings. Existing browser-only activity edits remain untouched; if the owner later needs one, re-enter it explicitly rather than auto-importing. Preserve 3A UI, privacy and explicit saves. Group implementation, regressions and small fixes into one completed 3B checkpoint with exact results and a short owner UI walkthrough; Codex reviews it once. Do not start Google sync, Messenger or publishing automation. No push, merge or deployment.
+
+### Phase 3B technical checkpoint — Codex, 16 November 2026
+
+**Status: implemented and technical checks passed; owner UI walkthrough pending.** Codex took over the uncommitted 3B implementation after Claude's setup request, following the faster working agreement. No need for the owner to run or relay passing technical checks again.
+
+**Setup completed by Codex:** reviewed additive migration `20261116120000_phase3b_participation` (Participation, ParticipationEvent, enum/indexes/FKs); applied the existing migration to development using `migrate:deploy` (no interactive migration generation), applied to the isolated test database using `migrate:test`, then generated Prisma Client. No reset of development data. Tests reset only the guarded test database.
+
+**Implementation:** durable member join/book/cancel, transactional last-place protection with the activity lock shared by staff saves/restores, booking-aware schedule/capacity edits, staff roster/removal, audit and participation history, public counts without identities, and server-based My plans/calendar/event/location consumers. Browser prototype participations are ignored, never imported. Old activity deletion is refused if participation history exists.
+
+**Codex corrections:** updated calendar mocks for the new roster/count calls; focused member test fixtures on their intended activity and disambiguated the Full button; corrected the DB test that incorrectly expected a member's other archived-activity booking to disappear after staff removal from one activity. Fixed an account-switch race in the shared plans store: per-owner in-flight requests, generation guards against old responses, clear/reload on sign-out/re-sign-in, and a regression covering out-of-order responses. Plans reload on tab return. Staff date selection now includes cancelled historical booking dates so their history remains reachable.
+
+**Final evidence on the Mac:**
+
+- `pnpm test`: **33 files passed, 15 skipped; 147 tests passed, 133 skipped**.
+- `pnpm test:db`: **18 files, 143 tests passed**.
+- `pnpm typecheck`: all workspace checks passed after the fixes.
+- `pnpm lint`: clean ESLint and repository Prettier after the fixes.
+- `pnpm build`: full workspace/production build passed with the web dev server stopped. Generated `.next` output was cleared while stopped, then the web dev server restarted on localhost:3000. Generated tracked tsbuildinfo was restored to avoid unrelated build noise.
+- `git diff --check`: passed before this note.
+
+**Owner UI walkthrough (only remaining acceptance step):**
+
+1. As Admin/Pastor create a published future activity with joining enabled and capacity 1 (use a future date to avoid time-of-day ambiguity). As a member, book it in Calendar & bookings; confirm My plans shows it and the count becomes full. Reload and confirm it persists.
+2. As staff open the same activity's People section, confirm the member appears, then remove them. Return to the member tab (or reload); confirm the booking is gone and the place is available. Cancellation remains in staff history.
+3. Join again, then cancel your own booking from My plans; confirm it disappears and the place is freed. A member must have no staff edit/roster controls.
+
+**Next Claude instruction:** read this checkpoint and use the saved implementation; do not rerun setup, migrations or all passing checks, and do not overwrite Codex's fixes with an older copy. Guide/record the owner's short UI walkthrough and fix any actual UI issue within this slice. Once it passes, close 3B and prepare the agreed 3C Google service-account/calendar setup checklist using current official docs, with owner-entered secrets and one-way public events only. No two-way/personal sync, Messenger or publishing automation. No push, merge or deployment authorized here.

@@ -13,7 +13,6 @@ import { Modal } from '../../components/modal';
 import { useContent } from '../../components/content-provider';
 import { useToast } from '../../components/toast';
 import { formatCalendarDate } from '../../lib/calendar';
-import { formatDate } from '../../lib/activities';
 import type {
   AppointmentRequest,
   MemberPrayerRequest,
@@ -61,9 +60,6 @@ export default function UsersAdmin() {
   const applications = content.participationApplications.filter(
     (item) => item.userId === selectedId,
   );
-  const memberActivities = content.participations.filter(
-    (item) => item.userId === selectedId,
-  );
   const assignments = content.serviceAssignments.filter(
     (item) => item.userId === selectedId,
   );
@@ -87,20 +83,6 @@ export default function UsersAdmin() {
       saved ? 'info' : 'error',
     );
     return saved;
-  }
-  // Pastor and admin can both remove a member from an activity or booking.
-  async function removeParticipation(id: string, title: string) {
-    if (!ready || storageError) return;
-    const saved = await update((state) => ({
-      ...state,
-      participations: state.participations.filter((item) => item.id !== id),
-    }));
-    push(
-      saved
-        ? `Removed from ${title} in this browser preview.`
-        : 'This change could not be saved in this browser. Please try again.',
-      saved ? 'info' : 'error',
-    );
   }
   function patchAppointment(id: string, status: AppointmentRequest['status']) {
     void save(
@@ -287,10 +269,7 @@ export default function UsersAdmin() {
                 </p>
               </div>
               <span>
-                {appointments.length +
-                  applications.length +
-                  memberActivities.length +
-                  prayers.length}{' '}
+                {appointments.length + applications.length + prayers.length}{' '}
                 responses
               </span>
             </header>
@@ -397,38 +376,10 @@ export default function UsersAdmin() {
                 <h3>
                   <CalendarDays aria-hidden="true" /> Activities &amp; bookings
                 </h3>
-                {memberActivities.length ? (
-                  memberActivities.map((item) => {
-                    const activity = content.activities.find(
-                      (entry) => entry.id === item.activityId,
-                    );
-                    return (
-                      <div className="activity-record" key={item.id}>
-                        <span>
-                          <b>{activity?.title ?? 'Removed activity'}</b>
-                          <small>
-                            {item.date
-                              ? `Booked for ${formatDate(item.date, true)}`
-                              : 'Member'}
-                          </small>
-                        </span>
-                        <button
-                          className="text-danger"
-                          onClick={() =>
-                            removeParticipation(
-                              item.id,
-                              activity?.title ?? 'activity',
-                            )
-                          }
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="empty-record">No activities or bookings.</p>
-                )}
+                <p className="empty-record">
+                  Bookings and group members are on each activity’s roster: open
+                  the activity from the calendar and choose People.
+                </p>
               </article>
               {pastor && (
                 <article className="panel">

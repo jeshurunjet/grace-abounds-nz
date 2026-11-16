@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemberEngagement } from './member-engagement';
 import { JoinActivities, MyPlans } from './member-activities';
+import { resetParticipationStore } from '../lib/participation';
 import { MemberCalendar } from './member-calendar';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn() }));
@@ -14,9 +15,17 @@ vi.mock('next-auth/react', () => ({
   }),
 }));
 beforeEach(() => {
+  resetParticipationStore();
+  // Bookings come from the server (Phase 3B): none yet, no places taken.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ data: [] })),
+  );
   nav.replace.mockClear();
   window.history.replaceState({}, '', '/members');
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('Home member tools', () => {
   it('keeps the four member destinations one click away', () => {
@@ -70,10 +79,10 @@ describe('Home member tools', () => {
     );
   });
 
-  it('joining and bookings stay available with the calendar', () => {
+  it('joining and bookings stay available with the calendar', async () => {
     const onFind = vi.fn();
     render(<MyPlans onFind={onFind} />);
-    expect(screen.getByText('Nothing planned yet.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing planned yet.')).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', { name: 'Find something to join' }),
     );

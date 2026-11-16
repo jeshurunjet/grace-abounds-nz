@@ -10,16 +10,19 @@ import {
   formatDate,
   formatTime,
   kindLabels,
-  participants,
-  spotsLeft,
+  placesLeft,
+  placesTaken,
   upcoming,
 } from '../../lib/activities';
+import { useAvailability } from '../../lib/participation';
 
 /** Detail page for any activity: event, service, group, study or ministry. */
 export default function ActivityDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { ready } = useContent();
-  const { live, exceptions, participations, place } = useActivities();
+  const { live, exceptions, place } = useActivities();
+  // Places taken come from the server (counts only).
+  const availability = useAvailability();
   const item = live.find((activity) => activity.slug === slug);
   if (!ready) return <p className="container">Loading…</p>;
   if (!item) notFound();
@@ -27,15 +30,15 @@ export default function ActivityDetailPage() {
   const next = dates.find((date) => !date.cancelled);
   const spots =
     item.joinMode === 'membership'
-      ? spotsLeft(item, participations)
+      ? placesLeft(item, availability)
       : next
-        ? spotsLeft(item, participations, next.date)
+        ? placesLeft(item, availability, next.date)
         : null;
   const going =
     item.joinMode === 'membership'
-      ? participants(item, participations).length
+      ? placesTaken(availability, item.id)
       : next
-        ? participants(item, participations, next.date).length
+        ? placesTaken(availability, item.id, next.date)
         : 0;
   const action =
     item.joinMode === 'membership'

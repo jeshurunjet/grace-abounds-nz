@@ -13,6 +13,7 @@ import {
   type Activity,
   type ActivityException,
   type ActivityInput,
+  type ActivitySchedule,
   type StaffActivities,
   type StaffActivity,
 } from '@grace-abounds/validation';
@@ -44,6 +45,9 @@ import { parseRestored } from '../lib/restore.js';
  *   DELETE /v1/staff/activities/:id                   draft/archived only
  *   PUT    /v1/staff/activities/:id/exceptions/:date  change/cancel one date
  *   DELETE /v1/staff/activities/:id/exceptions/:date  back to the usual
+ *
+ * Joining and booking are in participation.ts (Phase 3B); saves here check
+ * them under the same row lock.
  *
  * Every write checks the version the editor saw, records a content revision
  * and an audit event, and enqueues the content-change outbox event in the
@@ -192,6 +196,78 @@ async function toData(tx: Tx, input: ActivityInput) {
   };
 }
 
+/** Takes the activity's row lock until the transaction ends. */
+export async function lockActivity(tx: Tx, id: string) {
+  const rows = await tx.$queryRaw<{ id: string }[]>`
+    SELECT "id" FROM "Activity" WHERE "id" = ${id} FOR UPDATE`;
+  return rows.length > 0;
+}
+
+const refuse = (field: string, message: string) =>
+  new AppError(422, 'VALIDATION_FAILED', message, { [field]: message });
+
+/**
+ * Bookings stay valid when staff save (Phase 3B). Under the activity's row
+ * lock, a save or restore is refused, naming the date, if it would change
+ * how people join while anyone is on it, put the capacity below the places
+ * taken, or take a booked upcoming date off the schedule. Cancelling one
+ * date instead keeps its bookings.
+ */
+async function checkBookings(
+  tx: Tx,
+  existing: ActivityRow,
+  data: Awaited<ReturnType<typeof toData>>,
+) {
+  const groups = await tx.participation.groupBy({
+    by: ['dateKey'],
+    where: {
+      activityId: existing.id,
+      status: 'ACTIVE',
+      OR: [{ dateKey: '' }, { dateKey: { gte: nzNow().date } }],
+    },
+    _count: { _all: true },
+    orderBy: { dateKey: 'asc' },
+  });
+  if (!groups.length) return;
+  const counts = groups.map((group) => ({
+    date: group.dateKey,
+    count: (group._count as { _all: number })._all,
+  }));
+  const total = counts.reduce((sum, item) => sum + item.count, 0);
+  if (data.joinMode !== existing.joinMode)
+    throw refuse(
+      'joinMode',
+      `${total} ${total === 1 ? 'person has' : 'people have'} ${existing.joinMode === 'booking' ? 'booked upcoming dates' : 'joined'}. Those places need cancelling before people join a different way.`,
+    );
+  for (const { date, count } of counts)
+    if (data.capacity != null && count > data.capacity)
+      throw refuse(
+        'capacity',
+        date
+          ? `${formatDate(date, true)} already has ${count} bookings, so the capacity can’t be lower than ${count}.`
+          : `${count} people have joined, so the capacity can’t be lower than ${count}.`,
+      );
+  if (data.joinMode !== 'booking') return;
+  const schedule: ActivitySchedule = {
+    repeat: data.repeat as ActivitySchedule['repeat'],
+    date: dateOnly(data.startDate),
+    until: data.untilDate ? dateOnly(data.untilDate) : '',
+    days: data.days,
+    monthWeek: data.monthWeek,
+    monthDay: data.monthDay,
+    startTime: data.startTime,
+    endTime: data.endTime,
+  };
+  for (const { date, count } of counts)
+    if (date && !scheduleDates(schedule, date, date).length)
+      throw refuse(
+        schedule.until && date > schedule.until
+          ? 'schedule.until'
+          : 'schedule.date',
+        `${formatDate(date, true)} has ${count} ${count === 1 ? 'booking' : 'bookings'} and would no longer be on the schedule. Keep that date, or cancel just that date so its bookings are kept.`,
+      );
+}
+
 /**
  * A changed date keeps its own start or end time and takes the other from
  * the series, so new series times must still leave every changed date
@@ -294,11 +370,14 @@ export async function saveActivity(
       });
       return created;
     }
+    // The row lock: a booking can't slip in between the checks and the save.
+    await lockActivity(tx, target.id);
     const existing = await tx.activity.findUnique({ where: { id: target.id } });
     if (!existing) throw notFound('Activity');
     if (existing.version !== target.expected) throw versionConflict();
     const data = await toData(tx, input(existing));
     await checkChangedDates(tx, existing.id, data.startTime, data.endTime);
+    await checkBookings(tx, existing, data);
     const result = await tx.activity.updateMany({
       where: { id: existing.id, version: target.expected },
       data: { ...data, version: { increment: 1 }, updatedById: actor.id },
@@ -437,6 +516,15 @@ export function registerActivityRoutes(app: FastifyInstance) {
             409,
             'ARCHIVE_FIRST',
             'Published activities are archived, not deleted. Archive it first.',
+          );
+        // Joining and booking history is kept (Phase 3B).
+        if (
+          await tx.participation.count({ where: { activityId: existing.id } })
+        )
+          throw new AppError(
+            409,
+            'HAS_HISTORY',
+            'People have joined or booked this activity, so it is kept for its history. Leave it archived instead.',
           );
         // Conditional: a save or publish that committed meanwhile changed
         // the version or status, so nothing is deleted.

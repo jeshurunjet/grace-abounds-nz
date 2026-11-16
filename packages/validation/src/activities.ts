@@ -689,3 +689,81 @@ export const activityInput = (activity: Activity): ActivityInput => ({
   status: activity.status === 'scheduled' ? 'published' : activity.status,
   publishAt: activity.publishAt,
 });
+
+// ---------- Joining and booking (Phase 3B) ----------
+/*
+ * Bookings are server records. A participation is one person on one
+ * occurrence: an ongoing activity they joined (date '') or one date they
+ * booked (date = the occurrence's original local date, its identity).
+ */
+
+/** Join an activity (date '') or book one of its dates. */
+export const participationInputSchema = z
+  .object({
+    activityId: z.string().trim().min(1, 'Choose an activity.'),
+    date: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || isIsoDate(value), {
+        message: 'Choose a date.',
+      }),
+  })
+  .strict();
+export type ParticipationInput = z.infer<typeof participationInputSchema>;
+
+/**
+ * One of the signed-in person's own plans. `available` is false once the
+ * activity is no longer published (the plan can still be cancelled);
+ * `dateCancelled` is true when staff cancelled that date.
+ */
+export type MemberPlan = {
+  id: string;
+  activityId: string;
+  date: string;
+  createdAt: string;
+  activity: { title: string; slug: string; kind: ActivityKind };
+  available: boolean;
+  dateCancelled: boolean;
+};
+
+/**
+ * How many places are taken, by activity and then by date ('' for an
+ * ongoing activity people join). Counts only, never who.
+ */
+export type Availability = Record<string, Record<string, number>>;
+
+/** Someone on an activity's roster, as staff see it. */
+export type RosterEntry = {
+  id: string;
+  date: string;
+  name: string;
+  email: string;
+  status: 'active' | 'cancelled';
+  createdAt: string;
+  cancelledAt: string;
+};
+
+/** Places taken on one occurrence ('' for joining), from the counts. */
+export const placesTaken = (
+  availability: Availability,
+  activityId: string,
+  date = '',
+) => availability[activityId]?.[date] ?? 0;
+
+/** Places left, or null when the activity has no limit. */
+export const placesLeft = (
+  activity: Pick<Activity, 'id' | 'capacity' | 'joinMode'>,
+  availability: Availability,
+  date = '',
+) =>
+  activity.capacity == null
+    ? null
+    : Math.max(
+        0,
+        activity.capacity -
+          placesTaken(
+            availability,
+            activity.id,
+            activity.joinMode === 'booking' ? date : '',
+          ),
+      );

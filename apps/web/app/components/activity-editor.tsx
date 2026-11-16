@@ -23,6 +23,7 @@ import { SidePanel } from './editor-kit/side-panel';
 import { KitConfirm } from './editor-kit/confirm';
 import { KitPhoto, KitText } from './editor-kit/parts';
 import { HistoryButton, HistoryPanel } from './editor-kit/history-panel';
+import { ActivityRoster } from './activity-roster';
 import { useToast } from './toast';
 import { api, ApiError, errorMessage } from '../lib/api-client';
 
@@ -800,6 +801,10 @@ export function ActivityEditor({
               })}
             </ul>
           </section>
+        )}
+
+        {current && (
+          <ActivityRoster activity={current} exceptions={exceptions} />
         )}
 
         {error && (

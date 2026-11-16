@@ -6,12 +6,19 @@ import { PageHero } from '../components/page-hero';
 import { Reveal } from '../components/reveal';
 import { useContent } from '../components/content-provider';
 import { SundayStatus, useActivities } from '../components/activity-ui';
-import { describeSchedule, spotsLeft, type Activity } from '../lib/activities';
+import {
+  describeSchedule,
+  placesLeft,
+  upcoming,
+  type Activity,
+} from '../lib/activities';
+import { useAvailability } from '../lib/participation';
 import { campusLabel } from '../lib/campus';
 export default function Location() {
   const { content } = useContent();
   const { locations } = content.pages;
-  const { live, participations, place } = useActivities();
+  const { live, exceptions, place } = useActivities();
+  const availability = useAvailability();
   const groups = live.filter((item) => item.kind === 'group');
   const studies = live.filter((item) => item.kind === 'study');
   const [tab, setTab] = useState<'locations' | 'groups' | 'studies'>(
@@ -28,7 +35,14 @@ export default function Location() {
     : [];
   /** One spaced action group per card: primary Join, secondary See dates. */
   const join = (item: Activity) => {
-    const spots = spotsLeft(item, participations);
+    // Places left on the group, or on its next date when booked by date.
+    const date =
+      item.joinMode === 'booking'
+        ? (upcoming(item, exceptions, 8).find((entry) => !entry.cancelled)
+            ?.date ?? '')
+        : '';
+    const spots =
+      item.joinMode === 'none' ? null : placesLeft(item, availability, date);
     return (
       <div className="activity-card-actions">
         {spots != null && (

@@ -52,6 +52,7 @@ model User {
   siteEdits      SiteSettings[]    @relation("SiteSettingsEditor")
   pageEdits      PageContent[]     @relation("PageContentEditor")
   contentRevisions ContentRevision[] @relation("ContentRevisionActor")
+  participations Participation[]
 }
 
 // Auth.js Prisma adapter tables (https://authjs.dev/getting-started/adapters/prisma)
@@ -513,7 +514,8 @@ model Activity {
   updatedAt   DateTime            @updatedAt
   updatedById String?
 
-  exceptions ActivityException[]
+  exceptions     ActivityException[]
+  participations Participation[]
 
   @@index([status])
 }
@@ -536,4 +538,48 @@ model ActivityException {
   activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 
   @@unique([activityId, date])
+}
+
+enum ParticipationStatus {
+  ACTIVE
+  CANCELLED
+}
+
+/// A person joined to an ongoing activity (dateKey "") or booked onto one
+/// date (dateKey = the occurrence's original local date, its identity).
+/// One row per person and occurrence: cancelling keeps the row and its
+/// events as history; booking again makes it active again. An activity with
+/// participation history cannot be deleted (archive it instead).
+model Participation {
+  id          String              @id @default(cuid())
+  activityId  String
+  userId      String
+  /// "" when joining an ongoing activity; "YYYY-MM-DD" for a booked date.
+  dateKey     String              @default("")
+  status      ParticipationStatus @default(ACTIVE)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  cancelledAt DateTime?
+
+  activity Activity             @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events   ParticipationEvent[]
+
+  @@unique([activityId, dateKey, userId])
+  @@index([activityId, dateKey, status])
+  @@index([userId, status])
+}
+
+/// What happened to a participation and who did it (history).
+model ParticipationEvent {
+  id              String   @id @default(cuid())
+  participationId String
+  /// joined | booked | cancelled | removed
+  action          String
+  actorId         String?
+  createdAt       DateTime @default(now())
+
+  participation Participation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+
+  @@index([participationId])
 }

@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useMemo, useState } from 'react';
 import { CalendarCheck, Search, Users } from 'lucide-react';
-import { useContent } from './content-provider';
 import { useToast } from './toast';
 import { AddToCalendar, useActivities } from './activity-ui';
 import {
@@ -11,93 +10,91 @@ import {
   formatDate,
   formatTime,
   kindLabels,
-  participants,
-  spotsLeft,
+  placesLeft,
+  placesTaken,
   upcoming,
   type Activity,
   type ActivityKind,
 } from '../lib/activities';
+import { errorMessage } from '../lib/api-client';
+import {
+  cancelPlan,
+  joinActivity,
+  loadPlans,
+  useAvailability,
+  usePlans,
+} from '../lib/participation';
 
 /*
- * The member's plans and the activities they can join or book. Joining and
- * bookings are still kept in this browser until Phase 3B moves them to the
- * server with capacity checks.
+ * The member's plans and the activities they can join or book (Phase 3B).
+ * Every join, booking and cancellation is decided by the server, which
+ * checks places, dates and cancellations; the page then shows the server's
+ * plans and counts.
  */
 
-/** The signed-in member's joined groups and bookings, with join/leave. */
+/** The signed-in person's groups and bookings, with join/leave. */
 export function useMemberPlans() {
-  const { content, update, ready, storageError } = useContent();
   const { data: session } = useSession();
   const { push } = useToast();
-  const { live, exceptions, participations, place, now } = useActivities();
-  const user =
-    content.users.find((item) => item.email === session?.user?.email) ??
-    content.users.find((item) => item.role === 'member');
-  const userId = user?.id ?? session?.user?.id ?? 'anonymous-member';
-  const mine = participations.filter((item) => item.userId === userId);
+  const { live, exceptions, place, now } = useActivities();
+  const userId = session?.user?.id ?? '';
+  const { plans, error } = usePlans(userId);
+  const availability = useAvailability();
+  const [busy, setBusy] = useState('');
+  const mine = plans ?? [];
   const memberships = mine.filter((item) => !item.date);
   const bookings = mine
     .filter((item) => item.date && item.date >= now.date)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const disabled = !ready || !!storageError || !user;
+  const loading = !!userId && plans === null && !error;
+  const disabled = !userId || plans === null || !!busy;
   const byId = (id: string) => live.find((item) => item.id === id);
 
   async function join(activity: Activity, date = '') {
     if (disabled) return;
-    if (spotsLeft(activity, participations, date) === 0) {
+    setBusy(`${activity.id}:${date}`);
+    try {
+      await joinActivity(activity.id, date);
       push(
-        `${activity.title} is full${date ? ` on ${formatDate(date)}` : ''}.`,
-        'error',
-      );
-      return;
-    }
-    const saved = await update((state) => ({
-      ...state,
-      participations: [
-        ...state.participations,
-        {
-          id: crypto.randomUUID(),
-          activityId: activity.id,
-          userId,
-          date,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    }));
-    push(
-      saved
-        ? date
+        date
           ? `You’re booked for ${activity.title} on ${formatDate(date)}.`
-          : `You’ve joined ${activity.title}.`
-        : 'This could not be saved in this browser. Please try again.',
-      saved ? 'success' : 'error',
-    );
+          : `You’ve joined ${activity.title}.`,
+        'success',
+      );
+    } catch (failure) {
+      push(errorMessage(failure), 'error');
+    } finally {
+      setBusy('');
+    }
   }
   async function leave(id: string, message: string) {
     if (disabled) return;
-    const saved = await update((state) => ({
-      ...state,
-      participations: state.participations.filter((item) => item.id !== id),
-    }));
-    push(
-      saved
-        ? message
-        : 'This could not be saved in this browser. Please try again.',
-      saved ? 'info' : 'error',
-    );
+    setBusy(id);
+    try {
+      await cancelPlan(id);
+      push(message, 'info');
+    } catch (failure) {
+      push(errorMessage(failure), 'error');
+    } finally {
+      setBusy('');
+    }
   }
   return {
     live,
     exceptions,
-    participations,
+    availability,
     place,
     mine,
     memberships,
     bookings,
+    loading,
+    error,
     disabled,
+    busy,
     byId,
     join,
     leave,
+    retry: () => void loadPlans(userId),
   };
 }
 
@@ -105,13 +102,32 @@ const SHOWN = 4;
 
 /** What the member is going to and the groups they belong to. */
 export function MyPlans({ onFind }: { onFind?: () => void }) {
-  const { memberships, bookings, exceptions, place, byId, disabled, leave } =
-    useMemberPlans();
+  const {
+    memberships,
+    bookings,
+    exceptions,
+    place,
+    byId,
+    disabled,
+    leave,
+    loading,
+    error,
+    retry,
+  } = useMemberPlans();
   const [all, setAll] = useState(false);
   const shownBookings = all ? bookings : bookings.slice(0, SHOWN);
-  const empty = !memberships.length && !bookings.length;
+  const empty = !loading && !error && !memberships.length && !bookings.length;
   return (
     <div className="plans">
+      {loading && <p className="plans-note">Loading your plans…</p>}
+      {error && (
+        <p className="plans-note" role="alert">
+          {error}{' '}
+          <button type="button" className="plans-more" onClick={retry}>
+            Try again
+          </button>
+        </p>
+      )}
       {empty && (
         <div className="plans-empty">
           <CalendarCheck aria-hidden="true" size={28} />
@@ -131,18 +147,22 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
           <h3 id="plans-coming-up">Coming up</h3>
           <ul className="plans-list">
             {shownBookings.map((entry) => {
+              // An activity no longer published isn't in the public data;
+              // the booking still shows (and can be cancelled).
               const activity = byId(entry.activityId);
-              if (!activity) return null;
-              const occurrence = upcoming(activity, exceptions, 400).find(
-                (item) => item.date === entry.date,
-              );
+              const occurrence = activity
+                ? upcoming(activity, exceptions, 400).find(
+                    (item) => item.date === entry.date,
+                  )
+                : undefined;
+              const cancelled = entry.dateCancelled || !!occurrence?.cancelled;
               const [weekday, rest = ''] = formatDate(entry.date, true).split(
                 ', ',
               );
               return (
                 <li
                   key={entry.id}
-                  className={`plans-item${occurrence?.cancelled ? ' is-cancelled' : ''}`}
+                  className={`plans-item${cancelled || !activity ? ' is-cancelled' : ''}`}
                 >
                   <span className="plans-date" aria-hidden="true">
                     <small>{weekday}</small>
@@ -150,23 +170,29 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
                     <small>{rest.split(' ')[1]}</small>
                   </span>
                   <span className="plans-main">
-                    <Link href={`/events/${activity.slug}`}>
-                      {activity.title}
-                    </Link>
+                    {activity ? (
+                      <Link href={`/events/${activity.slug}`}>
+                        {activity.title}
+                      </Link>
+                    ) : (
+                      <b>{entry.activity.title}</b>
+                    )}
                     <span>
                       <span className="sr-only">
                         {formatDate(entry.date, true)} ·{' '}
                       </span>
-                      {occurrence?.cancelled
-                        ? 'Cancelled by the church'
-                        : occurrence
-                          ? `${formatTime(occurrence.startTime)} · ${place(activity, occurrence.venue)}`
-                          : ''}
+                      {!activity
+                        ? 'No longer running'
+                        : cancelled
+                          ? 'Cancelled by the church'
+                          : occurrence
+                            ? `${formatTime(occurrence.startTime)} · ${place(activity, occurrence.venue)}`
+                            : ''}
                       {occurrence?.note && ` — ${occurrence.note}`}
                     </span>
                   </span>
                   <span className="plans-actions">
-                    {!occurrence?.cancelled && (
+                    {activity && !cancelled && (
                       <AddToCalendar
                         activity={activity}
                         date={entry.date}
@@ -180,7 +206,7 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
                       onClick={() =>
                         void leave(
                           entry.id,
-                          `Your booking for ${activity.title} on ${formatDate(entry.date)} is cancelled.`,
+                          `Your booking for ${entry.activity.title} on ${formatDate(entry.date)} is cancelled.`,
                         )
                       }
                     >
@@ -208,19 +234,29 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
           <ul className="plans-list">
             {memberships.map((entry) => {
               const activity = byId(entry.activityId);
-              if (!activity) return null;
-              const next = upcoming(activity, exceptions, 1)[0];
+              const next = activity
+                ? upcoming(activity, exceptions, 1)[0]
+                : undefined;
               return (
-                <li key={entry.id} className="plans-item">
+                <li
+                  key={entry.id}
+                  className={`plans-item${activity ? '' : ' is-cancelled'}`}
+                >
                   <span className="plans-icon" aria-hidden="true">
                     <Users size={18} />
                   </span>
                   <span className="plans-main">
-                    <Link href={`/events/${activity.slug}`}>
-                      {activity.title}
-                    </Link>
+                    {activity ? (
+                      <Link href={`/events/${activity.slug}`}>
+                        {activity.title}
+                      </Link>
+                    ) : (
+                      <b>{entry.activity.title}</b>
+                    )}
                     <span>
-                      {describeSchedule(activity.schedule)} · {place(activity)}
+                      {activity
+                        ? `${describeSchedule(activity.schedule)} · ${place(activity)}`
+                        : 'No longer running'}
                       {next?.cancelled &&
                         ` · ${formatDate(next.date)} cancelled`}
                     </span>
@@ -231,7 +267,10 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
                       className="plans-leave"
                       disabled={disabled}
                       onClick={() =>
-                        void leave(entry.id, `You’ve left ${activity.title}.`)
+                        void leave(
+                          entry.id,
+                          `You’ve left ${entry.activity.title}.`,
+                        )
                       }
                     >
                       Leave
@@ -243,9 +282,6 @@ export function MyPlans({ onFind }: { onFind?: () => void }) {
           </ul>
         </section>
       )}
-      <p className="plans-note">
-        Bookings and groups are saved in this browser for now.
-      </p>
     </div>
   );
 }
@@ -264,11 +300,12 @@ export function JoinActivities({ focus = '' }: { focus?: string }) {
   const {
     live,
     exceptions,
-    participations,
+    availability,
     place,
     mine,
     memberships,
     disabled,
+    busy,
     join,
   } = useMemberPlans();
   const [query, setQuery] = useState('');
@@ -347,8 +384,9 @@ export function JoinActivities({ focus = '' }: { focus?: string }) {
             (item) => item.activityId === activity.id && item.date === date,
           );
           const forDate = activity.joinMode === 'booking' ? date : '';
-          const spots = spotsLeft(activity, participations, forDate);
-          const count = participants(activity, participations, forDate).length;
+          const spots = placesLeft(activity, availability, forDate);
+          const count = placesTaken(availability, activity.id, forDate);
+          const saving = busy === `${activity.id}:${forDate}`;
           return (
             <article
               key={activity.id}
@@ -380,7 +418,7 @@ export function JoinActivities({ focus = '' }: { focus?: string }) {
                       disabled={disabled || spots === 0}
                       onClick={() => void join(activity)}
                     >
-                      {spots === 0 ? 'Full' : 'Join'}
+                      {spots === 0 ? 'Full' : saving ? 'Joining…' : 'Join'}
                     </button>
                   )
                 ) : !options.length ? (
@@ -415,7 +453,7 @@ export function JoinActivities({ focus = '' }: { focus?: string }) {
                         disabled={disabled || spots === 0}
                         onClick={() => void join(activity, date)}
                       >
-                        {spots === 0 ? 'Full' : 'Book'}
+                        {spots === 0 ? 'Full' : saving ? 'Booking…' : 'Book'}
                       </button>
                     )}
                   </>

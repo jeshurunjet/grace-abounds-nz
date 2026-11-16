@@ -41,6 +41,7 @@ import {
 } from '../lib/activities';
 import { api, errorMessage } from '../lib/api-client';
 import { ActivityEditor, type EditorTarget } from './activity-editor';
+import { usePlans } from '../lib/participation';
 
 /** Activities plus lookups shared by every activity screen. */
 export function useActivities() {
@@ -68,7 +69,6 @@ export function useActivities() {
       all: content.activities,
       live: content.activities.filter((item) => isLive(item, now.stamp)),
       exceptions: content.activityExceptions,
-      participations: content.participations,
       locations,
       campus,
       place,
@@ -183,8 +183,7 @@ const filters: { label: string; kinds: ActivityKind[] }[] = [
 export function ActivityCalendar({ member = false }: { member?: boolean }) {
   const { content } = useContent();
   const { data } = useSession();
-  const { live, exceptions, participations, place, now, locations } =
-    useActivities();
+  const { live, exceptions, place, now, locations } = useActivities();
   const role = data?.user?.role;
   const staff = member && (role === 'pastor' || role === 'admin');
   const [month, setMonth] = useState(now.date.slice(0, 7));
@@ -230,11 +229,11 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
     (member ? content.users.find((item) => item.role === 'member') : undefined);
   const first = `${month}-01`;
   const last = addDays(`${addDays(first, 32).slice(0, 7)}-01`, -1);
+  // The signed-in person's own bookings and groups, from the server.
+  const { plans } = usePlans(member ? (data?.user?.id ?? '') : '');
   const isMine = (item: Occurrence) =>
-    !!user &&
-    participations.some(
+    !!plans?.some(
       (entry) =>
-        entry.userId === user.id &&
         entry.activityId === item.activity.id &&
         (!entry.date || entry.date === item.date),
     );

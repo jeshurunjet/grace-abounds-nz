@@ -113,6 +113,8 @@ beforeEach(() => {
         ifMatch: new Headers(init?.headers).get('if-match'),
         body,
       });
+      if (url.endsWith('/roster')) return json(200, { data: [] });
+      if (url === '/api/v1/public/availability') return json(200, { data: {} });
       if (url === '/api/v1/staff/activities' && method === 'GET')
         return json(200, {
           data: { activities: [live, draft], exceptions: [] },

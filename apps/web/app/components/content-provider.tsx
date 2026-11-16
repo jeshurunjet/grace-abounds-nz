@@ -85,8 +85,10 @@ type ContentContextValue = {
  * Published settings, page sections, the Phase 2B collections (campuses,
  * Next steps, leadership), sermons and (Phase 3A) activities with their
  * changed dates come from the server. Browser storage keeps only the parts
- * that have not moved to the database yet (participations until 3B, member
- * records); it never supplies any server-owned part.
+ * that have not moved to the database yet (member records and other
+ * prototype tools); it never supplies any server-owned part. Prototype
+ * bookings left in a browser are kept as they were but never used: joining
+ * and booking are server records (Phase 3B).
  */
 function localPart(content: ContentState) {
   const {

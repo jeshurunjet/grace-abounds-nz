@@ -34,6 +34,7 @@ import {
 } from '../lib/errors.js';
 import { requireRole, type Actor } from '../lib/identity.js';
 import { recordContentChange } from '../lib/content-change.js';
+import { queueCalendarSync } from '../lib/calendar-queue.js';
 import { parseRestored } from '../lib/restore.js';
 
 /*
@@ -342,6 +343,7 @@ async function recordSave(
     metadata: { version: row.version, ...metadata },
   });
   await recordContentChange(tx, ENTITY, row.id, row.version);
+  await queueCalendarSync(tx, row.id);
 }
 
 /**
@@ -545,6 +547,7 @@ export function registerActivityRoutes(app: FastifyInstance) {
           metadata: { version: existing.version, record: toActivity(existing) },
         });
         await recordContentChange(tx, ENTITY, existing.id, null);
+        await queueCalendarSync(tx, existing.id);
       });
       reply.header('cache-control', 'private, no-store');
       return reply.status(204).send();

@@ -115,6 +115,8 @@ beforeEach(() => {
       });
       if (url.endsWith('/roster')) return json(200, { data: [] });
       if (url === '/api/v1/public/availability') return json(200, { data: {} });
+      if (url === '/api/v1/staff/calendar-sync')
+        return json(200, { data: { configured: false, items: [] } });
       if (url === '/api/v1/staff/activities' && method === 'GET')
         return json(200, {
           data: { activities: [live, draft], exceptions: [] },

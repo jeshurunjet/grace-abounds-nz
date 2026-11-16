@@ -392,53 +392,122 @@ const icsStamp = (date: string, time: string) =>
 
 /**
  * An .ics file for one date (when `date` is given) or the whole repeating
- * series, with cancelled dates excluded. Opens in Google, Apple and Outlook.
+ * series. Opens in Google, Apple and Outlook. The series has a stable UID,
+ * an RRULE, EXDATE for cancelled dates and an override (same UID with
+ * RECURRENCE-ID, the original date's start) for each changed date; SEQUENCE
+ * is the activity's saved version so calendars apply updates. A single
+ * cancelled date is exported as STATUS:CANCELLED.
  */
 export function toIcs(
   activity: Activity,
   options: {
     exceptions: ActivityException[];
     location: string;
+    /** The place for a date whose venue was changed. */
+    placeFor?: (venue: string) => string;
     date?: string;
     url?: string;
+    sequence?: number;
+    /** DTSTAMP; defaults to now. */
+    stamp?: Date;
   },
 ) {
   const { schedule } = activity;
-  const single = options.date ?? schedule.date;
-  const occurrence = options.date
-    ? occurrences([activity], options.exceptions, single, single)[0]
-    : undefined;
-  const start = occurrence?.startTime ?? schedule.startTime;
-  const end = occurrence?.endTime || schedule.endTime || start;
-  const rule = options.date ? null : toRRule(schedule);
-  const cancelled = options.exceptions
-    .filter(
-      (item) => item.activityId === activity.id && item.kind === 'cancelled',
-    )
-    .map(
-      (item) =>
-        `EXDATE;TZID=${CHURCH_TIME_ZONE}:${icsStamp(item.date, schedule.startTime)}`,
-    );
-  const lines = [
+  const mine = options.exceptions.filter(
+    (item) => item.activityId === activity.id,
+  );
+  const dtstamp = `${(options.stamp ?? new Date()).toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
+  const sequence = `SEQUENCE:${options.sequence ?? 0}`;
+  const place = (venue: string) =>
+    options.placeFor && venue !== activity.venue
+      ? options.placeFor(venue)
+      : options.location;
+  const describe = (note = '') =>
+    `DESCRIPTION:${icsText([activity.summary, note].filter(Boolean).join('\n\n'))}`;
+  const times = (date: string, start: string, end: string) => [
+    `DTSTART;TZID=${CHURCH_TIME_ZONE}:${icsStamp(date, start)}`,
+    `DTEND;TZID=${CHURCH_TIME_ZONE}:${icsStamp(date, end || start)}`,
+  ];
+  const shared = [
+    `SUMMARY:${icsText(activity.title)}`,
+    ...(options.url ? [`URL:${options.url}`] : []),
+  ];
+  const events: string[][] = [];
+  if (options.date) {
+    const occurrence = occurrences(
+      [activity],
+      mine,
+      options.date,
+      options.date,
+    )[0];
+    events.push([
+      `UID:${activity.id}-${options.date}@graceaboundsnz.org`,
+      `DTSTAMP:${dtstamp}`,
+      sequence,
+      ...times(
+        options.date,
+        occurrence?.startTime ?? schedule.startTime,
+        occurrence?.endTime || schedule.endTime,
+      ),
+      ...(occurrence?.cancelled ? ['STATUS:CANCELLED'] : []),
+      ...shared,
+      describe(occurrence?.note),
+      `LOCATION:${icsText(place(occurrence?.venue ?? activity.venue))}`,
+    ]);
+  } else {
+    const rule = toRRule(schedule);
+    const uid = `UID:${activity.id}@graceaboundsnz.org`;
+    events.push([
+      uid,
+      `DTSTAMP:${dtstamp}`,
+      sequence,
+      ...times(schedule.date, schedule.startTime, schedule.endTime),
+      ...(rule
+        ? [
+            `RRULE:${rule}`,
+            ...mine
+              .filter((item) => item.kind === 'cancelled')
+              .map(
+                (item) =>
+                  `EXDATE;TZID=${CHURCH_TIME_ZONE}:${icsStamp(item.date, schedule.startTime)}`,
+              ),
+          ]
+        : []),
+      ...shared,
+      describe(),
+      `LOCATION:${icsText(options.location)}`,
+    ]);
+    // A changed date: same UID, identified by its original start.
+    if (rule)
+      for (const item of mine.filter((entry) => entry.kind === 'changed')) {
+        const occurrence = occurrences(
+          [activity],
+          mine,
+          item.date,
+          item.date,
+        )[0];
+        if (!occurrence) continue;
+        events.push([
+          uid,
+          `DTSTAMP:${dtstamp}`,
+          sequence,
+          `RECURRENCE-ID;TZID=${CHURCH_TIME_ZONE}:${icsStamp(item.date, schedule.startTime)}`,
+          ...times(item.date, occurrence.startTime, occurrence.endTime),
+          ...shared,
+          describe(occurrence.note),
+          `LOCATION:${icsText(place(occurrence.venue))}`,
+        ]);
+      }
+  }
+  return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Grace Abounds NZ//Activities//EN',
     'CALSCALE:GREGORIAN',
     ...NZ_TIMEZONE,
-    'BEGIN:VEVENT',
-    `UID:${activity.id}${options.date ? `-${options.date}` : ''}@graceaboundsnz.org`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-    `DTSTART;TZID=${CHURCH_TIME_ZONE}:${icsStamp(single, start)}`,
-    `DTEND;TZID=${CHURCH_TIME_ZONE}:${icsStamp(single, end)}`,
-    ...(rule ? [`RRULE:${rule}`, ...cancelled] : []),
-    `SUMMARY:${icsText(activity.title)}`,
-    `DESCRIPTION:${icsText(activity.summary)}`,
-    `LOCATION:${icsText(options.location)}`,
-    ...(options.url ? [`URL:${options.url}`] : []),
-    'END:VEVENT',
+    ...events.flatMap((lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT']),
     'END:VCALENDAR',
-  ];
-  return lines.join('\r\n');
+  ].join('\r\n');
 }
 
 // ---------- New records ----------

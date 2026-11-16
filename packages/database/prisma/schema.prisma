@@ -583,3 +583,24 @@ model ParticipationEvent {
 
   @@index([participationId])
 }
+
+/// One-way delivery of one activity to the public church Google Calendar
+/// (Phase 3C). Deliberately not linked to Activity by a foreign key: when an
+/// activity is deleted, its events still have to be removed from Google.
+model CalendarSync {
+  activityId    String    @id
+  /// pending | synced | failed
+  status        String    @default("pending")
+  /// Bumped by every change request; a sync only marks itself done if no
+  /// newer request arrived while it ran.
+  wanted        Int       @default(0)
+  /// What Google holds for upcoming dates: { "YYYY-MM-DD": hash of the event sent }.
+  synced        Json      @default("{}")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String    @default("")
+  syncedAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+}

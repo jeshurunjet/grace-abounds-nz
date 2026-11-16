@@ -13,6 +13,7 @@ import { registerPastorMemberRoutes } from './routes/pastor-members.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerActivityRoutes } from './routes/activities.js';
 import { registerParticipationRoutes } from './routes/participation.js';
+import { registerCalendarRoutes } from './routes/calendar.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -54,5 +55,6 @@ export function buildApp() {
   registerUploadRoutes(app);
   registerActivityRoutes(app);
   registerParticipationRoutes(app);
+  registerCalendarRoutes(app);
   return app;
 }

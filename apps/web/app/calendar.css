@@ -872,3 +872,27 @@ a.cal-entry-title:hover {
   border-width: 1px;
   font-size: 0.875rem;
 }
+
+/* Google Calendar sync state for staff (Phase 3C). */
+.calendar-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.calendar-sync.is-failed {
+  color: var(--maple);
+}
+.calendar-sync-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.95rem;
+}

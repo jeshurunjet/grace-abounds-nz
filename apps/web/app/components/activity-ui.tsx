@@ -30,7 +30,6 @@ import {
   nextSunday,
   nzNow,
   occurrences,
-  toIcs,
   weekdayOf,
   type Activity,
   type ActivityException,
@@ -42,6 +41,7 @@ import {
 import { api, errorMessage } from '../lib/api-client';
 import { ActivityEditor, type EditorTarget } from './activity-editor';
 import { usePlans } from '../lib/participation';
+import { CalendarSyncBanner } from './calendar-sync-status';
 
 /** Activities plus lookups shared by every activity screen. */
 export function useActivities() {
@@ -88,27 +88,18 @@ export function AddToCalendar({
   date?: string;
   label?: string;
 }) {
-  const { exceptions, place } = useActivities();
-  function download() {
-    const ics = toIcs(activity, {
-      exceptions,
-      location: place(activity),
-      date,
-      url: `${window.location.origin}/events/${activity.slug}`,
-    });
-    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
-    const link = Object.assign(document.createElement('a'), {
-      href: url,
-      download: `${activity.slug}${date ? `-${date}` : ''}.ics`,
-    });
-    link.click();
-    URL.revokeObjectURL(url);
-  }
+  // The server builds the file (Phase 3C): stable UID and SEQUENCE,
+  // cancelled dates excluded, changed dates as their own entries.
+  const href = `/api/v1/public/activities/${encodeURIComponent(activity.slug)}/calendar.ics${date ? `?date=${date}` : ''}`;
   return (
-    <button type="button" className="button button-outline" onClick={download}>
+    <a
+      className="button button-outline"
+      href={href}
+      download={`${activity.slug}${date ? `-${date}` : ''}.ics`}
+    >
       <CalendarPlus aria-hidden="true" size={16} />{' '}
       {label ?? (date ? 'Add to calendar' : 'Add all dates to calendar')}
-    </button>
+    </a>
   );
 }
 
@@ -556,6 +547,8 @@ export function ActivityCalendar({ member = false }: { member?: boolean }) {
           </button>
         )}
       </div>
+
+      {staff && <CalendarSyncBanner />}
 
       {staffError && (
         <div className="publishing-errors" role="alert">

@@ -144,3 +144,61 @@ describe('activity calendar and participation', () => {
     expect(ics).toContain('LOCATION:Hall B');
   });
 });
+
+describe('calendar export semantics (Phase 3C)', () => {
+  const exceptions = (activityId: string): ActivityException[] => [
+    {
+      id: 'cancel',
+      activityId,
+      date: '2026-11-15',
+      kind: 'cancelled',
+      startTime: '',
+      endTime: '',
+      venue: '',
+      note: 'Combined service',
+    },
+    {
+      id: 'change',
+      activityId,
+      date: '2026-11-22',
+      kind: 'changed',
+      startTime: '11:00',
+      endTime: '',
+      venue: 'Hall B',
+      note: 'Later start',
+    },
+  ];
+
+  it('a series has one UID, excluded and overridden dates, and a sequence', () => {
+    const activity = fixture();
+    const ics = toIcs(activity, {
+      exceptions: exceptions(activity.id),
+      location: 'Main hall',
+      placeFor: (venue) => `${venue}, Manukau`,
+      sequence: 7,
+      stamp: new Date('2026-11-01T00:00:00Z'),
+    });
+    const uid = `UID:${activity.id}@graceaboundsnz.org`;
+    expect(ics.split(uid).length - 1).toBe(2); // series + one override
+    expect(ics).toContain('EXDATE;TZID=Pacific/Auckland:20261115T100000');
+    expect(ics).toContain(
+      'RECURRENCE-ID;TZID=Pacific/Auckland:20261122T100000',
+    );
+    expect(ics).toContain('DTSTART;TZID=Pacific/Auckland:20261122T110000');
+    expect(ics).toContain('LOCATION:Hall B\\, Manukau');
+    expect(ics).toContain('Later start');
+    expect(ics.match(/SEQUENCE:7/g)).toHaveLength(2);
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+  });
+
+  it('one cancelled date is exported as cancelled', () => {
+    const activity = fixture();
+    const ics = toIcs(activity, {
+      exceptions: exceptions(activity.id),
+      location: 'Main hall',
+      date: '2026-11-15',
+    });
+    expect(ics).toContain('STATUS:CANCELLED');
+    expect(ics).toContain(`UID:${activity.id}-2026-11-15@graceaboundsnz.org`);
+  });
+});

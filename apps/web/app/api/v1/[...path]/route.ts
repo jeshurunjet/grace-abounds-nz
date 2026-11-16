@@ -19,7 +19,13 @@ const FORWARDED_HEADERS = [
 ];
 /** Matches the API's own body limit. */
 const MAX_BODY_BYTES = 1_048_576;
-const RETURNED_HEADERS = ['content-type', 'etag', 'location', 'retry-after'];
+const RETURNED_HEADERS = [
+  'content-type',
+  'content-disposition',
+  'etag',
+  'location',
+  'retry-after',
+];
 
 function error(
   status: number,

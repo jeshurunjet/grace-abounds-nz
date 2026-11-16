@@ -1902,3 +1902,61 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Current next instruction:**
 
 > Owner: hand Phase 3A to Codex. Codex: review `f2fe65c..31e61e0`: activity schema and migration, shared recurrence/validation (including the NZ daylight-saving rule and `nzLocalToUtc`), staff authorization, If-Match/412/428 handling, revisions/audit/outbox, public bundle filtering (drafts, scheduled, archived and their exceptions), the content provider no longer storing activities in the browser, the seed import, and the Calendar & bookings UI. Claude: no 3B work until Codex's review; no merge, push or deployment.
+
+### Codex Phase 3A review — 16 November 2026, head `da5b7fe`
+
+**Verdict: two focused changes requested before 3B.** Reviewed the database activity/exception model, conditional writes, staff gates, revision/audit/outbox transactions, public filtering, server-owned provider fields, seed and calendar/editor integration. Those core paths follow the agreed structure. Browser-local participation is an acknowledged 3B boundary, not verified booking functionality. Keep the accepted calendar UI; no broad redesign requested.
+
+**[P2] Scheduled release does not refresh an already-open public calendar.** `publicActivities` correctly omits future releases, but the bundle therefore has no scheduled record for the browser's local clock to reveal. `usePublishedChanges` refreshes only when the saved content generation increases; crossing `publishAt` performs no write and does not increase it. A visitor who loaded `/events` before release can keep seeing the old calendar indefinitely despite minute stamp polling. The handover's claim that existing stamp polling picks it up is incorrect. Implement a bounded time-aware refresh/invalidation path that works without exposing future private content or requiring an unrelated save; keep caching off and the existing generation protocol's retry guarantees. Add a fake-clock regression: render before release, advance beyond it with no save, refresh/fetch and show the event; drafts and later scheduled content remain hidden. New scheduled-release editing remains out of scope.
+
+**[P2] Validate retained date exceptions when saving or restoring series times.** `saveActivity` validates the base schedule but does not check existing changed-date overrides against the new inherited times. Example: series 09:00–12:00, a changed date overrides only endTime to 10:00 (valid). Save the series as 11:00–12:00: both the old override and new base are individually valid, but `occurrences` now produces 11:00–10:00 for that date. The exception PUT route already validates the effective start/end; ordinary series saves and history restore need the same invariant inside their transaction. Reject a conflicting edit with a clear field/error identifying the date for resolution; do not silently discard exceptions. Cover base-time save and revision restore, plus an unaffected valid override. This is separate from the booked-occurrence reconciliation to come in 3B.
+
+**Fresh Codex evidence:** 35 tests passed across five suites: shared activity rules (8), calendar/editor (5), provider (9), legacy recurrence/export (6), freshness (7). Whitespace check passed. Owner-reported 141 regular tests, 134 DB tests and clean lint acknowledged; not independently rerun. Build passed at `e8f4a26`, but the later UI commits still need a stopped-server production build before final acceptance/merge. No production build, database mutation, migration, server restart, push, merge or deployment performed during this review.
+
+**Remaining owner checks:** signed-out `/events` in a browser, publish a staff activity and observe it there within about a minute; confirm that any browser-only prototype edits can be re-entered rather than imported. Record actual results, not inferred passes from API tests. Clearer cancelled-date styling is optional owner feedback, not a blocker or authorization for a redesign.
+
+**Next Claude instruction:** address only the two findings with focused regressions, correct the scheduled-refresh limitation above, record exact results and guide the outstanding short owner checks. Run the final production build with the dev server stopped at an appropriate checkpoint. Preserve existing recurrence types, exceptions, explicit saves, privacy, UI and browser-data preservation; no 3B, Google setup, new scheduled-release editor, push, merge or deployment yet. Return for focused Codex re-review.
+
+### Phase 3A review fixes — Claude, 16 November 2026, head `e7bbf23`
+
+**Commit:** `e7bbf23` (local, not pushed). Range for the focused re-review: `da5b7fe..e7bbf23`.
+
+**[P2] Scheduled release refresh: fixed.** A release changes what the public sees without a save, so the generation never moved. The public bundle and the freshness stamp now also carry `released`: the latest scheduled release that has already passed (epoch ms, 0 when none), from `releasedThrough(now)` in `apps/api/src/routes/activities.ts`. The bundle reads its activities and its marker with one clock (`publicCollections(now)`, `releasedThrough(now)`), after reading the generation as before. `usePublishedChanges` (`app/components/content-freshness.tsx`) now compares `{ generation, released }` with the rendered bundle (provider exposes `released`) and refreshes when either is ahead, keeping the retry-until-caught-up behaviour. Only past release moments are sent; upcoming release times, scheduled records and drafts stay private. Caching stays off (with `PUBLIC_CONTENT_CACHE_SECONDS` set, a release would wait for the cache timer, since no save clears the tag). The checkpoint's earlier statement that stamp polling already handled releases was wrong.
+
+**[P2] Changed dates on series saves: fixed.** `checkChangedDates` runs inside `saveActivity`'s transaction, so it covers ordinary saves and history restore. A changed date that keeps its own end time is checked against the new series start (error on `schedule.startTime`); one that keeps its own start time against the new series end (`schedule.endTime`). The 422 names the date, e.g. “Sun, 27 Dec 2026 has its own end time (10:00am), which would be before this start time. Change that date or set it back to the usual time first.” Nothing is saved and no changed date is discarded; the editor already shows field errors under the times and the History panel shows the message.
+
+**New tests:**
+
+- `activities.test.ts` (database), 3 new:
+  - **Fake-clock release:** the clock is set to 08:00 NZDT, an hour before a 09:00 release. The bundle has only the live activity, with `released` 0 and a matching stamp. Then the clock moves to 09:30 with no save: the stamp has the same generation and `released` equals the release instant; the bundle then includes the release. A 12:00 release and a draft stay absent, and so does the 12:00 instant.
+  - **Series save:** refused for 11:00 (27 Dec ends 10:00) and for 06:00–07:30 (3 Jan starts 08:00), with the record and both changed dates unchanged. 09:30–12:00 saves as version 4 with both changed dates kept.
+  - **Restore:** version 1 (11:00) is refused while 27 Dec ends at 10:00, with nothing changed; version 2 (same times as now) restores as version 4.
+- `content-freshness.test.tsx`: a passed release with an unchanged generation refreshes the page, retries while the page still shows the old bundle, and stops once it shows the release.
+
+**Results (owner's Mac, at `e7bbf23`):**
+
+- `pnpm test`: **31 files passed, 14 skipped (45); 142 tests passed, 127 skipped (269)**.
+- `pnpm test:db`: **17 files, 137 tests passed**.
+- `pnpm lint`: clean (eslint for media-worker, api and web with `--max-warnings=0`; Prettier “All matched files use Prettier code style!”).
+- `pnpm build`, dev server stopped: packages, media-worker and `next build` completed with the route table (`/signup`, `/sitemap.xml`, `/terms`, `/verify-email` …, “First Load JS shared by all 102 kB”). `.next/BUILD_ID` was written at 12:51 NZ. The owner pasted only part of the output, so the API's `tsc --noEmit` lines weren't seen; Claude's API typecheck at `e7bbf23` is clean.
+- Claude: API and web typecheck clean; Prettier clean.
+
+**Owner browser checks (16 Nov, development):**
+
+- **Signed out:** in a private window, `/events` showed the calendar; the draft “Christmas Special” was not on 16 Nov; clicking a date opened the day card; there was no Create activity button and no edit buttons. The owner confirmed this as matching.
+- **Publish:** as staff, the owner created “3A publish check”, saved it published on Fri 20 Nov (times entered as 07:00–20:00), and with the private `/events` window left open it **appeared without reloading**. Claude confirmed the record (26 activities, status published) and that it is in the cookie-free public bundle (generation 12). An earlier attempt was deleted by the owner before checking, so it isn't counted. Both test records remain in development.
+- **Not yet confirmed:** that any browser-only prototype activity edits can be re-entered rather than imported.
+
+**Owner note for Codex (not changed):** the public header (`app/components/header.tsx`) has never had an Events link: Home, About, Location, Next Steps, Give since the original public site (`b622e76`). Events is reached from the footer and the “What's On” heading. The owner asked for this to go to Codex. Suggested: add `['Events', '/events']` between Next Steps and Give as a separate small change.
+
+**Remaining limits (unchanged from the checkpoint unless noted):**
+
+- Joining, booking and capacity are browser-local until 3B.
+- New scheduled-release editing is out of scope.
+- “This Sunday” remains on the public `/events` and campus pages.
+- Cancelled-date styling is optional owner feedback.
+- The `released` marker relies on caching staying off. If caching is enabled later, release times would also need to clear the cached bundle.
+
+**Current next instruction:**
+
+> Owner: hand the 3A fixes to Codex. Codex: focused re-review of `da5b7fe..e7bbf23` (release marker in the bundle and stamp, the freshness comparison and its privacy, `checkChangedDates` for saves and restores, the new tests), and decide on the Events header link. Claude: no 3B work until Codex's verdict; no merge, push or deployment.

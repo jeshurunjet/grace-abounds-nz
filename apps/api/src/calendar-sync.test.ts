@@ -151,8 +151,8 @@ describe.skipIf(!dbTestsEnabled)('Google Calendar sync (PostgreSQL)', () => {
     );
   const dateUrl = (id: string, date: string) =>
     `/v1/staff/activities/${id}/exceptions/${date}`;
-  /** The outbox runs, then the worker until nothing is due. */
-  async function deliver(provider: CalendarProvider = google) {
+  /** The outbox runs: change requests reach their CalendarSync rows. */
+  async function queue() {
     // Everything queued so far is due now, whatever the database's clock
     // says (it can trail the app's clock by a moment).
     await prisma.outboxEvent.updateMany({
@@ -163,10 +163,55 @@ describe.skipIf(!dbTestsEnabled)('Google Calendar sync (PostgreSQL)', () => {
       [CONTENT_CHANGED]: async () => {},
       [CALENDAR_SYNC]: calendarSyncRequester(),
     });
+  }
+  /** The outbox runs, then the worker until nothing is due. */
+  async function deliver(provider: CalendarProvider = google) {
+    await queue();
     for (let pass = 0; pass < 20 && (await calendarSyncPass(provider)); pass++);
+  }
+  /**
+   * A sender that stops inside its first Google call until released (and
+   * can then fail), counting how many calls run at the same time.
+   */
+  function paused() {
+    let release!: (fail: boolean) => void;
+    let arrived!: () => void;
+    const gate = new Promise<boolean>((resolve) => (release = resolve));
+    const atGate = new Promise<void>((resolve) => (arrived = resolve));
+    let first = true;
+    let running = 0;
+    let most = 0;
+    const track = async <T>(work: () => Promise<T>) => {
+      most = Math.max(most, ++running);
+      try {
+        return await work();
+      } finally {
+        running--;
+      }
+    };
+    const provider: CalendarProvider = {
+      upsert: (id, event) =>
+        track(async () => {
+          if (first) {
+            first = false;
+            arrived();
+            if (await gate)
+              throw new CalendarError(
+                'Google Calendar create failed (503).',
+                503,
+                true,
+              );
+          }
+          return google.upsert(id, event);
+        }),
+      remove: (id) => track(() => google.remove(id)),
+    };
+    return { provider, atGate, release, most: () => most };
   }
   const state = (activityId: string) =>
     prisma.calendarSync.findUnique({ where: { activityId } });
+  const stamp = (date: string, time: string) =>
+    `${date.replace(/-/g, '')}T${time.replace(':', '')}00`;
 
   it('publishing sends each upcoming date once; edits update in place', async () => {
     const admin = await as('ADMIN');
@@ -423,8 +468,6 @@ describe.skipIf(!dbTestsEnabled)('Google Calendar sync (PostgreSQL)', () => {
     const series = await call('GET', url);
     expect(series.statusCode).toBe(200);
     expect(series.headers['content-type']).toMatch(/^text\/calendar/);
-    const stamp = (date: string, time: string) =>
-      `${date.replace(/-/g, '')}T${time.replace(':', '')}00`;
     expect(series.body).toContain('RRULE:FREQ=WEEKLY;BYDAY=SU');
     expect(series.body).toContain(
       `EXDATE;TZID=Pacific/Auckland:${stamp(sunday, '18:00')}`,
@@ -450,5 +493,185 @@ describe.skipIf(!dbTestsEnabled)('Google Calendar sync (PostgreSQL)', () => {
       (await call('GET', `/v1/public/activities/${draft.slug}/calendar.ics`))
         .statusCode,
     ).toBe(404);
+  });
+
+  it('two senders: a newer save never lets a second one in; the latest wins', async () => {
+    const admin = await as('ADMIN');
+    const night = await create(admin);
+    await queue();
+    const a = paused();
+    const senderA = calendarSyncPass(a.provider, () => new Date(), 1);
+    await a.atGate; // A is inside a Google call
+
+    // A newer save while A works: the row is due again…
+    expect(
+      (await save(admin, night.id, 1, { title: 'Family Night Out' }))
+        .statusCode,
+    ).toBe(200);
+    await queue();
+    expect((await state(night.id))?.status).toBe('pending');
+    // …but sender B may not take it while A holds its claim.
+    const calls = google.calls.length;
+    expect(await calendarSyncPass(google, () => new Date(), 5)).toBe(0);
+    expect(google.calls.length).toBe(calls);
+
+    a.release(false);
+    await senderA;
+    // A finished the older state and saw the newer save: due again.
+    expect(await state(night.id)).toMatchObject({
+      status: 'pending',
+      claimToken: null,
+    });
+    await deliver();
+    expect((await state(night.id))?.status).toBe('synced');
+    expect(google.events.size).toBe(upcoming().length);
+    expect(google.created).toBe(upcoming().length);
+    expect(
+      [...google.events.values()].every(
+        (item) => item.summary === 'Family Night Out',
+      ),
+    ).toBe(true);
+    expect(a.most()).toBe(1);
+  });
+
+  it('an expired claim is taken over; the old sender’s late result is ignored', async () => {
+    const admin = await as('ADMIN');
+    for (const late of ['fails', 'completes'] as const) {
+      google = new MemoryCalendar();
+      const night = await create(admin, { title: `Night that ${late}` });
+      await queue();
+      const a = paused();
+      const senderA = calendarSyncPass(a.provider, () => new Date(), 1);
+      await a.atGate;
+      // A hangs past its lease (as if its process stalled)…
+      await prisma.calendarSync.update({
+        where: { activityId: night.id },
+        data: { claimedUntil: new Date(Date.now() - 1_000) },
+      });
+      // …so B takes over and finishes.
+      expect(await calendarSyncPass(google, () => new Date(), 1)).toBe(1);
+      const finished = (await state(night.id))!;
+      expect(finished).toMatchObject({ status: 'synced', claimToken: null });
+
+      // A wakes up and fails or completes: nothing of B's is overwritten.
+      a.release(late === 'fails');
+      await senderA;
+      const after = (await state(night.id))!;
+      expect(after).toMatchObject({
+        status: 'synced',
+        lastError: '',
+        attempts: 0,
+        claimToken: null,
+      });
+      expect(after.synced).toEqual(finished.synced);
+      expect(after.syncedAt).toEqual(finished.syncedAt);
+      expect(google.events.size).toBe(upcoming().length);
+    }
+  });
+
+  it('a healthy sender keeps its claim through a long Google call', async () => {
+    const admin = await as('ADMIN');
+    const night = await create(admin);
+    await queue();
+    // A short lease and heartbeat, so "long" takes under a second.
+    const timing = { leaseMs: 400, heartbeatMs: 50 };
+    const a = paused();
+    const started = Date.now();
+    const senderA = calendarSyncPass(a.provider, () => new Date(), 1, timing);
+    await a.atGate;
+    // Well past the original lease, with A's call still in flight…
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const held = (await state(night.id))!;
+    expect(held.claimToken).not.toBeNull();
+    expect(held.claimedUntil!.getTime()).toBeGreaterThan(started + 400);
+    expect(held.claimedUntil!.getTime()).toBeGreaterThan(Date.now());
+    // …so no other sender can take it.
+    expect(await calendarSyncPass(google, () => new Date(), 5, timing)).toBe(0);
+    a.release(false);
+    await senderA;
+    expect(await state(night.id)).toMatchObject({
+      status: 'synced',
+      claimToken: null,
+      claimedUntil: null,
+    });
+    expect(google.events.size).toBe(upcoming().length);
+  });
+
+  it('a change still in the outbox shows as sending, with or without a row', async () => {
+    const admin = await as('ADMIN');
+    const night = await create(admin);
+    await deliver();
+    const status = async (activityId: string) =>
+      (
+        (await call('GET', '/v1/staff/calendar-sync', admin)).json().data
+          .items as { activityId: string; status: string }[]
+      ).find((item) => item.activityId === activityId);
+    expect((await status(night.id))?.status).toBe('synced');
+
+    // Saved but not yet through the outbox: its row still says synced,
+    // and that must not be reported as up to date.
+    await save(admin, night.id, 1, { title: 'Family Night Out' });
+    expect((await state(night.id))?.status).toBe('synced');
+    expect((await status(night.id))?.status).toBe('pending');
+
+    // A brand-new activity has no row yet and is still reported as sending.
+    const fresh = await create(admin, { title: 'Brand new night' });
+    expect(await state(fresh.id)).toBeNull();
+    expect((await status(fresh.id))?.status).toBe('pending');
+
+    await deliver();
+    expect((await status(night.id))?.status).toBe('synced');
+    expect((await status(fresh.id))?.status).toBe('synced');
+  });
+
+  it('one-off exports apply their change or cancellation, with or without a date', async () => {
+    const admin = await as('ADMIN');
+    const once = { ...base.schedule, repeat: 'once', date: sunday, days: [] };
+    const moved = await create(admin, { title: 'Moved night', schedule: once });
+    await call(
+      'PUT',
+      dateUrl(moved.id, sunday),
+      admin,
+      {
+        kind: 'changed',
+        note: 'In the hall',
+        startTime: '19:00',
+        endTime: '21:00',
+        venue: 'Hall B',
+      },
+      1,
+    );
+    const off = await create(admin, { title: 'Called off', schedule: once });
+    await call(
+      'PUT',
+      dateUrl(off.id, sunday),
+      admin,
+      { kind: 'cancelled', note: '', startTime: '', endTime: '', venue: '' },
+      1,
+    );
+    for (const query of ['', `?date=${sunday}`]) {
+      const changed = (
+        await call(
+          'GET',
+          `/v1/public/activities/${moved.slug}/calendar.ics${query}`,
+        )
+      ).body;
+      expect(changed).toContain(
+        `DTSTART;TZID=Pacific/Auckland:${stamp(sunday, '19:00')}`,
+      );
+      expect(changed).toContain(
+        `DTEND;TZID=Pacific/Auckland:${stamp(sunday, '21:00')}`,
+      );
+      expect(changed).toContain('LOCATION:Hall B');
+      expect(changed).toContain('In the hall');
+      expect(changed).toContain('SEQUENCE:2');
+      const cancelled = (
+        await call(
+          'GET',
+          `/v1/public/activities/${off.slug}/calendar.ics${query}`,
+        )
+      ).body;
+      expect(cancelled).toContain('STATUS:CANCELLED');
+    }
   });
 });

@@ -600,6 +600,10 @@ model CalendarSync {
   nextAttemptAt DateTime  @default(now())
   lastError     String    @default("")
   syncedAt      DateTime?
+  /// The sender currently working on it, and until when (renewed while it
+  /// works). Separate from nextAttemptAt, which only schedules retries.
+  claimToken    String?
+  claimedUntil  DateTime?
   updatedAt     DateTime  @updatedAt
 
   @@index([status, nextAttemptAt])

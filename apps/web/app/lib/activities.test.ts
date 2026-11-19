@@ -191,6 +191,55 @@ describe('calendar export semantics (Phase 3C)', () => {
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
   });
 
+  it('a one-off applies its own change or cancellation without a date', () => {
+    const activity = {
+      ...fixture(),
+      schedule: { ...fixture().schedule, repeat: 'once' as const },
+    };
+    const changed: ActivityException[] = [
+      {
+        id: 'change',
+        activityId: activity.id,
+        date: '2026-11-01',
+        kind: 'changed',
+        startTime: '11:00',
+        endTime: '12:30',
+        venue: 'Hall B',
+        note: 'Moved to the hall',
+      },
+    ];
+    const moved = toIcs(activity, {
+      exceptions: changed,
+      location: 'Main hall',
+      placeFor: (venue) => venue,
+      sequence: 3,
+    });
+    expect(moved).toContain('DTSTART;TZID=Pacific/Auckland:20261101T110000');
+    expect(moved).toContain('DTEND;TZID=Pacific/Auckland:20261101T123000');
+    expect(moved).toContain('LOCATION:Hall B');
+    expect(moved).toContain('Moved to the hall');
+    expect(moved).toContain(`UID:${activity.id}@graceaboundsnz.org`);
+    expect(moved).toContain('SEQUENCE:3');
+    // The time zone block has its own yearly rules; the event has none.
+    expect(moved.slice(moved.indexOf('BEGIN:VEVENT'))).not.toContain('RRULE');
+    expect(moved.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+
+    const cancelled = toIcs(activity, {
+      exceptions: [
+        {
+          ...changed[0]!,
+          kind: 'cancelled',
+          startTime: '',
+          endTime: '',
+          venue: '',
+        },
+      ],
+      location: 'Main hall',
+    });
+    expect(cancelled).toContain('STATUS:CANCELLED');
+    expect(cancelled).toContain(`UID:${activity.id}@graceaboundsnz.org`);
+  });
+
   it('one cancelled date is exported as cancelled', () => {
     const activity = fixture();
     const ics = toIcs(activity, {

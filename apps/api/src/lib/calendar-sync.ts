@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   addDays,
   nzNow,
@@ -26,9 +26,13 @@ import { toActivity } from '../routes/activities.js';
  * 2. The outbox handler only marks that activity's CalendarSync row as
  *    wanted (fast, no Google call), so Google latency never holds the
  *    outbox transaction and a save never depends on Google.
- * 3. A worker sends wanted activities to Google, outside any long
- *    transaction, and records synced or failed (with the error and a
- *    backoff). Staff see the state and can retry.
+ * 3. A worker claims one wanted activity at a time (a claim token with a
+ *    renewed lease, separate from retry scheduling), sends to Google
+ *    outside any long transaction, and records synced or failed (with the
+ *    error and a backoff). Every progress and outcome write requires the
+ *    claim, so a sender whose claim expired can't overwrite a newer one,
+ *    and a newer save never lets a second sender in while one is working.
+ *    Staff see the state and can retry.
  * 4. A sweep compares what Google should hold with what was sent, so a
  *    scheduled release (no save happens), the rolling window moving on, or
  *    any missed event is caught.
@@ -46,6 +50,7 @@ import { toActivity } from '../routes/activities.js';
  * link back. Never people, bookings, capacity, prayers or appointments.
  */
 
+import { CALENDAR_SYNC } from './calendar-queue.js';
 export { CALENDAR_SYNC, queueCalendarSync } from './calendar-queue.js';
 export const DAYS_AHEAD = 180;
 /** Calls to Google per activity per pass; the rest continues next pass. */
@@ -176,124 +181,255 @@ function plan(wanted: Wanted[], synced: SyncedMap, today: string) {
 }
 
 /**
- * One pass for one activity: sends at most PASS_LIMIT changes, saving
- * progress as it goes, so an outage part-way loses nothing and a retry
- * repeats nothing already confirmed. Returns whether it finished.
+ * How long a claim lasts unless renewed. A working sender renews it before
+ * every Google call and, while a call is in flight, every HEARTBEAT_MS (a
+ * call can take several requests with retries), so it keeps its claim
+ * however long Google takes; a crashed sender's claim simply expires.
+ */
+export const LEASE_MS = 3 * 60_000;
+const HEARTBEAT_MS = 30_000;
+export type SyncTiming = { leaseMs: number; heartbeatMs: number };
+const defaultTiming: SyncTiming = {
+  leaseMs: LEASE_MS,
+  heartbeatMs: HEARTBEAT_MS,
+};
+
+/** This sender's claim expired and another took over: stop, write nothing. */
+class LostClaim extends Error {}
+
+export type Claim = {
+  activityId: string;
+  token: string;
+  /** The change generation this delivery started from. */
+  wanted: number;
+  attempts: number;
+};
+
+/**
+ * Claims one due activity, right before sending it. The claim is separate
+ * from retry scheduling: a newer save makes the row due again but never
+ * frees a claim another sender still holds.
+ */
+export async function claimNext(
+  now: Date,
+  leaseMs = LEASE_MS,
+): Promise<Claim | null> {
+  return prisma.$transaction(async (tx) => {
+    const [row] = await tx.$queryRaw<
+      { activityId: string; wanted: number; attempts: number }[]
+    >`
+      SELECT "activityId", "wanted", "attempts" FROM "CalendarSync"
+      WHERE "status" IN ('pending', 'failed') AND "nextAttemptAt" <= ${now}
+        AND ("claimedUntil" IS NULL OR "claimedUntil" < ${now})
+      ORDER BY "nextAttemptAt"
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED`;
+    if (!row) return null;
+    const token = randomUUID();
+    await tx.calendarSync.update({
+      where: { activityId: row.activityId },
+      data: {
+        claimToken: token,
+        claimedUntil: new Date(now.getTime() + leaseMs),
+      },
+    });
+    return { ...row, token };
+  });
+}
+
+/** Writes only while this sender still holds its claim. */
+async function guarded(
+  claim: Claim,
+  data: Prisma.CalendarSyncUpdateManyMutationInput,
+  also: Prisma.CalendarSyncWhereInput = {},
+) {
+  const result = await prisma.calendarSync.updateMany({
+    where: { activityId: claim.activityId, claimToken: claim.token, ...also },
+    data,
+  });
+  return result.count > 0;
+}
+
+/**
+ * Runs one Google call while renewing the claim every heartbeat (token-
+ * guarded, one renewal at a time, stopped when the call ends). If the claim
+ * was lost meanwhile, the call's result is not recorded.
+ */
+async function withHeartbeat<T>(
+  claim: Claim,
+  timing: SyncTiming,
+  now: () => Date,
+  work: () => Promise<T>,
+): Promise<T> {
+  let lost = false;
+  let beating: Promise<void> = Promise.resolve();
+  const timer = setInterval(() => {
+    beating = beating
+      .then(() =>
+        guarded(claim, {
+          claimedUntil: new Date(now().getTime() + timing.leaseMs),
+        }),
+      )
+      .then((kept) => {
+        if (!kept) lost = true;
+      })
+      .catch(() => {
+        // A renewal that couldn't reach the database: the next one retries.
+      });
+  }, timing.heartbeatMs);
+  let result: T;
+  try {
+    result = await work();
+  } finally {
+    clearInterval(timer);
+    await beating;
+  }
+  if (lost) throw new LostClaim();
+  return result;
+}
+
+/**
+ * One pass for one claimed activity: sends at most PASS_LIMIT changes.
+ * Before each Google call it saves the progress so far and renews the
+ * claim, both only if the claim is still its own, so an outage part-way
+ * loses nothing, a retry repeats nothing confirmed, and a sender that lost
+ * its claim stops before touching Google again. Returns whether it finished.
  */
 export async function syncActivity(
-  activityId: string,
+  claim: Claim,
   provider: CalendarProvider,
-  now = new Date(),
+  now: () => Date = () => new Date(),
+  timing: SyncTiming = defaultTiming,
 ) {
   const record = await prisma.calendarSync.findUnique({
-    where: { activityId },
+    where: { activityId: claim.activityId },
   });
-  const synced = readSynced(record?.synced ?? {});
-  const today = nzNow(now).date;
+  if (record?.claimToken !== claim.token) throw new LostClaim();
+  const synced = readSynced(record.synced);
+  const today = nzNow(now()).date;
   // Past dates are history: forget them, never touch them in Google.
   for (const date of Object.keys(synced)) if (date < today) delete synced[date];
   const { upserts, removals } = plan(
-    await wantedEvents(activityId, now),
+    await wantedEvents(claim.activityId, now()),
     synced,
     today,
   );
   const save = () =>
-    prisma.calendarSync.upsert({
-      where: { activityId },
-      create: { activityId, synced: synced as Prisma.InputJsonValue },
-      update: { synced: synced as Prisma.InputJsonValue },
+    guarded(claim, {
+      synced: synced as Prisma.InputJsonValue,
+      claimedUntil: new Date(now().getTime() + timing.leaseMs),
     });
+  const call = <T>(work: () => Promise<T>) =>
+    withHeartbeat(claim, timing, now, work);
   const work = removals.length + upserts.length;
   let done = 0;
   try {
     for (const date of removals) {
       if (done >= PASS_LIMIT) break;
-      await provider.remove(synced[date]!.id);
+      if (!(await save())) throw new LostClaim();
+      await call(() => provider.remove(synced[date]!.id));
       delete synced[date];
       done++;
     }
     for (const item of upserts) {
       if (done >= PASS_LIMIT) break;
-      const id = await provider.upsert(
-        synced[item.date]?.id ?? item.id,
-        item.event,
+      if (!(await save())) throw new LostClaim();
+      const id = await call(() =>
+        provider.upsert(synced[item.date]?.id ?? item.id, item.event),
       );
       synced[item.date] = { id, h: item.h };
       done++;
     }
-  } finally {
-    await save();
+  } catch (error) {
+    // Keep what Google confirmed before the failure (if still ours).
+    if (!(error instanceof LostClaim)) await save();
+    throw error;
   }
+  if (!(await save())) throw new LostClaim();
   return done === work;
 }
 
 const backoffSeconds = (attempts: number, retryable: boolean) =>
   Math.min(retryable ? 30 * 2 ** attempts : 3600, 3600);
+const release = { claimToken: null, claimedUntil: null };
 
-/** Claims due activities (a short lease), syncs them, records the outcome. */
+/** Delivers one claimed activity and records the outcome, if still its own. */
+export async function deliverClaim(
+  claim: Claim,
+  provider: CalendarProvider,
+  now: () => Date = () => new Date(),
+  timing: SyncTiming = defaultTiming,
+) {
+  try {
+    const finished = await syncActivity(claim, provider, now, timing);
+    // Synced only if no newer change arrived meanwhile; otherwise due now.
+    const synced =
+      finished &&
+      (await guarded(
+        claim,
+        {
+          status: 'synced',
+          attempts: 0,
+          lastError: '',
+          syncedAt: now(),
+          ...release,
+        },
+        { wanted: claim.wanted },
+      ));
+    if (!synced)
+      await guarded(claim, {
+        status: 'pending',
+        nextAttemptAt: now(),
+        ...release,
+      });
+  } catch (error) {
+    // Another sender owns it now: its outcome stands, not this one's.
+    if (error instanceof LostClaim) return;
+    const known = error instanceof CalendarError;
+    const lastError = (
+      known ? error.message : 'Sending to Google Calendar failed unexpectedly.'
+    ).slice(0, 500);
+    const backedOff = await guarded(
+      claim,
+      {
+        status: 'failed',
+        attempts: { increment: 1 },
+        lastError,
+        nextAttemptAt: new Date(
+          now().getTime() +
+            backoffSeconds(claim.attempts, known ? error.retryable : true) *
+              1000,
+        ),
+        ...release,
+      },
+      { wanted: claim.wanted },
+    );
+    // A newer change arrived while this failed: try it promptly.
+    if (!backedOff)
+      await guarded(claim, {
+        status: 'pending',
+        attempts: { increment: 1 },
+        lastError,
+        nextAttemptAt: now(),
+        ...release,
+      });
+  }
+}
+
+/** Claims and delivers due activities one at a time, up to `limit`. */
 export async function calendarSyncPass(
   provider: CalendarProvider,
-  now = () => new Date(),
+  now: () => Date = () => new Date(),
   limit = 5,
+  timing: SyncTiming = defaultTiming,
 ) {
-  const claimed = await prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<
-      { activityId: string; wanted: number; attempts: number }[]
-    >`
-      SELECT "activityId", "wanted", "attempts" FROM "CalendarSync"
-      WHERE "status" IN ('pending', 'failed') AND "nextAttemptAt" <= ${now()}
-      ORDER BY "nextAttemptAt"
-      LIMIT ${limit}
-      FOR UPDATE SKIP LOCKED`;
-    if (rows.length)
-      await tx.calendarSync.updateMany({
-        where: { activityId: { in: rows.map((row) => row.activityId) } },
-        // A lease: if this process dies, another picks it up later.
-        data: { nextAttemptAt: new Date(now().getTime() + 5 * 60_000) },
-      });
-    return rows;
-  });
-  for (const row of claimed) {
-    try {
-      const finished = await syncActivity(row.activityId, provider, now());
-      // Done only if no newer change arrived while this ran.
-      const marked = await prisma.calendarSync.updateMany({
-        where: { activityId: row.activityId, wanted: row.wanted },
-        data: finished
-          ? {
-              status: 'synced',
-              attempts: 0,
-              lastError: '',
-              syncedAt: now(),
-            }
-          : { status: 'pending', nextAttemptAt: now() },
-      });
-      if (!marked.count)
-        await prisma.calendarSync.update({
-          where: { activityId: row.activityId },
-          data: { status: 'pending', nextAttemptAt: now() },
-        });
-    } catch (error) {
-      const known = error instanceof CalendarError;
-      const message = known
-        ? error.message
-        : 'Sending to Google Calendar failed unexpectedly.';
-      await prisma.calendarSync.update({
-        where: { activityId: row.activityId },
-        data: {
-          status: 'failed',
-          attempts: { increment: 1 },
-          lastError: message.slice(0, 500),
-          nextAttemptAt: new Date(
-            now().getTime() +
-              backoffSeconds(row.attempts, known ? error.retryable : true) *
-                1000,
-          ),
-        },
-      });
-    }
+  let handled = 0;
+  for (; handled < limit; handled++) {
+    const claim = await claimNext(now(), timing.leaseMs);
+    if (!claim) break;
+    await deliverClaim(claim, provider, now, timing);
   }
-  return claimed.length;
+  return handled;
 }
 
 /**
@@ -338,19 +474,48 @@ export type CalendarSyncState = {
 };
 
 export async function calendarSyncState(): Promise<CalendarSyncState> {
-  const rows = await prisma.calendarSync.findMany({
-    orderBy: { activityId: 'asc' },
-  });
-  return {
-    configured: !!googleCalendarConfig(),
-    items: rows.map((row) => ({
-      activityId: row.activityId,
-      status: row.status as 'pending' | 'synced' | 'failed',
-      lastError: row.lastError,
-      syncedAt: row.syncedAt?.toISOString() ?? '',
-      nextAttemptAt: row.nextAttemptAt.toISOString(),
-    })),
-  };
+  // One consistent snapshot of both tables: a change can't slip from the
+  // outbox to its row between the two reads and be missed by both.
+  const [rows, queued] = await prisma.$transaction(
+    async (tx) =>
+      [
+        await tx.calendarSync.findMany({ orderBy: { activityId: 'asc' } }),
+        // A change still in the outbox hasn't reached its row yet: it is
+        // pending, whatever the row says, so "up to date" is never early.
+        await tx.outboxEvent.findMany({
+          where: { topic: CALENDAR_SYNC, processedAt: null },
+          select: { payload: true },
+        }),
+      ] as const,
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  );
+  const waiting = new Set(
+    queued
+      .map(
+        (event) =>
+          (event.payload as { activityId?: unknown } | null)?.activityId,
+      )
+      .filter((id): id is string => typeof id === 'string'),
+  );
+  const items: CalendarSyncState['items'] = rows.map((row) => ({
+    activityId: row.activityId,
+    status: waiting.has(row.activityId)
+      ? 'pending'
+      : (row.status as 'pending' | 'synced' | 'failed'),
+    lastError: row.lastError,
+    syncedAt: row.syncedAt?.toISOString() ?? '',
+    nextAttemptAt: row.nextAttemptAt.toISOString(),
+  }));
+  for (const activityId of waiting)
+    if (!rows.some((row) => row.activityId === activityId))
+      items.push({
+        activityId,
+        status: 'pending',
+        lastError: '',
+        syncedAt: '',
+        nextAttemptAt: '',
+      });
+  return { configured: !!googleCalendarConfig(), items };
 }
 
 /** Runs in the API process: sends every few seconds, sweeps every 10 min. */

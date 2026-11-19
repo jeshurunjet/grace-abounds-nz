@@ -812,6 +812,7 @@ export function ActivityEditor({
           <CalendarSyncStatus
             activityId={current.id}
             isPublic={current.status === 'published'}
+            version={current.version}
           />
         )}
 

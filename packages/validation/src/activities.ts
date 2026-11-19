@@ -392,7 +392,8 @@ const icsStamp = (date: string, time: string) =>
 
 /**
  * An .ics file for one date (when `date` is given) or the whole repeating
- * series. Opens in Google, Apple and Outlook. The series has a stable UID,
+ * series. Opens in Google, Apple and Outlook. A one-off's own change or
+ * cancellation applies to its single event. A series has a stable UID,
  * an RRULE, EXDATE for cancelled dates and an override (same UID with
  * RECURRENCE-ID, the original date's start) for each changed date; SEQUENCE
  * is the activity's saved version so calendars apply updates. A single
@@ -457,26 +458,43 @@ export function toIcs(
   } else {
     const rule = toRRule(schedule);
     const uid = `UID:${activity.id}@graceaboundsnz.org`;
-    events.push([
-      uid,
-      `DTSTAMP:${dtstamp}`,
-      sequence,
-      ...times(schedule.date, schedule.startTime, schedule.endTime),
-      ...(rule
-        ? [
-            `RRULE:${rule}`,
-            ...mine
-              .filter((item) => item.kind === 'cancelled')
-              .map(
-                (item) =>
-                  `EXDATE;TZID=${CHURCH_TIME_ZONE}:${icsStamp(item.date, schedule.startTime)}`,
-              ),
-          ]
-        : []),
-      ...shared,
-      describe(),
-      `LOCATION:${icsText(options.location)}`,
-    ]);
+    // A one-off has exactly one occurrence: its saved change or
+    // cancellation applies to the event itself (same UID and sequence).
+    const only = rule
+      ? undefined
+      : occurrences([activity], mine, schedule.date, schedule.date)[0];
+    if (only) {
+      events.push([
+        uid,
+        `DTSTAMP:${dtstamp}`,
+        sequence,
+        ...times(only.date, only.startTime, only.endTime),
+        ...(only.cancelled ? ['STATUS:CANCELLED'] : []),
+        ...shared,
+        describe(only.note),
+        `LOCATION:${icsText(place(only.venue))}`,
+      ]);
+    } else
+      events.push([
+        uid,
+        `DTSTAMP:${dtstamp}`,
+        sequence,
+        ...times(schedule.date, schedule.startTime, schedule.endTime),
+        ...(rule
+          ? [
+              `RRULE:${rule}`,
+              ...mine
+                .filter((item) => item.kind === 'cancelled')
+                .map(
+                  (item) =>
+                    `EXDATE;TZID=${CHURCH_TIME_ZONE}:${icsStamp(item.date, schedule.startTime)}`,
+                ),
+            ]
+          : []),
+        ...shared,
+        describe(),
+        `LOCATION:${icsText(options.location)}`,
+      ]);
     // A changed date: same UID, identified by its original start.
     if (rule)
       for (const item of mine.filter((entry) => entry.kind === 'changed')) {

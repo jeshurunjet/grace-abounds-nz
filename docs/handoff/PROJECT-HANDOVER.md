@@ -1,6 +1,6 @@
 # Grace Abounds — Claude ↔ Codex handover
 
-Updated: 13 November 2026 by Codex (consolidated role, UI and delivery plan). **This is the only project handover and backend plan.** Update this file in place; do not create backup handovers, separate progress files or dated reviews. Git preserves history. README files may describe components and link here, but must not duplicate the plan. Earlier handovers have been consolidated and removed.
+Updated: 19 November 2026 by Jet (Phase 3C correction review and owner decision gate). **This is the only project handover and backend plan.** Update this file in place; do not create backup handovers, separate progress files or dated reviews. Git preserves history. README files may describe components and link here, but must not duplicate the plan. Earlier handovers have been consolidated and removed.
 
 ## Current decisions — read first
 
@@ -18,7 +18,7 @@ Updated: 13 November 2026 by Codex (consolidated role, UI and delivery plan). **
 
 ## How we work
 
-- Owner coordinates the work by pasting instructions into Claude. Claude implements; Codex reviews the resulting diff against this file and the running app. Do not claim that either agent has automatically received a message or reviewed a change.
+- Owner-authorized coordination (19 November): Jet relays focused instructions directly to the existing Claude desktop conversation, reviews the shared workspace, and executes native Mac checks. Claude remains the main implementer. The Codex desktop app is not accessible to Jet through computer use; do not claim to control it. Pause and report concrete owner decisions, credentials, costs or destructive actions. Do not ask the owner to relay routine commands or passing logs.
 - Work one phase at a time, with a branch and review checkpoint. Do not merge, push or deploy merely because a phase is coded. Report the branch, commit, changed behavior, checks and remaining blockers here for Codex review.
 - Inspect current git status and branch before changing anything; preserve unrelated work. Existing draft branch is `backend-phase-1`. Revise its useful work instead of discarding it blindly. Prefer `codex/` for new Codex branches; do not rename the shared existing branch unnecessarily.
 - Preserve the existing frontend and shared workspace. No redesign or new auth/backend framework without a documented reason and owner agreement.
@@ -81,19 +81,19 @@ Baseline code limits: 10-minute expiry, 5 requests/hour per normalized email and
 
 ## Delivery phases and review gates — revised 13 November 2026
 
-**Current position:** Phase 1 accepted for local-development progression; Phase 2 slice 1 site/page persistence and its published-state fixes accepted; editor-kit/theme checkpoint reviewed and pushed. Phase 2 is incomplete. Latest planning decisions are not yet implemented. Preserve completed auth, migrations, APIs and regression coverage; do not restart the project. Verify live git status/branch rather than relying on historical commit IDs.
+**Current position:** Phases 1 and 2 accepted for local-development progression (2D closed 16 November). Phase 3A/3B accepted; Phase 3C correction checkpoint technically accepted by Jet on 19 November, with the owner’s previously recorded live Google evidence retained. Phase 4 is not started: owner retention/access wording remains unresolved. Production/staging launch is not accepted. Preserve completed work; verify live branch/status rather than relying on historical IDs.
 
 Each slice includes its contracts, meaningful permission/data/failure tests, accurate frontend states and a short update here. Coded/verified/owner-accepted are separate statuses. Owner preview and Codex review occur at slice boundaries; do not repeat successful provider setup or unrelated full audits.
 
-| Phase | Scope                                                                                       | Status                                                                                                                                                                                                   |
-| ----- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                                                              |
-| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                                                      |
-| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | In progress; slice 1, 2A, 2B (pushed at `2802e00`) and **2C accepted and closed** (Codex re-review plus owner freshness check, 15 Nov; local commits not pushed). 2D (S3 library) awaits owner go-ahead. |
-| 3     | One connected calendar, capacity/bookings and public Google sync                            | Planned; required before full launch.                                                                                                                                                                    |
-| 4     | People management, private care/appointments and real role summaries                        | Planned.                                                                                                                                                                                                 |
-| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                                                      |
-| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                                                  |
+| Phase | Scope                                                                                       | Status                                                                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Planning and frontend foundation                                                            | Completed baseline; revised product scope consolidated here. Owner approval of the revised implementation sequence pending.                                             |
+| 1     | Real identity/security/session foundation                                                   | Accepted locally. Fixed-staff/member-management permission migration is Phase 4; do not claim old Pastor-only role APIs already meet the new model.                     |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | Accepted locally; 2D closed 16 November. Production CDN/host paths remain staging checks.                                                                               |
+| 3     | One connected calendar, capacity/bookings and public Google sync                            | Technical checkpoint accepted 19 November after focused corrections; prior live creation/cancel/restore evidence retained. Live field-update check remains unperformed. |
+| 4     | People management, private care/appointments and real role summaries                        | Not started; paused for owner retention/access wording before confidential-care collection.                                                                             |
+| 5     | Core delivery/account lifecycle; future media/chat foundations                              | Planned. Video approval enforcement begins in Phase 2, not postponed to this phase.                                                                                     |
+| 6     | Staging acceptance, operational readiness and launch                                        | Planned; explicit production cutover approval required.                                                                                                                 |
 
 ### Phase 2 — finish the CMS and shared content foundation
 
@@ -376,12 +376,12 @@ Add readiness/liveness checks, migration deployment, verified backups/restores, 
 
 ## Live status — update in place after every session
 
-| Phase | Status                                                                        | Evidence / blocker                                                                                     |
-| ----- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 0     | Complete — accepted by Codex                                                  | Source review, defaults confirmed, session design below.                                               |
-| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed) | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2". |
-| 2     | Historical row; see the revised phase table at the top of this file           | 2A checkpoint at `5854084` (see "Phase 2A checkpoint").                                                |
-| 3–6   | Not implemented                                                               | —                                                                                                      |
+| Phase | Status                                                                                      | Evidence / blocker                                                                                     |
+| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 0     | Complete — accepted by Codex                                                                | Source review, defaults confirmed, session design below.                                               |
+| 1     | Complete — accepted by Codex (12 Nov; `backend-phase-1` tip `37f0050` pushed)               | Local-development acceptance, not a production sign-off. See "Codex checkpoint and return to Phase 2". |
+| 2     | Simplified workspace shell, complete public CMS, content/library records, verified S3 files | Accepted locally; 2D closed 16 November. Production CDN/host paths remain staging checks.              |
+| 3–6   | Not implemented                                                                             | —                                                                                                      |
 
 **How to read this section:** the sections below are a chronological record. Blockers, "pending", "not run" and next-instruction lines inside earlier sections are **historical**. The current state is the table above, and the current next instructions are only in the **last section** of this file.
 
@@ -2098,3 +2098,22 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Reference checks:** Google's event creation/update documentation and RFC 5545 reviewed for the adapter/export contract: https://developers.google.com/workspace/calendar/api/v3/reference/events/insert ; https://developers.google.com/workspace/calendar/api/v3/reference/events/update ; https://datatracker.ietf.org/doc/html/rfc5545 . No need to redo Google console setup or re-enter keys.
 
 **Next Claude instruction:** address the three focused findings as one correction checkpoint, with deterministic regressions. Keep the accepted activity/booking UI and existing Google account setup. Record exact results in this single handover; Codex can execute local technical checks directly under the faster working agreement. Do not require the owner to relay routine passing logs. Retain the single-environment sender rule, caching-off and 180-day window. No new phase, push, merge or deployment. Return for focused re-review; the successful build above need not be repeated for documentation-only changes.
+
+### Jet coordinated Phase 3C correction acceptance — 19 November 2026
+
+**Verdict: technically accepted for continued local development.** Reviewed the uncommitted correction set on `backend-phase-2`, based on `820f41b`. Claude implemented; Jet coordinated directly through Claude’s desktop conversation and ran checks natively on the Mac. No Codex desktop access is claimed. This checkpoint does not declare the whole project or launch finished.
+
+**Corrections verified:** independent claim tokens/leases unaffected by new sync intent; one-at-a-time claims and token-guarded progress/outcome writes; heartbeat during slow provider operations; stale-owner late success/failure cannot overwrite the current database owner; repeatable-read status snapshot includes queued outbox intent; one-off .ics exceptions/cancellation without a date; editor status refresh after saves, polling/retry/tab return, StrictMode effect replay and old responses during a newer save. The original export regression incorrectly rejected timezone RRULEs; its assertion now inspects the event, preserving timezone rules.
+
+**Setup and evidence (Jet, Mac):**
+
+- Inspected additive migration `20261119180000_phase3c_calendar_claims` (two nullable CalendarSync columns), then ran `pnpm --filter @grace-abounds/database migrate:deploy`, `migrate:test`, and `generate`: all successful. Development data was not reset; destructive test helpers target the isolated `_test` database only.
+- `pnpm test`: **35 files passed, 16 skipped; 166 tests passed, 142 skipped**. This run followed the web fixes; the final API-only heartbeat/snapshot changes were verified below. Skipped DB-gated tests run in the separate DB suite.
+- `pnpm test:db` after final API corrections: **20 files, 165 tests passed**.
+- Focused status/export suites: **14 tests passed**. Focused PostgreSQL sync suite: **11 tests passed**, including healthy long-call renewal, two workers/newer intent, expired claims with late failure/completion, queued-intent status and one-off exports.
+- `pnpm typecheck`: passed after Prisma generation; subsequent final API/web changes also typechecked clean via Claude and the native production builds.
+- `pnpm lint`: all workspace ESLint and repository Prettier checks passed.
+- Production builds: `pnpm --filter @grace-abounds/web build` and `pnpm -r --filter '!@grace-abounds/web' --if-present build` both passed. Web dev was stopped before building; development and production `.next` outputs were kept separate, development cache restored, and web dev restarted on port 3000. API `/health` returned `{"status":"ok"}`. HTTP checks are not a new owner UI walkthrough.
+- `git diff --check`: passed. No package installation, .env edits, credential display, new live calendar test mutation, push, merge or deployment. Existing configured API worker remains the sole local sender. Preserve prior limits: 180-day window, public fields only, caching off, single configured sending environment; real Google field update and rate limiting still have only stand-in evidence. Snapshot race prevention is source-reviewed; the test covers queued intent, not a forced interleaving.
+
+**Owner decision required / next action:** Phase 4 requires agreed retention/access wording before real prayer/appointment collection (active Phase 4 plan and Security/operational rules above). Confirm how long closed prayer/appointment requests and Pastor notes should be retained, and the member-facing statement that only the submitting member and Pastor can view requests (Pastor notes remain Pastor-only; Admin has no care access or counts). Jet and Claude are paused at this decision gate; do not invent a retention period, start Phase 4 or collect real confidential records. After the owner answers, update this single handover and direct Claude through coherent Phase 4 slices with focused review and tests. Credentials, spending, deployment/cutover and unrequested destructive changes remain owner gates.

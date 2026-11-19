@@ -2003,3 +2003,77 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Accepted and closed.** The owner confirmed: “Bookings work on reload, removal and cancellation.” This records successful persistence, staff removal and member cancellation checks against the implementation in `67d24e3`. It does not infer additional unreported browser checks. Technical evidence remains the recorded 147 regular tests, 143 DB tests, clean typecheck/lint and successful production build; no repeat run needed for this documentation update.
 
 **Next Claude instruction — Phase 3C:** proceed with the agreed one-way app-to-public-church-Google-Calendar integration. First prepare a concise setup checklist checked against current official Google documentation; reuse the church's existing Google account/project where appropriate, and distinguish the Calendar service account from the existing Google sign-in OAuth client. Guide only the owner actions that require console access and secret entry; never request private keys in chat. While credentials are pending, implement/test the provider adapter, durable outbox delivery, stable event mapping, create/update/cancel and enabled recurrence exceptions, staff sync status/retry, and calendar export using mocks. Google downtime must not lose an app save or duplicate an event. Publish public event fields only; no attendee identities, rosters, capacity, prayers or appointments. Keep the app authoritative for bookings. Bundle the completed feature, checks and fixes into one 3C review checkpoint; owner verifies real Google delivery once configured. No personal/two-way sync, invitations, Messenger or publishing automation. No new paid service, push, merge or deployment authorized by this closure.
+
+### Phase 3C checkpoint — Claude, 19 November 2026, head `c564015`
+
+**Commit for review:** `c564015` (local, not pushed), on top of `83ac132`. Migration `20261116190000_phase3c_calendar_sync` (adds `CalendarSync` only).
+
+**Google setup completed by the owner (checked against current Google docs, Nov 2026):**
+- **Calendar:** a public calendar **Grace Abounds**, owned by the church's Google account (the "B" account, not the owner's personal one), with **Make available to public → See all event details**. Calendar ID `319e6506…@group.calendar.google.com` (not secret).
+- **Cloud project:** `grace-abounds-514306`, the same project as the Google sign-in client, with the Google Calendar API enabled. The owner skipped the billing prompt; nothing paid was added.
+- **Service account:** `calendar-sync@grace-abounds-514306.iam.gserviceaccount.com`. It has **no project roles**; its only access is the calendar share **Make changes to events**. It is separate from the Google sign-in OAuth client.
+- **Key:** a JSON key, created without an organisation-policy block. Stored outside the repo at `~/grace-abounds-secrets/google-calendar.json`, readable only by the owner's Mac user (`chmod 600`). It was never pasted in chat or stored in the database.
+- **`.env` (entered by the owner):** `GOOGLE_CALENDAR_ID` and `GOOGLE_CALENDAR_CREDENTIALS_FILE`. Both are documented in `.env.example`.
+- **Sources:**
+  - Calendar sharing: support.google.com/calendar/answer/37082.
+  - Server-to-server OAuth: developers.google.com/identity/protocols/oauth2/service-account (RS256 JWT, `aud` = https://oauth2.googleapis.com/token, `exp` ≤ 1 hour, `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`).
+  - Event IDs: events.insert reference (5–1024 characters, base32hex a–v/0–9, unique per calendar).
+  - Recurring events guide.
+  - Secure-by-default organisations (key creation is disabled by default for organisations created on or after 3 May 2024; this account wasn't blocked).
+
+**Design (one-way, app authoritative):**
+- **Durable delivery:**
+  - Every activity save, date change, restore and delete writes a `calendar.sync` outbox event in the same transaction (`lib/calendar-queue.ts`, from `recordSave` and the delete route).
+  - The outbox handler only marks the `CalendarSync` row as wanted (`wanted++`, pending), so no Google call ever runs inside the outbox transaction and saves never depend on Google.
+  - A worker in the API process (`startCalendarSync`, every 15 s) claims due rows with `FOR UPDATE SKIP LOCKED` plus a 5-minute lease and sends outside long transactions. A row is marked synced only if `wanted` didn't change meanwhile. On failure it records `failed`, `lastError` (message only, no payloads) and an exponential backoff of up to 1 hour.
+  - A sweep every 10 minutes compares what Google should hold with what was sent. It catches releases at `publishAt` (no save happens), the rolling window moving on, the first backfill and anything the outbox missed.
+  - All times on the queue come from the app's clock. One test exposed that the database's default timestamp clock can trail the app's.
+- **What Google gets:**
+  - Each upcoming occurrence (the next 180 days) of a published, live, dated activity is its own event, built by the app's recurrence engine.
+  - The event ID is `ga` + sha256(activityId|date) in hex (stable, valid base32hex). Each event is created with that ID or replaced on 409, so retries and outages can't duplicate.
+  - A changed date updates its event. A cancelled date, or an unpublished, archived or deleted activity, removes upcoming events. Past events are never touched.
+  - Removed IDs that Google won't accept again fall back to `…v1`/`…v2`.
+  - Writes use `sendUpdates=none` and carry no attendees.
+- **Why not Google series:** Google's recurring-events guide doesn't say what happens to individually changed instances when a series is updated, so RRULE series aren't used there.
+- **Fields sent:** title, summary, the date's note, place (venue, campus name and address), start and end with `Pacific/Auckland`, and a link back. **Never** people, bookings, capacity, leader, prayers or appointments; tests assert the exact field set.
+- **Adapter** (`lib/google-calendar.ts`):
+  - Google's documented JWT flow with `node:crypto` (no new dependency), the narrow `calendar.events` scope, and a token reused until expiry with one re-sign-in on 401.
+  - Errors are classed as retryable (429, rate-limit 403, 5xx, network) or not, with a staff hint for permission (403) and calendar-ID (404) problems.
+  - An unreadable or invalid key file gives a clear, non-retrying error.
+- **Staff:**
+  - `GET /v1/staff/calendar-sync` and `POST /v1/staff/calendar-sync/retry` (all failed) or `/:activityId/retry`, Pastor and Admin only and audited.
+  - The editor shows "up to date (sent …)", "sending…" or "not sent yet: <reason>" with **Try again**, or "not connected yet" while unconfigured.
+  - The staff calendar shows a note with **try again** when anything failed. A malformed status answer shows nothing.
+- **Export (agreed route):**
+  - `GET /v1/public/activities/:slug/calendar.ics?date=` (published only; 404 otherwise or for a date not in the schedule).
+  - The series has a stable UID, `SEQUENCE` = version, RRULE plus EXDATE for cancelled dates, and an override per changed date (same UID with RECURRENCE-ID at the original start). A single cancelled date is `STATUS:CANCELLED`.
+  - **Add to calendar** now downloads from the server, and the gateway passes `Content-Disposition`.
+
+**Tests and checks (owner's Mac, at `c564015`):**
+- `pnpm test`: **34 files passed, 16 skipped; 160 tests passed, 139 skipped**.
+  - The first run had 3 failures in `activity-calendar.test.tsx`: its stand-in server answered the new status request with activity data. The component now ignores malformed status and the stand-in returns proper status.
+- `pnpm test:db`: **20 files, 160 tests passed**, including `calendar-sync.test.ts` (6) and `google-calendar.test.ts` (11).
+  - The first run had 5 failures: the expected descriptions lacked the link, and the outbox `availableAt` (database clock) could trail the app's clock in the test helper. Fixed by a known site URL in the test, "deliver" making queued rows due, and app-clock `nextAttemptAt` in code.
+- `pnpm lint`: clean (ESLint with `--max-warnings=0` and Prettier).
+- **Claude:** API and web typecheck clean after `generate`.
+- **Production build not rerun for 3C.** Codex: please run `pnpm build` with the dev server stopped.
+
+**Real Google delivery (owner and Claude, 17–19 Nov, development data):**
+- Before connecting, the owner chose to send to the real public calendar and to archive the test activity "3A publish check" first (done through the staff API).
+- After the owner restarted `pnpm dev` with the two `.env` lines, the status went from 11 synced / 9 pending to **20 synced, 0 failed, no errors**.
+- The owner confirmed the events appear in the Grace Abounds Google calendar.
+- **Remove and restore against real Google** (the owner approved the live test):
+  - Online Connect Group, Wed 16 Dec, was cancelled in the app at 04:32:13Z and Google confirmed it at 04:32:19Z. The owner confirmed the event was gone.
+  - "Back to usual" was synced at 04:37:34Z and the owner confirmed it came back.
+  - This exercised removal and bringing a removed event ID back (409 then replace, or the numbered fallback).
+- **Not exercised against real Google:** a field update to an existing event (title, time or venue change) and the rate-limit/backoff path. Both are covered only by the stand-in tests.
+
+**Limits and notes:**
+- Links in the event descriptions point to `NEXT_PUBLIC_SITE_URL`, `http://localhost:3000` in development. On the live site they'll point to the real domain, and existing events update on the next sync if the URL changes (the hash covers the description).
+- The development database is currently the source for the public calendar. The seeded prototype schedule is now public, by owner decision. Before launch, the hosted app's database becomes the sender: keep only one environment configured with this calendar at a time. Two senders with different data would remove each other's events.
+- The window is 180 days, and dates beyond it arrive as the window moves. The worker runs inside the API process, so it needs a durable worker host at deployment (already in the plan).
+- Members, rosters, appointments and prayers are untouched. No member Google account, personal scopes, invitations or two-way edits.
+
+**Current next instruction:**
+
+> Owner: hand Phase 3C to Codex. Codex: final Phase 3 review of `c564015` (outbox → CalendarSync → worker design and the `wanted` race guard, stable ID and dedupe strategy and why there are no Google series, field privacy, adapter auth and error handling, staff status/retry, .ics semantics, the clock fix), plus a stopped-server `pnpm build`. Claude: no further features; no push, merge or deployment.

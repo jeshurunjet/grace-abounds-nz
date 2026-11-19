@@ -2009,6 +2009,7 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Commit for review:** `c564015` (local, not pushed), on top of `83ac132`. Migration `20261116190000_phase3c_calendar_sync` (adds `CalendarSync` only).
 
 **Google setup completed by the owner (checked against current Google docs, Nov 2026):**
+
 - **Calendar:** a public calendar **Grace Abounds**, owned by the church's Google account (the "B" account, not the owner's personal one), with **Make available to public → See all event details**. Calendar ID `319e6506…@group.calendar.google.com` (not secret).
 - **Cloud project:** `grace-abounds-514306`, the same project as the Google sign-in client, with the Google Calendar API enabled. The owner skipped the billing prompt; nothing paid was added.
 - **Service account:** `calendar-sync@grace-abounds-514306.iam.gserviceaccount.com`. It has **no project roles**; its only access is the calendar share **Make changes to events**. It is separate from the Google sign-in OAuth client.
@@ -2022,6 +2023,7 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
   - Secure-by-default organisations (key creation is disabled by default for organisations created on or after 3 May 2024; this account wasn't blocked).
 
 **Design (one-way, app authoritative):**
+
 - **Durable delivery:**
   - Every activity save, date change, restore and delete writes a `calendar.sync` outbox event in the same transaction (`lib/calendar-queue.ts`, from `recordSave` and the delete route).
   - The outbox handler only marks the `CalendarSync` row as wanted (`wanted++`, pending), so no Google call ever runs inside the outbox transaction and saves never depend on Google.
@@ -2050,6 +2052,7 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
   - **Add to calendar** now downloads from the server, and the gateway passes `Content-Disposition`.
 
 **Tests and checks (owner's Mac, at `c564015`):**
+
 - `pnpm test`: **34 files passed, 16 skipped; 160 tests passed, 139 skipped**.
   - The first run had 3 failures in `activity-calendar.test.tsx`: its stand-in server answered the new status request with activity data. The component now ignores malformed status and the stand-in returns proper status.
 - `pnpm test:db`: **20 files, 160 tests passed**, including `calendar-sync.test.ts` (6) and `google-calendar.test.ts` (11).
@@ -2059,6 +2062,7 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 - **Production build not rerun for 3C.** Codex: please run `pnpm build` with the dev server stopped.
 
 **Real Google delivery (owner and Claude, 17–19 Nov, development data):**
+
 - Before connecting, the owner chose to send to the real public calendar and to archive the test activity "3A publish check" first (done through the staff API).
 - After the owner restarted `pnpm dev` with the two `.env` lines, the status went from 11 synced / 9 pending to **20 synced, 0 failed, no errors**.
 - The owner confirmed the events appear in the Grace Abounds Google calendar.
@@ -2069,6 +2073,7 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 - **Not exercised against real Google:** a field update to an existing event (title, time or venue change) and the rate-limit/backoff path. Both are covered only by the stand-in tests.
 
 **Limits and notes:**
+
 - Links in the event descriptions point to `NEXT_PUBLIC_SITE_URL`, `http://localhost:3000` in development. On the live site they'll point to the real domain, and existing events update on the next sync if the URL changes (the hash covers the description).
 - The development database is currently the source for the public calendar. The seeded prototype schedule is now public, by owner decision. Before launch, the hosted app's database becomes the sender: keep only one environment configured with this calendar at a time. Two senders with different data would remove each other's events.
 - The window is 180 days, and dates beyond it arrive as the window moves. The worker runs inside the API process, so it needs a durable worker host at deployment (already in the plan).
@@ -2077,3 +2082,19 @@ Regression fixtures are real files made with ffmpeg (`packages/validation/fixtur
 **Current next instruction:**
 
 > Owner: hand Phase 3C to Codex. Codex: final Phase 3 review of `c564015` (outbox → CalendarSync → worker design and the `wanted` race guard, stable ID and dedupe strategy and why there are no Google series, field privacy, adapter auth and error handling, staff status/retry, .ics semantics, the clock fix), plus a stopped-server `pnpm build`. Claude: no further features; no push, merge or deployment.
+
+### Codex final Phase 3 review — 19 November 2026, head `4bfcbe8`
+
+**Verdict: changes requested; Phase 3 is not closed yet.** Reviewed `c564015` on the accepted 3A/3B baseline. Durable outbox intent, app-authoritative per-occurrence Google events, public-only payload construction, service-account separation, bounded provider requests, retryable error handling and the no-notification/no-attendee boundary follow the agreed design. Expanding occurrences rather than using Google RRULE series is an acceptable documented choice for the 180-day window. Three correctness gaps remain; do not start Phase 4 yet.
+
+**[P2] Separate delivery leases from retry scheduling and fence progress writes.** In `apps/api/src/lib/calendar-sync.ts`, `calendarSyncPass` leases a row by putting `nextAttemptAt` five minutes ahead, but `requestSync` resets that same field to now on every newer save/retry. While worker A awaits Google, a new intent therefore makes its row claimable immediately by worker B in another API process. Both then read/modify/write the `synced` map and send external changes concurrently. The `wanted` check protects the final status only: `syncActivity` saves progress unconditionally, and errors also overwrite the row unconditionally. Additionally, a batch of five rows is leased up front and processed serially; slow work (up to 60 changes, each with multiple 15-second requests) can exceed the five-minute lease even before later rows start. Use an independent claim/lease identity with guarded progress/outcome writes, preserved across new intent, and a bounded or renewed lease; claim close to execution. Retain the wanted-generation retry semantics and do not put Google calls in a long DB transaction. Add deterministic two-worker tests: pause A at a provider call, enqueue a newer save/retry, run B, and prove exclusive delivery and eventual latest-state convergence; also cover expired/stale claims and late failure/completion not overwriting a newer owner. A process-local running flag does not provide this protection across API instances/restarts.
+
+**[P2] One-off exports without `?date=` ignore their saved exception.** In `packages/validation/src/activities.ts`, the no-date branch of `toIcs` emits the base times, location and description; it applies cancellation/changed overrides only when an RRULE exists. For a `repeat: once` activity, `GET .../calendar.ics` therefore exports a cancelled event as active and a changed event with its old time/place, although `?date=<original date>` correctly applies the exception. Apply the one real occurrence's effective times/place/note and cancelled state to a one-off master export, preserving its stable UID and sequence. Add API/export regressions for one-off cancelled and changed events with and without the date parameter. Keep the existing recurring EXDATE/RECURRENCE-ID behavior.
+
+**[P2] Staff sync status stays stale after its initial fetch.** `useSyncState` in `apps/web/app/components/calendar-sync-status.tsx` loads once on mount; saving the same activity does not reload it, and Try again replaces it with the immediate pending response but never observes completion. An editor can keep saying “up to date” after a save, or “sending”/failed indefinitely after the worker finishes. Refresh status after confirmed activity changes and at a modest interval while the relevant UI is visible/pending (plus tab return), with cleanup and no overlapping requests. Do not show synced until the server has acknowledged the latest queued activity change; account for the brief outbox-to-CalendarSync delay. Add a focused screen regression for save → pending → synced and failure → retry → completion without closing/reopening the editor.
+
+**Fresh evidence:** requested `pnpm build` **passed** for the full workspace, including API TypeScript and Next production build, with the web dev server stopped. Focused export/calendar UI suites: **13 tests passed across 2 files**. Google adapter and database sync suites: **17 tests passed across 2 files** against the isolated test database and stand-in providers (no live Google writes). Existing tests do not cover the three cases above. Previously recorded owner real-Google creation/cancellation/restoration evidence acknowledged; a live field-update test remains unperformed. No credentials read, migration, production data change, Google write, push, merge or deployment by Codex. Generated production `.next` output cleared while stopped, then the web dev server restarted on port 3000. Only this handover was edited.
+
+**Reference checks:** Google's event creation/update documentation and RFC 5545 reviewed for the adapter/export contract: https://developers.google.com/workspace/calendar/api/v3/reference/events/insert ; https://developers.google.com/workspace/calendar/api/v3/reference/events/update ; https://datatracker.ietf.org/doc/html/rfc5545 . No need to redo Google console setup or re-enter keys.
+
+**Next Claude instruction:** address the three focused findings as one correction checkpoint, with deterministic regressions. Keep the accepted activity/booking UI and existing Google account setup. Record exact results in this single handover; Codex can execute local technical checks directly under the faster working agreement. Do not require the owner to relay routine passing logs. Retain the single-environment sender rule, caching-off and 180-day window. No new phase, push, merge or deployment. Return for focused re-review; the successful build above need not be repeated for documentation-only changes.

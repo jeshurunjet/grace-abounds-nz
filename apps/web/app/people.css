@@ -1,0 +1,112 @@
+/* People and staff summaries (Phase 4C). Theme tokens only. */
+
+.people {
+  display: grid;
+  gap: 1rem;
+}
+.people-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+.people-filters input,
+.people-filters select {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.people-list {
+  margin: 0;
+}
+.people-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+.people-facts dt {
+  color: var(--ink-soft);
+}
+.people-facts dd {
+  margin: 0;
+}
+.people-counts {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.people-counts p {
+  margin: 0;
+}
+.care-badge.is-active {
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+.care-badge.is-suspended,
+.care-badge.is-deletion_pending {
+  background: var(--surface);
+  color: var(--danger-ink);
+}
+
+.staff-summary {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+.staff-summary h2 {
+  margin: 0;
+}
+.staff-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-stats a,
+.staff-stats div {
+  display: grid;
+  gap: 0.15rem;
+  height: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  text-decoration: none;
+}
+.staff-stats a:hover {
+  border-color: var(--gold);
+}
+.staff-stats a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.staff-stats strong {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.staff-stats span {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+@media (max-width: 720px) {
+  .people-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.reauth-dialog form {
+  display: grid;
+  gap: 0.75rem;
+}

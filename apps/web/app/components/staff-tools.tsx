@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { staffTools } from '../lib/staff-tools';
+import { StaffSummary } from './staff-summary';
 
 /** Staff editors as large tiles, shown on Home under the calendar. */
 export function StaffTools({ role }: { role: string }) {
@@ -10,6 +11,7 @@ export function StaffTools({ role }: { role: string }) {
       id="staff-tools"
       aria-labelledby="staff-tools-title"
     >
+      <StaffSummary />
       <h2 id="staff-tools-title">Staff tools</h2>
       <div className="kit-tiles">
         {staffTools(role).map(

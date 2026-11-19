@@ -28,14 +28,14 @@ describe('workspace navigation by role', () => {
       'Website content',
       'Activities',
       'Sermons',
-      'Member directory',
+      'People',
       'Appointments',
     ]);
     expect(titles('pastor')).toEqual([
       'Website content',
       'Activities',
       'Sermons',
-      'Members & roles',
+      'People',
       'Pastoral care',
     ]);
   });

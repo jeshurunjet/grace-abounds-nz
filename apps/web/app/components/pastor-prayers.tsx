@@ -11,6 +11,7 @@ import {
 import { SidePanel } from './editor-kit/side-panel';
 import { useToast } from './toast';
 import { careDate, PrayerBadge, PrayerHistory } from './prayer-ui';
+import { hrefWithout, useUrlFilter } from '../lib/use-url-filter';
 import { api, ApiError, errorMessage } from '../lib/api-client';
 
 /*
@@ -49,10 +50,15 @@ export function PastorPrayers() {
   const { push } = useToast();
   const [prayers, setPrayers] = useState<PastorPrayer[] | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [filter, setFilter] = useState<Filter>('open');
+  const [filter, setFilter] = useUrlFilter<Filter>(
+    'prayers',
+    filters.map((item) => item.id),
+    'open',
+  );
   const router = useRouter();
   const pathname = usePathname();
-  const linked = useSearchParams()?.get('prayer') ?? '';
+  const params = useSearchParams();
+  const linked = params?.get('prayer') ?? '';
   const [openId, setOpenId] = useState(linked);
   const openRef = useRef(openId);
   openRef.current = openId;
@@ -114,7 +120,8 @@ export function PastorPrayers() {
   function close() {
     setOpenId('');
     // Forget the link, so the same notification can open it again.
-    if (linked) router.replace(pathname ?? '/pastor/care');
+    if (linked)
+      router.replace(hrefWithout(pathname ?? '/pastor/care', params, 'prayer'));
   }
 
   useEffect(() => {

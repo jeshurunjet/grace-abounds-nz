@@ -277,4 +277,27 @@ describe('Pastor prayer requests', () => {
       'Draft for Cara',
     );
   });
+
+  it('a Home count link opens that list; another link switches it on the same page', async () => {
+    route.search = 'prayers=prayed_for';
+    const view = render(<PastorPrayers />);
+    await settle();
+    expect(screen.getByText('Ben Member')).toBeInTheDocument();
+    expect(screen.queryByText('Anna Member')).toBeNull();
+    route.search = 'prayers=submitted';
+    view.rerender(<PastorPrayers />);
+    await settle();
+    expect(screen.getByText('Anna Member')).toBeInTheDocument();
+    expect(screen.queryByText('Ben Member')).toBeNull();
+  });
+
+  it('closing a linked request keeps the list filter in the address', async () => {
+    route.search = 'prayers=prayed_for&prayer=p2';
+    render(<PastorPrayers />);
+    await settle();
+    await click(within(panel()).getByRole('button', { name: 'Close panel' }));
+    expect(route.replace).toHaveBeenCalledWith(
+      '/pastor/care?prayers=prayed_for',
+    );
+  });
 });

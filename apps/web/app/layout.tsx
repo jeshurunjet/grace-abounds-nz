@@ -12,6 +12,7 @@ import './editor-kit.css';
 import './library.css';
 import './calendar.css';
 import './care.css';
+import './people.css';
 
 const lora = localFont({
   variable: '--font-display',

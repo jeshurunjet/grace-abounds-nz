@@ -19,6 +19,7 @@ import {
   AppointmentHistory,
   slotText,
 } from './appointment-ui';
+import { hrefWithout, useUrlFilter } from '../lib/use-url-filter';
 import { api, ApiError, errorMessage } from '../lib/api-client';
 
 /*
@@ -86,10 +87,15 @@ function AppointmentsFor({ pastor }: { pastor: boolean }) {
   const { push } = useToast();
   const router = useRouter();
   const pathname = usePathname();
-  const linked = useSearchParams()?.get('appointment') ?? '';
+  const params = useSearchParams();
+  const linked = params?.get('appointment') ?? '';
   const [items, setItems] = useState<StaffAppointment[] | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [filter, setFilter] = useState<Filter>('requested');
+  const [filter, setFilter] = useUrlFilter<Filter>(
+    'appointments',
+    filters.map((item) => item.id),
+    'requested',
+  );
   const [openId, setOpenId] = useState(linked);
   const [detail, setDetail] = useState<StaffAppointmentDetail | null>(null);
   const [detailError, setDetailError] = useState('');
@@ -107,10 +113,10 @@ function AppointmentsFor({ pastor }: { pastor: boolean }) {
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
+    // Every late answer (list, detail, save) checks this flag, so it alone
+    // fences the old screen; the tickets only order answers within it.
     return () => {
       alive.current = false;
-      latestList.current++;
-      latestDetail.current++;
     };
   }, []);
 
@@ -173,7 +179,10 @@ function AppointmentsFor({ pastor }: { pastor: boolean }) {
   }, [linked]);
   function close() {
     setOpenId('');
-    if (linked) router.replace(pathname ?? '/pastor/care');
+    if (linked)
+      router.replace(
+        hrefWithout(pathname ?? '/pastor/care', params, 'appointment'),
+      );
   }
   useEffect(() => {
     void load();

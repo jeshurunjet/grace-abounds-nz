@@ -1,54 +1,35 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import UsersAdmin from './page';
-import { seedContent } from '../../lib/content';
-const state = vi.hoisted(() => ({ role: 'admin', update: vi.fn() }));
-vi.mock('next-auth/react', () => ({
-  useSession: () => ({
-    data: { user: { role: state.role, email: `${state.role}@example.org` } },
-  }),
+import PeoplePage from './page';
+
+/*
+ * Phase 4C: People is the canonical directory. The page no longer reads
+ * browser-stored users, offers no role changes, deletion or prototype
+ * activity panels; it hosts the server-backed directory only.
+ */
+const content = vi.hoisted(() => ({ used: false }));
+vi.mock('../../components/content-provider', () => ({
+  useContent: () => {
+    content.used = true;
+    return {};
+  },
 }));
 vi.mock('../../components/admin-shell', () => ({
   AdminShell: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock('../../components/content-provider', () => ({
-  useContent: () => ({ content: seedContent, update: state.update }),
+vi.mock('../../components/people-directory', () => ({
+  PeopleDirectory: () => <p>Canonical directory</p>,
 }));
-beforeEach(() => {
-  state.role = 'admin';
-  state.update.mockClear();
-});
-describe('member account controls', () => {
-  it('keeps admin member management read-only', () => {
-    render(<UsersAdmin />);
-    expect(
-      screen.getByRole('combobox', { name: 'Role for Michael Example' }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByRole('button', { name: 'Review account deletion' }),
-    ).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Search members'), {
-      target: { value: 'no matching person' },
-    });
-    expect(screen.getByText(/No accounts match/)).toBeInTheDocument();
-  });
-  it('requires pastor review and does not simulate a successful identity change', () => {
-    state.role = 'pastor';
-    render(<UsersAdmin />);
-    const role = screen.getByRole('combobox', {
-      name: 'Role for Michael Example',
-    });
-    expect(role).toBeEnabled();
-    expect(
-      screen.getByRole('combobox', { name: 'Role for Pastor Example' }),
-    ).toBeDisabled();
-    fireEvent.change(role, { target: { value: 'admin' } });
-    expect(
-      screen.getByRole('dialog', { name: 'Review role change' }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
-    expect(state.update).not.toHaveBeenCalled();
-    expect(role).toHaveValue('member');
+
+describe('People page', () => {
+  it('hosts the canonical directory without browser users or role controls', () => {
+    render(<PeoplePage />);
+    expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument();
+    expect(screen.getByText('Canonical directory')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByText(/Review account deletion/)).toBeNull();
+    expect(screen.queryByText(/Service assignments|Participation/)).toBeNull();
+    expect(content.used).toBe(false);
   });
 });

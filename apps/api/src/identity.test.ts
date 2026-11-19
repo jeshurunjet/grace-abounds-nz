@@ -142,22 +142,27 @@ describe.skipIf(!dbTestsEnabled)(
       expect((await call('GET', '/v1/me', headers)).statusCode).toBe(200);
     });
 
-    it('keeps Members and Admins out of Pastor routes', async () => {
+    it('the old role and status routes are gone for every role (Phase 4C)', async () => {
       const target = await createUser();
-      for (const role of ['MEMBER', 'ADMIN'] as const) {
+      for (const role of ['MEMBER', 'ADMIN', 'PASTOR'] as const) {
         const { headers } = await signedIn(role);
-        const response = await call(
-          'PATCH',
-          `/v1/pastor/members/${target.id}/role`,
-          { ...headers, 'if-match': '"1"' },
-          { role: 'PASTOR' },
-        );
-        expect(response.statusCode).toBe(403);
+        for (const [path, body] of [
+          ['role', { role: 'PASTOR' }],
+          ['status', { status: 'SUSPENDED' }],
+        ] as const) {
+          const response = await call(
+            'PATCH',
+            `/v1/pastor/members/${target.id}/${path}`,
+            { ...headers, 'if-match': '"1"' },
+            body,
+          );
+          expect(response.statusCode).toBe(404);
+        }
       }
-      expect(
-        (await prisma.user.findUniqueOrThrow({ where: { id: target.id } }))
-          .role,
-      ).toBe('MEMBER');
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: target.id },
+      });
+      expect([after.role, after.status]).toEqual(['MEMBER', 'ACTIVE']);
     });
 
     it('suspension ends the member’s access on the next request', async () => {
@@ -168,9 +173,9 @@ describe.skipIf(!dbTestsEnabled)(
       );
       const response = await call(
         'PATCH',
-        `/v1/pastor/members/${member.user.id}/status`,
+        `/v1/staff/members/${member.user.id}/status`,
         { ...pastor.headers, 'if-match': '"1"' },
-        { status: 'SUSPENDED' },
+        { status: 'suspended' },
       );
       expect(response.statusCode).toBe(200);
       expect((await call('GET', '/v1/me', member.headers)).statusCode).toBe(
@@ -182,38 +187,14 @@ describe.skipIf(!dbTestsEnabled)(
       expect(audit?.actorId).toBe(pastor.user.id);
     });
 
-    it('two Pastors demoting each other at once leaves one Pastor', async () => {
-      const a = await signedIn('PASTOR');
-      const b = await signedIn('PASTOR');
-      const demote = (actor: typeof a, target: typeof b) =>
-        call(
-          'PATCH',
-          `/v1/pastor/members/${target.user.id}/role`,
-          { ...actor.headers, 'if-match': '"1"' },
-          { role: 'MEMBER' },
-        );
-      const [first, second] = await Promise.all([demote(a, b), demote(b, a)]);
-      // One wins. The other is refused either inside the lock (409: would
-      // leave no Pastor) or, if the winner committed first, because the loser
-      // is no longer a Pastor (403). Never both.
-      const statuses = [first.statusCode, second.statusCode].sort();
-      expect(statuses[0]).toBe(200);
-      expect([403, 409]).toContain(statuses[1]);
-      expect(
-        await prisma.user.count({
-          where: { role: 'PASTOR', status: 'ACTIVE' },
-        }),
-      ).toBe(1);
-    });
-
-    it('rejects a stale role change', async () => {
+    it('rejects a stale status change', async () => {
       const pastor = await signedIn('PASTOR');
       const member = await createUser();
       const response = await call(
         'PATCH',
-        `/v1/pastor/members/${member.id}/role`,
+        `/v1/staff/members/${member.id}/status`,
         { ...pastor.headers, 'if-match': '"7"' },
-        { role: 'ADMIN' },
+        { status: 'suspended' },
       );
       expect(response.statusCode).toBe(412);
     });

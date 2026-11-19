@@ -43,22 +43,14 @@ export function staffTools(role: string): StaffTool[] {
       icon: Video,
       tone: 'sermons',
     },
-    role === 'pastor'
-      ? {
-          href: '/admin/users',
-          title: 'Members & roles',
-          description: 'Member accounts and who can manage what.',
-          icon: Users,
-          tone: 'members',
-        }
-      : {
-          href: '/admin/users',
-          title: 'Member directory',
-          description:
-            'Look up member accounts. Role changes are made by the pastor.',
-          icon: Users,
-          tone: 'members',
-        },
+    {
+      href: '/admin/users',
+      title: 'People',
+      description:
+        'Find member accounts and suspend or reactivate access when needed.',
+      icon: Users,
+      tone: 'members',
+    },
   ];
   if (role === 'pastor')
     tiles.push({

@@ -303,6 +303,48 @@ describe('staff appointments', () => {
     expect(within(panel()).getByLabelText('Date')).toHaveValue('2026-12-02');
   });
 
+  it('a Home count link opens that list; another link switches it on the same page', async () => {
+    server.rows = [
+      logistics('a1', 'Anna Member'),
+      {
+        ...logistics('a2', 'Ben Member'),
+        status: 'confirmed',
+        startsAt: '2026-12-01T21:00:00.000Z',
+        endsAt: '2026-12-01T21:30:00.000Z',
+      },
+    ];
+    route.search = 'appointments=upcoming';
+    const page = render(<StaffAppointments />);
+    await settle();
+    const row = (name: string) =>
+      screen.queryByRole('button', { name: `Open appointment with ${name}` });
+    expect(row('Ben Member')).toBeTruthy();
+    expect(row('Anna Member')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Confirmed/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    route.search = 'appointments=requested';
+    page.rerender(<StaffAppointments />);
+    await settle();
+    expect(row('Anna Member')).toBeTruthy();
+    expect(row('Ben Member')).toBeNull();
+    // Choosing a filter here updates the address.
+    fireEvent.click(screen.getByRole('button', { name: /^Closed/ }));
+    expect(route.replace).toHaveBeenLastCalledWith(
+      '/pastor/care?appointments=closed',
+      { scroll: false },
+    );
+  });
+
+  it('closing a linked appointment keeps the list filter in the address', async () => {
+    route.search = 'appointments=all&appointment=a1';
+    render(<StaffAppointments />);
+    await settle();
+    await click(within(panel()).getByRole('button', { name: 'Close panel' }));
+    expect(route.replace).toHaveBeenCalledWith('/pastor/care?appointments=all');
+  });
+
   it('closing a linked appointment drops it from the address', async () => {
     route.search = 'appointment=a1';
     render(<StaffAppointments />);

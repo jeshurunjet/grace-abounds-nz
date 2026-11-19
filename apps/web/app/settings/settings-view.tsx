@@ -591,7 +591,7 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
                 Website content
               </Link>
               <Link className="button button-outline" href="/admin/users">
-                Member management
+                People
               </Link>
             </div>
           </section>

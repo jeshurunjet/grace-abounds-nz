@@ -46,10 +46,17 @@ describe('Home member tools', () => {
       'href',
       '/members/prayer',
     );
-    fireEvent.click(screen.getByRole('button', { name: /Appointments/ }));
-    expect(
-      screen.getByRole('dialog', { name: 'Appointments' }),
-    ).toBeInTheDocument();
+    // Appointments is its own page too, backed by the server (Phase 4B).
+    expect(screen.getByRole('link', { name: /Appointments/ })).toHaveAttribute(
+      'href',
+      '/members/appointments',
+    );
+  });
+
+  it('older Next steps appointment links open the Appointments page', () => {
+    window.history.replaceState({}, '', '/members?panel=appointment');
+    render(<MemberEngagement />);
+    expect(nav.replace).toHaveBeenCalledWith('/members/appointments');
   });
 
   it('public Next steps links still open the next-step request', () => {

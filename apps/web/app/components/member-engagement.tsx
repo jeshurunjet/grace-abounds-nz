@@ -10,7 +10,7 @@ import {
   Heart,
   Users,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useContent } from './content-provider';
 import { useToast } from './toast';
 import { useActivities } from './activity-ui';
@@ -21,7 +21,7 @@ export function MemberEngagement() {
   const { data: session } = useSession();
   const { push } = useToast();
   const [opportunity, setOpportunity] = useState('');
-  const [panel, setPanel] = useState<null | 'appointment' | 'step'>(null);
+  const [panel, setPanel] = useState<null | 'step'>(null);
   const currentUser =
     content.users.find((user) => user.email === session?.user?.email) ??
     content.users.find((user) => user.role === 'member');
@@ -46,9 +46,10 @@ export function MemberEngagement() {
   const { live } = useActivities();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    // Next steps "appointment" buttons link here with ?panel=appointment.
+    // Older Next steps "appointment" links (?panel=appointment) now open
+    // the Appointments page, where requests are real (Phase 4B).
     if (params.get('panel') === 'appointment') {
-      setPanel('appointment');
+      router.replace('/members/appointments');
       return;
     }
     const requested = params.get('join');
@@ -65,41 +66,6 @@ export function MemberEngagement() {
       router.replace(`/members/calendar?${params.toString()}#activities`);
   }, [opportunities, live, router]);
   const selected = opportunities.find((item) => item.name === opportunity);
-  async function requestAppointment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!ready || storageError) return;
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const saved = await update((current) => ({
-      ...current,
-      appointmentRequests: [
-        ...current.appointmentRequests,
-        {
-          id: crypto.randomUUID(),
-          userId,
-          type: String(data.get('type')),
-          preferredDate: String(data.get('date')),
-          message: String(data.get('message') ?? ''),
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    }));
-    if (!saved) {
-      push(
-        'This could not be saved in this browser. Your entry is still here — please try again.',
-        'error',
-      );
-      return;
-    }
-    form.reset();
-    setAppointmentDirty(false);
-    setPanel(null);
-    push(
-      'Appointment added to this browser preview only. It has not been delivered.',
-      'info',
-    );
-  }
   async function submitInterest() {
     if (!selected || !ready || storageError) return;
     const existing = content.participationApplications.some(
@@ -140,15 +106,11 @@ export function MemberEngagement() {
       'info',
     );
   }
-  const [appointmentDirty, setAppointmentDirty] = useState(false);
   useEffect(() => {
     if (opportunity && new URLSearchParams(window.location.search).get('join'))
       setPanel('step');
   }, [opportunity]);
-  const close = () => {
-    setPanel(null);
-    setAppointmentDirty(false);
-  };
+  const close = () => setPanel(null);
   return (
     <div className="member-engagement">
       {storageError && (
@@ -165,61 +127,15 @@ export function MemberEngagement() {
           <Heart aria-hidden="true" size={18} />
           Prayer
         </Link>
-        <button type="button" onClick={() => setPanel('appointment')}>
+        <Link href="/members/appointments">
           <CalendarCheck aria-hidden="true" size={18} />
           Appointments
-        </button>
+        </Link>
         <Link href="/members/gallery">
           <FolderOpen aria-hidden="true" size={18} />
           Gallery
         </Link>
       </nav>
-
-      <SidePanel
-        open={panel === 'appointment'}
-        title="Appointments"
-        eyebrow="Pastoral care"
-        dirty={appointmentDirty}
-        onClose={close}
-      >
-        <p>
-          Prepare an appointment request for the pastoral team. This preview
-          keeps requests in this browser and does not deliver them.
-        </p>
-        <form
-          className="member-appointment-form"
-          onSubmit={requestAppointment}
-          onChange={() => setAppointmentDirty(true)}
-        >
-          <label>
-            Appointment type
-            <select name="type" required defaultValue="">
-              <option value="" disabled>
-                Choose a reason
-              </option>
-              <option>Pastoral care</option>
-              <option>Prayer</option>
-              <option>Baptism interview</option>
-              <option>Marriage support</option>
-            </select>
-          </label>
-          <label>
-            Preferred date
-            <input name="date" type="date" required />
-          </label>
-          <label>
-            Message
-            <textarea
-              name="message"
-              rows={3}
-              placeholder="Anything you would like the pastoral team to know?"
-            />
-          </label>
-          <button className="button" disabled={!ready || !!storageError}>
-            Save appointment preview
-          </button>
-        </form>
-      </SidePanel>
 
       <SidePanel
         open={panel === 'step'}

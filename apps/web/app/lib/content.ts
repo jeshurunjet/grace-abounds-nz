@@ -117,6 +117,10 @@ export type ContentState = {
   participations: Participation[];
   team: TeamMember[];
   users: UserRecord[];
+  /**
+   * Prototype appointment requests some browsers saved before Phase 4B.
+   * Never read or imported: appointments are private server records now.
+   */
   appointmentRequests: AppointmentRequest[];
   participationApplications: ParticipationApplication[];
   serviceAssignments: ServiceAssignment[];

@@ -161,7 +161,7 @@ const blankSite: SiteContent = {
 /** Where a Next steps call to action goes (Phase 2B destinations). */
 export function nextStepHref(step: Pick<PublicNextStep, 'title' | 'cta'>) {
   const { kind, target } = step.cta;
-  if (kind === 'appointment') return '/members?panel=appointment';
+  if (kind === 'appointment') return '/members/appointments';
   if (kind === 'calendar')
     return target
       ? `/events/${encodeURIComponent(target)}`

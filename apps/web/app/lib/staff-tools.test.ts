@@ -29,6 +29,7 @@ describe('workspace navigation by role', () => {
       'Activities',
       'Sermons',
       'Member directory',
+      'Appointments',
     ]);
     expect(titles('pastor')).toEqual([
       'Website content',

@@ -1,4 +1,5 @@
 import {
+  CalendarCheck,
   CalendarCog,
   Globe,
   Heart,
@@ -66,6 +67,15 @@ export function staffTools(role: string): StaffTool[] {
       description:
         'Prayer requests and appointment requests. Private to pastors.',
       icon: Heart,
+      tone: 'care',
+    });
+  // Admin schedules appointments without seeing topics, messages or notes.
+  if (role === 'admin')
+    tiles.push({
+      href: '/admin/appointments',
+      title: 'Appointments',
+      description: 'Suggest and confirm appointment times. No private details.',
+      icon: CalendarCheck,
       tone: 'care',
     });
   return tiles;

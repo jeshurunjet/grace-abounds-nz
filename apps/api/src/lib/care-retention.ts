@@ -1,13 +1,21 @@
-import { PRAYER_RETENTION_MONTHS } from '@grace-abounds/validation';
+import {
+  APPOINTMENT_RETENTION_DAYS,
+  PRAYER_RETENTION_MONTHS,
+} from '@grace-abounds/validation';
 import { prisma, recordAudit } from '@grace-abounds/database';
 import { forgetNotifications } from './notifications.js';
 
 /*
- * Approved care retention (Phase 4A, owner decision 19 November 2026):
- * a prayer request marked "Prayed for" is deleted 12 months after it was
- * closed, with its Pastor notes, its history and every notification about
- * it. Open requests are never age-deleted. The audit entry records only how
- * many were removed, never their content or ids of people.
+ * Approved care retention (owner decision 19 November 2026). The audit
+ * entry records only how many were removed, never content or people.
+ *
+ * - A prayer request marked "Prayed for" is deleted 12 months after it was
+ *   closed, with its Pastor notes, history and notifications (Phase 4A).
+ *   Open requests are never age-deleted.
+ * - An appointment that was completed, cancelled or declined is deleted 30
+ *   days after that, with its notes, history and notifications, and never
+ *   before its time has passed (Phase 4B). Requested, suggested and
+ *   confirmed appointments are never age-deleted.
  */
 
 export function prayerCutoff(now: Date) {
@@ -40,12 +48,45 @@ export async function expirePrayers(now = new Date()) {
   });
 }
 
+export async function expireAppointments(now = new Date()) {
+  const cutoff = new Date(
+    now.getTime() - APPOINTMENT_RETENTION_DAYS * 86_400_000,
+  );
+  return prisma.$transaction(async (tx) => {
+    const due = await tx.appointment.findMany({
+      where: {
+        status: { in: ['COMPLETED', 'CANCELLED', 'DECLINED'] },
+        closedAt: { lte: cutoff },
+        OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+      },
+      select: { id: true },
+    });
+    if (!due.length) return 0;
+    const ids = due.map((row) => row.id);
+    await forgetNotifications(tx, 'appointment', ids);
+    const removed = await tx.appointment.deleteMany({
+      where: {
+        id: { in: ids },
+        status: { in: ['COMPLETED', 'CANCELLED', 'DECLINED'] },
+      },
+    });
+    await recordAudit(tx, {
+      actorId: null,
+      action: 'care.appointments_expired',
+      entityType: 'appointment',
+      entityId: 'retention',
+      metadata: { count: removed.count },
+    });
+    return removed.count;
+  });
+}
+
 /** Runs in the API process: at start, then every 6 hours. */
 export function startCareRetention(log: {
   warn: (object: object, message: string) => void;
 }) {
   const run = () =>
-    expirePrayers().catch((error) =>
+    Promise.all([expirePrayers(), expireAppointments()]).catch((error) =>
       log.warn(
         { error: String((error as Error)?.message ?? error) },
         'Care retention run failed; it will run again.',

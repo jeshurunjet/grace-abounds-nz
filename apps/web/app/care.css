@@ -229,3 +229,67 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Appointments (Phase 4B) */
+.care-topic {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.care-slot {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.care-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.care-field input,
+.care-field select {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.care-slot-form {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+}
+.care-slot-form legend {
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+.care-badge.is-requested {
+  background: var(--tile-website-bg);
+  color: var(--tile-website-ink);
+}
+.care-badge.is-proposed {
+  background: var(--tile-activities-bg);
+  color: var(--tile-activities-ink);
+}
+.care-badge.is-confirmed,
+.care-badge.is-completed {
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+.care-badge.is-cancelled,
+.care-badge.is-declined {
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+@media (max-width: 520px) {
+  .care-pair {
+    grid-template-columns: 1fr;
+  }
+}

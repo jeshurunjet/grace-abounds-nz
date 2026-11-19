@@ -12,7 +12,7 @@ try {
   startOutboxDispatcher(app.log);
   // Sends public activities to the church Google Calendar when configured.
   startCalendarSync(app.log);
-  // Deletes closed prayer requests 12 months after closing (owner decision).
+  // Deletes closed care records on the approved schedule (owner decision).
   startCareRetention(app.log);
 } catch (error) {
   app.log.error(error);

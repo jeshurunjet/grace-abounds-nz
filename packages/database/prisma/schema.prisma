@@ -55,6 +55,7 @@ model User {
   participations Participation[]
   prayerRequests PrayerRequest[]
   notifications  Notification[]
+  appointments   Appointment[]
 }
 
 // Auth.js Prisma adapter tables (https://authjs.dev/getting-started/adapters/prisma)
@@ -687,4 +688,75 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@index([entityType, entityId])
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  PROPOSED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DECLINED
+}
+
+/// A private appointment (Phase 4B). Member and Pastor see everything;
+/// Admin sees logistics only (who, contact, slot, status), never topic,
+/// reason or notes. Only CONFIRMED reserves its slot. Never in the public
+/// calendar or Google. Deleted with notes, history and notifications 30 days
+/// after COMPLETED/CANCELLED/DECLINED (and not before its time has passed).
+model Appointment {
+  id            String            @id @default(cuid())
+  userId        String
+  /// Confidential: member and Pastor only.
+  topic         String
+  reason        String            @default("")
+  /// The member's wishes (not a reservation).
+  preferredDate DateTime?         @db.Date
+  preferredTime String            @default("any")
+  /// Suggested (PROPOSED) or reserved (CONFIRMED) time and place.
+  startsAt      DateTime?
+  endsAt        DateTime?
+  location      String            @default("")
+  status        AppointmentStatus @default(REQUESTED)
+  /// Made once per draft by the browser: a retried request finds the same one.
+  clientKey     String
+  version       Int               @default(1)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  closedAt      DateTime?
+
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes  AppointmentNote[]
+  events AppointmentEvent[]
+
+  @@unique([userId, clientKey])
+  @@index([status, startsAt])
+  @@index([closedAt])
+}
+
+/// A Pastor-only private note on an appointment (same retention).
+model AppointmentNote {
+  id            String   @id @default(cuid())
+  appointmentId String
+  text          String
+  authorId      String?
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+}
+
+/// Member-visible history: each status reached and the time it referred to.
+model AppointmentEvent {
+  id            String            @id @default(cuid())
+  appointmentId String
+  status        AppointmentStatus
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime          @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
 }

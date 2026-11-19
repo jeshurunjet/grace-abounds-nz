@@ -14,7 +14,6 @@ import { useContent } from '../../components/content-provider';
 import { useToast } from '../../components/toast';
 import { formatCalendarDate } from '../../lib/calendar';
 import type {
-  AppointmentRequest,
   ParticipationApplication,
   ServiceAssignment,
   UserRecord,
@@ -53,9 +52,6 @@ export default function UsersAdmin() {
   const selected =
     filtered.find((user) => user.id === selectedKey) ?? filtered[0];
   const selectedId = selected?.id ?? '';
-  const appointments = content.appointmentRequests.filter(
-    (item) => item.userId === selectedId,
-  );
   const applications = content.participationApplications.filter(
     (item) => item.userId === selectedId,
   );
@@ -79,17 +75,6 @@ export default function UsersAdmin() {
       saved ? 'info' : 'error',
     );
     return saved;
-  }
-  function patchAppointment(id: string, status: AppointmentRequest['status']) {
-    void save(
-      (state) => ({
-        ...state,
-        appointmentRequests: state.appointmentRequests.map((item) =>
-          item.id === id ? { ...item, status } : item,
-        ),
-      }),
-      `Appointment status set to ${status} in this browser preview.`,
-    );
   }
   function patchApplication(
     id: string,
@@ -253,7 +238,7 @@ export default function UsersAdmin() {
                   {selected.email} · {selected.role}
                 </p>
               </div>
-              <span>{appointments.length + applications.length} responses</span>
+              <span>{applications.length} responses</span>
             </header>
 
             {pastor && (
@@ -287,37 +272,15 @@ export default function UsersAdmin() {
             <div className="user-activity-grid">
               <article className="panel">
                 <h3>
-                  <CalendarClock aria-hidden="true" /> Appointment requests
+                  <CalendarClock aria-hidden="true" /> Appointments
                 </h3>
-                {appointments.length ? (
-                  appointments.map((item) => (
-                    <div className="activity-record" key={item.id}>
-                      <span>
-                        <b>{item.type}</b>
-                        <small>
-                          {item.preferredDate} · {item.message || 'No message'}
-                        </small>
-                      </span>
-                      <select
-                        disabled={!pastor}
-                        value={item.status}
-                        onChange={(event) =>
-                          patchAppointment(
-                            item.id,
-                            event.target.value as AppointmentRequest['status'],
-                          )
-                        }
-                      >
-                        <option>pending</option>
-                        <option>confirmed</option>
-                        <option>completed</option>
-                        <option>declined</option>
-                      </select>
-                    </div>
-                  ))
-                ) : (
-                  <p className="empty-record">No appointment requests.</p>
-                )}
+                <p className="empty-record">
+                  Appointments have their own page, where each person sees only
+                  what their role allows.{' '}
+                  <a href={pastor ? '/pastor/care' : '/admin/appointments'}>
+                    Open appointments
+                  </a>
+                </p>
               </article>
               <article className="panel">
                 <h3>

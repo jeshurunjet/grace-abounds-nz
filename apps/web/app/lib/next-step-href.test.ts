@@ -14,4 +14,13 @@ describe('Next steps link destinations', () => {
       'https://example.org/serve',
     );
   });
+
+  it('appointment steps open the Appointments page (Phase 4B)', () => {
+    expect(
+      nextStepHref({
+        title: 'Meet the pastor',
+        cta: { kind: 'appointment', label: 'Ask', target: '' },
+      }),
+    ).toBe('/members/appointments');
+  });
 });

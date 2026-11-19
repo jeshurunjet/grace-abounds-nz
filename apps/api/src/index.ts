@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { startOutboxDispatcher } from './lib/outbox.js';
 import { startCalendarSync } from './lib/calendar-sync.js';
+import { startCareRetention } from './lib/care-retention.js';
 
 const port = Number(process.env.API_PORT ?? 4000);
 const app = buildApp();
@@ -11,6 +12,8 @@ try {
   startOutboxDispatcher(app.log);
   // Sends public activities to the church Google Calendar when configured.
   startCalendarSync(app.log);
+  // Deletes closed prayer requests 12 months after closing (owner decision).
+  startCareRetention(app.log);
 } catch (error) {
   app.log.error(error);
   process.exit(1);

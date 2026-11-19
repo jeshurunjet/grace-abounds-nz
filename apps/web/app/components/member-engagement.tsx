@@ -20,12 +20,8 @@ export function MemberEngagement() {
   const { content, update, ready, storageError } = useContent();
   const { data: session } = useSession();
   const { push } = useToast();
-  const [prayer, setPrayer] = useState('');
-  const [prayerSent, setPrayerSent] = useState(false);
   const [opportunity, setOpportunity] = useState('');
-  const [panel, setPanel] = useState<null | 'appointment' | 'prayer' | 'step'>(
-    null,
-  );
+  const [panel, setPanel] = useState<null | 'appointment' | 'step'>(null);
   const currentUser =
     content.users.find((user) => user.email === session?.user?.email) ??
     content.users.find((user) => user.role === 'member');
@@ -144,35 +140,6 @@ export function MemberEngagement() {
       'info',
     );
   }
-  async function submitPrayer() {
-    if (!prayer.trim() || !ready || storageError) return;
-    const saved = await update((current) => ({
-      ...current,
-      memberPrayerRequests: [
-        ...current.memberPrayerRequests,
-        {
-          id: crypto.randomUUID(),
-          userId,
-          request: prayer.trim(),
-          status: 'new',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    }));
-    if (!saved) {
-      push(
-        'This could not be saved in this browser. Your entry is still here — please try again.',
-        'error',
-      );
-      return;
-    }
-    setPrayer('');
-    setPrayerSent(true);
-    push(
-      'Prayer request added to this browser preview only. It has not been sent to the pastor.',
-      'info',
-    );
-  }
   const [appointmentDirty, setAppointmentDirty] = useState(false);
   useEffect(() => {
     if (opportunity && new URLSearchParams(window.location.search).get('join'))
@@ -181,7 +148,6 @@ export function MemberEngagement() {
   const close = () => {
     setPanel(null);
     setAppointmentDirty(false);
-    setPrayerSent(false);
   };
   return (
     <div className="member-engagement">
@@ -195,10 +161,10 @@ export function MemberEngagement() {
           <CalendarDays aria-hidden="true" size={18} />
           Calendar &amp; bookings
         </Link>
-        <button type="button" onClick={() => setPanel('prayer')}>
+        <Link href="/members/prayer">
           <Heart aria-hidden="true" size={18} />
           Prayer
-        </button>
+        </Link>
         <button type="button" onClick={() => setPanel('appointment')}>
           <CalendarCheck aria-hidden="true" size={18} />
           Appointments
@@ -253,38 +219,6 @@ export function MemberEngagement() {
             Save appointment preview
           </button>
         </form>
-      </SidePanel>
-
-      <SidePanel
-        open={panel === 'prayer'}
-        title="Prayer request"
-        eyebrow="Pastoral care"
-        dirty={!!prayer.trim()}
-        onClose={close}
-      >
-        {prayerSent ? (
-          <p className="member-prayer-success" role="status">
-            Your request is in this browser preview only. It has not been sent
-            to the pastor.
-          </p>
-        ) : (
-          <>
-            <textarea
-              aria-label="Private prayer request"
-              rows={5}
-              value={prayer}
-              onChange={(event) => setPrayer(event.target.value)}
-              placeholder="How can we pray with you?"
-            />
-            <button
-              className="button"
-              disabled={!ready || !!storageError || !prayer.trim()}
-              onClick={submitPrayer}
-            >
-              Save prayer preview
-            </button>
-          </>
-        )}
       </SidePanel>
 
       <SidePanel

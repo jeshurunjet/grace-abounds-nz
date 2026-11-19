@@ -41,11 +41,11 @@ describe('Home member tools', () => {
       'href',
       '/members/gallery',
     );
-    fireEvent.click(screen.getByRole('button', { name: /Prayer/ }));
-    expect(
-      screen.getByRole('dialog', { name: 'Prayer request' }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    // Prayer is its own page now, backed by the server (Phase 4A).
+    expect(screen.getByRole('link', { name: /Prayer/ })).toHaveAttribute(
+      'href',
+      '/members/prayer',
+    );
     fireEvent.click(screen.getByRole('button', { name: /Appointments/ }));
     expect(
       screen.getByRole('dialog', { name: 'Appointments' }),

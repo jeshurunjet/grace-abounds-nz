@@ -14,6 +14,8 @@ import { registerUploadRoutes } from './routes/uploads.js';
 import { registerActivityRoutes } from './routes/activities.js';
 import { registerParticipationRoutes } from './routes/participation.js';
 import { registerCalendarRoutes } from './routes/calendar.js';
+import { registerCareRoutes } from './routes/care.js';
+import { registerNotificationRoutes } from './routes/notifications.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -56,5 +58,7 @@ export function buildApp() {
   registerActivityRoutes(app);
   registerParticipationRoutes(app);
   registerCalendarRoutes(app);
+  registerCareRoutes(app);
+  registerNotificationRoutes(app);
   return app;
 }

@@ -15,7 +15,6 @@ import { useToast } from '../../components/toast';
 import { formatCalendarDate } from '../../lib/calendar';
 import type {
   AppointmentRequest,
-  MemberPrayerRequest,
   ParticipationApplication,
   ServiceAssignment,
   UserRecord,
@@ -63,9 +62,6 @@ export default function UsersAdmin() {
   const assignments = content.serviceAssignments.filter(
     (item) => item.userId === selectedId,
   );
-  const prayers = content.memberPrayerRequests.filter(
-    (item) => item.userId === selectedId,
-  );
 
   async function save(recipe: Parameters<typeof update>[0], success: string) {
     if (!pastor || !ready || storageError) {
@@ -107,17 +103,6 @@ export default function UsersAdmin() {
         ),
       }),
       `Application status set to ${status} in this browser preview.`,
-    );
-  }
-  function patchPrayer(id: string, status: MemberPrayerRequest['status']) {
-    void save(
-      (state) => ({
-        ...state,
-        memberPrayerRequests: state.memberPrayerRequests.map((item) =>
-          item.id === id ? { ...item, status } : item,
-        ),
-      }),
-      `Prayer status set to ${status} in this browser preview.`,
     );
   }
   async function addAssignment(event: FormEvent<HTMLFormElement>) {
@@ -268,10 +253,7 @@ export default function UsersAdmin() {
                   {selected.email} · {selected.role}
                 </p>
               </div>
-              <span>
-                {appointments.length + applications.length + prayers.length}{' '}
-                responses
-              </span>
+              <span>{appointments.length + applications.length} responses</span>
             </header>
 
             {pastor && (
@@ -381,47 +363,6 @@ export default function UsersAdmin() {
                   the activity from the calendar and choose People.
                 </p>
               </article>
-              {pastor && (
-                <article className="panel">
-                  <h3>
-                    <HandHeart aria-hidden="true" /> Prayer requests
-                  </h3>
-                  {prayers.length ? (
-                    prayers.map((item) => (
-                      <div
-                        className="activity-record prayer-record"
-                        key={item.id}
-                      >
-                        <span>
-                          <b>{item.request}</b>
-                          <small>
-                            {new Date(item.createdAt).toLocaleDateString(
-                              'en-NZ',
-                            )}
-                          </small>
-                        </span>
-                        <select
-                          disabled={!pastor}
-                          value={item.status}
-                          onChange={(event) =>
-                            patchPrayer(
-                              item.id,
-                              event.target
-                                .value as MemberPrayerRequest['status'],
-                            )
-                          }
-                        >
-                          <option>new</option>
-                          <option>praying</option>
-                          <option>completed</option>
-                        </select>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="empty-record">No prayer requests.</p>
-                  )}
-                </article>
-              )}
               <article className="panel">
                 <h3>
                   <CalendarDays aria-hidden="true" /> Service assignments

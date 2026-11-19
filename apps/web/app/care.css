@@ -1,0 +1,231 @@
+/* Confidential care screens (Phase 4A): member prayer page and the
+   Pastor's prayer task list. Theme tokens only. */
+
+.care-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.care-card,
+.care-item,
+.care-task {
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: var(--surface-raised);
+}
+.care-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem;
+}
+.care-card h2,
+.care-list h2,
+.care-pastor h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.care-privacy {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--ink-mid);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.care-field {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.care-field textarea {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+.care-compose-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.care-compose-actions small,
+.care-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.care-list {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.care-list ul,
+.care-tasks,
+.care-notes ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.care-item {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+.care-item.is-focus {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.care-item header,
+.care-task-head,
+.care-detail > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.care-item header small {
+  color: var(--ink-soft);
+}
+.care-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.care-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.care-badge.is-submitted {
+  background: var(--tile-website-bg);
+  color: var(--tile-website-ink);
+}
+.care-badge.is-praying {
+  background: var(--tile-activities-bg);
+  color: var(--tile-activities-ink);
+}
+.care-badge.is-prayed_for {
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+
+.care-history {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--line);
+  list-style: none;
+  font-size: 0.9rem;
+}
+.care-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+}
+.care-history time {
+  color: var(--ink-soft);
+}
+
+/* Pastor task list */
+.care-pastor {
+  display: grid;
+  gap: 0.8rem;
+}
+.care-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.care-count {
+  margin-left: 0.25rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.care-task {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.care-task:hover {
+  background: var(--surface);
+}
+.care-task:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.care-task-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ink-mid);
+}
+.care-task small {
+  color: var(--ink-soft);
+}
+.care-detail {
+  display: grid;
+  gap: 0.9rem;
+}
+.care-detail > header span {
+  display: grid;
+}
+.care-detail > header small {
+  color: var(--ink-soft);
+}
+.care-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.care-notes {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.care-notes h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.care-notes li {
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.care-notes li p {
+  margin: 0 0 0.25rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.care-notes li small {
+  color: var(--ink-soft);
+}
+
+@media (max-width: 860px) {
+  .care-layout {
+    grid-template-columns: 1fr;
+  }
+}

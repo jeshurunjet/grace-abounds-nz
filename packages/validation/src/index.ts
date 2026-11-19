@@ -5,3 +5,4 @@ export * from './collection-defaults.ts';
 export * from './files.ts';
 export * from './activities.ts';
 export * from './activity-defaults.ts';
+export * from './care.ts';

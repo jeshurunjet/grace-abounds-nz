@@ -120,6 +120,10 @@ export type ContentState = {
   appointmentRequests: AppointmentRequest[];
   participationApplications: ParticipationApplication[];
   serviceAssignments: ServiceAssignment[];
+  /**
+   * Prototype prayer requests some browsers saved before Phase 4A. Never
+   * read or imported: prayer requests are private server records now.
+   */
   memberPrayerRequests: MemberPrayerRequest[];
 };
 

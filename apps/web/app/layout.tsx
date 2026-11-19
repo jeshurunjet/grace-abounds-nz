@@ -11,6 +11,7 @@ import './workspace-theme.css';
 import './editor-kit.css';
 import './library.css';
 import './calendar.css';
+import './care.css';
 
 const lora = localFont({
   variable: '--font-display',

@@ -4,6 +4,11 @@ import {
 } from '@grace-abounds/validation';
 import { prisma, recordAudit } from '@grace-abounds/database';
 import { forgetNotifications } from './notifications.js';
+import {
+  heldUserIds,
+  lockRetentionGate,
+  retentionPause,
+} from './retention-holds.js';
 
 /*
  * Approved care retention (owner decision 19 November 2026). The audit
@@ -16,6 +21,9 @@ import { forgetNotifications } from './notifications.js';
  *   days after that, with its notes, history and notifications, and never
  *   before its time has passed (Phase 4B). Requested, suggested and
  *   confirmed appointments are never age-deleted.
+ * - Records of a person under a records hold are skipped (Phase 5C). Each
+ *   run takes the retention gate first and reads the holds after it, so a
+ *   hold placed meanwhile is either honoured or waits for the run to end.
  */
 
 export function prayerCutoff(now: Date) {
@@ -26,16 +34,24 @@ export function prayerCutoff(now: Date) {
 
 export async function expirePrayers(now = new Date()) {
   return prisma.$transaction(async (tx) => {
+    await lockRetentionGate(tx, 'cleanup');
+    // A records hold keeps a person's records (Phase 5C).
+    const held = await heldUserIds(tx);
     const due = await tx.prayerRequest.findMany({
-      where: { status: 'PRAYED_FOR', closedAt: { lte: prayerCutoff(now) } },
+      where: {
+        status: 'PRAYED_FOR',
+        closedAt: { lte: prayerCutoff(now) },
+        userId: { notIn: held },
+      },
       select: { id: true },
     });
+    await retentionPause('care.scanned');
     if (!due.length) return 0;
     const ids = due.map((row) => row.id);
     await forgetNotifications(tx, 'prayer', ids);
     // Notes and history go with the request (cascade).
     const removed = await tx.prayerRequest.deleteMany({
-      where: { id: { in: ids }, status: 'PRAYED_FOR' },
+      where: { id: { in: ids }, status: 'PRAYED_FOR', userId: { notIn: held } },
     });
     await recordAudit(tx, {
       actorId: null,
@@ -53,14 +69,19 @@ export async function expireAppointments(now = new Date()) {
     now.getTime() - APPOINTMENT_RETENTION_DAYS * 86_400_000,
   );
   return prisma.$transaction(async (tx) => {
+    await lockRetentionGate(tx, 'cleanup');
+    // A records hold keeps a person's records (Phase 5C).
+    const held = await heldUserIds(tx);
     const due = await tx.appointment.findMany({
       where: {
         status: { in: ['COMPLETED', 'CANCELLED', 'DECLINED'] },
         closedAt: { lte: cutoff },
         OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+        userId: { notIn: held },
       },
       select: { id: true },
     });
+    await retentionPause('care.scanned');
     if (!due.length) return 0;
     const ids = due.map((row) => row.id);
     await forgetNotifications(tx, 'appointment', ids);
@@ -68,6 +89,7 @@ export async function expireAppointments(now = new Date()) {
       where: {
         id: { in: ids },
         status: { in: ['COMPLETED', 'CANCELLED', 'DECLINED'] },
+        userId: { notIn: held },
       },
     });
     await recordAudit(tx, {

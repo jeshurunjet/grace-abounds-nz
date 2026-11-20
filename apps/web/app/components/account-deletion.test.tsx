@@ -114,6 +114,13 @@ describe('delete your account', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     expect(within(confirmBox()).getByText(/can’t be undone/)).toBeTruthy();
     expect(within(confirmBox()).getByText(/30 days/)).toBeTruthy();
+    // Removal is due after 30 days, not promised on an exact date; a
+    // records hold is described, and access ends at once.
+    const effects = within(confirmBox()).getByText(/30 days/);
+    expect(effects).toHaveTextContent('become due for removal');
+    expect(effects).toHaveTextContent('only while that need is reviewed');
+    expect(effects).toHaveTextContent('signed out everywhere straight away');
+    expect(effects).not.toHaveTextContent('removed for good');
     const confirm = within(confirmBox()).getByRole('button', {
       name: 'Delete my account',
     });

@@ -61,9 +61,9 @@ export function StaffDeletionDialog({
             Only do this when the member has asked. It can’t be undone: they are
             signed out everywhere, their upcoming bookings are cancelled and
             open appointments closed. Their remaining records are kept as
-            “Deleted user” for {DELETION_RETENTION_DAYS} days (longer if an
-            appointment was booked for a later date), then removed. They are
-            emailed a notice.
+            “Deleted user” for {DELETION_RETENTION_DAYS} days, then become due
+            for removal at the next records clean-up (a records hold keeps what
+            it covers while it is in place). They are emailed a notice.
           </p>
           <label className="people-check">
             <input

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { addDays, isRealDate, nzLocalToUtc, nzNow } from './activities.ts';
 
 /*
  * Account settings, delivery controls and personal data export (Phase 5).
@@ -73,8 +74,30 @@ export const EXPORT_CONTENTS_NOTE =
 
 /** What remains of a deleted account ("Deleted user") is purged after this. */
 export const DELETION_RETENTION_DAYS = 30;
-/** Activity (audit) log entries are kept this long (rolling). */
-export const AUDIT_RETENTION_DAYS = 365;
+/*
+ * Activity (audit and security) log retention, by calendar year in New
+ * Zealand time (owner policy, 21 November 2026; proposed exact formula):
+ * an entry is kept for the whole calendar year it was recorded in and the
+ * whole calendar year after, and becomes eligible for deletion at 00:00
+ * NZ time on 1 January of the year after that. So an entry from the
+ * last minute of 31 December (23:59) is kept one year and one minute; one
+ * made at 00:00 on 1 January exactly two calendar years (the maximum). The
+ * formula is proposed and still awaits the owner's explicit approval.
+ * Eligible entries are only removed when staff choose "Delete eligible
+ * records now" (never automatically), and never while a records hold
+ * covers the person they are about.
+ */
+export const AUDIT_RETENTION_RULE =
+  'Activity records are kept for the calendar year they were made in and all of the next calendar year (New Zealand time). The shortest keep is one year and one minute (a record made at 23:59 on 31 December); the longest is two years (one made at 00:00 on 1 January).';
+
+/** The New Zealand calendar year of an instant. */
+export const nzYear = (at: Date) => Number(nzNow(at).date.slice(0, 4));
+/** When an entry made at `createdAt` becomes eligible for deletion. */
+export const auditEligibleFrom = (createdAt: Date) =>
+  nzLocalToUtc(`${nzYear(createdAt) + 2}-01-01`, '00:00');
+/** Entries made before this instant are eligible for deletion at `now`. */
+export const auditCutoff = (now: Date) =>
+  nzLocalToUtc(`${nzYear(now) - 1}-01-01`, '00:00');
 export const DELETED_USER_LABEL = 'Deleted user';
 
 /** The member deleting their own account (with a recent sign-in). */
@@ -102,16 +125,13 @@ export const staffDeletionSchema = z
 export type DeletionInfo = {
   via: 'self' | 'staff';
   requestedAt: string;
-  /**
-   * When the remaining "Deleted user" records are removed: 30 days after
-   * the request, or later if an appointment can't be removed before then.
-   */
+  /** When the remaining "Deleted user" records become due: 30 days on. */
   purgeAfter: string;
   purgedAt: string;
 };
 
 export const DELETION_EFFECTS_NOTE =
-  'Deleting your account can’t be undone. You’ll be signed out everywhere straight away and can’t sign in again. Your upcoming bookings are cancelled, open appointments are closed, and any data export is removed. Your prayer requests, appointment history and booking history are kept as “Deleted user” for 30 days (longer if an appointment was booked for a later date), then removed for good. Church content such as sermons and website pages stays. Copies may remain in secure backups until they are replaced.';
+  'Deleting your account can’t be undone. You’ll be signed out everywhere straight away and can’t sign in again. Your upcoming bookings are cancelled, open appointments are closed, and any data export is removed. Your prayer requests, appointment history and booking history are kept as “Deleted user” for 30 days. After that they become due for removal and are deleted when the church next clears due records. If the church must keep something for a legal obligation, investigation or claim, it is kept, with restricted access, only while that need is reviewed. Church content such as sermons and website pages stays. Copies may remain in secure backups until they are replaced.';
 
 /**
  * When a record kept for a deleted account is actually removed: its own
@@ -150,3 +170,113 @@ export const profilePhotoInputSchema = z
       ),
   })
   .strict();
+
+// ---------- Records holds and due-only clean-up (5C) ----------
+
+export const retentionHoldReasons = [
+  'legal_obligation',
+  'investigation',
+  'claim',
+] as const;
+export type RetentionHoldReason = (typeof retentionHoldReasons)[number];
+export const retentionHoldReasonLabels: Record<RetentionHoldReason, string> = {
+  legal_obligation: 'Legal obligation',
+  investigation: 'Investigation',
+  claim: 'Claim or dispute',
+};
+/** A hold's review date is at most this far ahead (no open-ended holds). */
+export const HOLD_MAX_REVIEW_DAYS = 365;
+
+const reviewDate = z
+  .string()
+  .trim()
+  .refine(isRealDate, { message: 'Choose a review date.' });
+
+export const retentionHoldInputSchema = z
+  .object({
+    userId: z.string().trim().min(1).max(64),
+    reason: z.enum(retentionHoldReasons),
+    reference: z
+      .string()
+      .trim()
+      .min(3, 'Give a short reference, such as a case number.')
+      .max(120),
+    basis: z
+      .string()
+      .trim()
+      .min(3, 'Say briefly why the records must be kept.')
+      .max(300),
+    reviewBy: reviewDate,
+  })
+  .strict();
+export const retentionHoldRenewSchema = z
+  .object({ reviewBy: reviewDate })
+  .strict();
+
+/**
+ * "Delete eligible records now": the page makes one key per press and
+ * sends the same key on every retry, so a retry resumes (or reports) that
+ * same run instead of starting another.
+ */
+export const retentionRunInputSchema = z
+  .object({
+    requestKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{8,100}$/, 'Use a valid request key.'),
+  })
+  .strict();
+
+/** True if a review date (YYYY-MM-DD) is after today and within a year. */
+export function reviewDateAllowed(reviewBy: string, now = new Date()) {
+  const today = nzNow(now).date;
+  return reviewBy > today && reviewBy <= addDays(today, HOLD_MAX_REVIEW_DAYS);
+}
+
+export type RetentionHoldItem = {
+  id: string;
+  userId: string;
+  /** The person's name, or "Deleted user". */
+  subject: string;
+  reason: RetentionHoldReason;
+  reference: string;
+  basis: string;
+  reviewBy: string;
+  /** The review date has passed: the hold still protects until released. */
+  overdue: boolean;
+  placedAt: string;
+  version: number;
+};
+
+export type RetentionPreview = {
+  /** Whether "Delete eligible records now" can run on this server. */
+  enabled: boolean;
+  auditRule: string;
+  /** Activity records made before this are eligible. */
+  auditCutoff: string;
+  due: {
+    deletedAccounts: number;
+    auditEvents: number;
+    deletionRecords: number;
+  };
+  /** Due but kept back by a records hold. */
+  held: { deletedAccounts: number; auditEvents: number };
+  holds: { active: number; overdue: number };
+  lastRun: RetentionRunSummary | null;
+};
+
+export type RetentionRunSummary = {
+  id: string;
+  status: 'running' | 'done' | 'failed';
+  startedAt: string;
+  finishedAt: string;
+  /** How many times this run was started or resumed. */
+  attempts: number;
+  removed: {
+    deletedAccounts: number;
+    auditEvents: number;
+    deletionRecords: number;
+  };
+  held: { deletedAccounts: number; auditEvents: number };
+  /** Some due records were left for the next run (batch limit). */
+  more: boolean;
+};

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
+  retentionHoldReasonLabels,
   accountRoleLabels,
   accountStatusLabels,
   type PeoplePage,
@@ -16,6 +17,7 @@ import { useToast } from './toast';
 import { careDate } from './prayer-ui';
 import { ReauthDialog } from './reauth-dialog';
 import { StaffDeletionDialog } from './staff-deletion-dialog';
+import { HoldDialog, type HoldInput } from './hold-dialog';
 import { hrefWithout, useUrlFilter } from '../lib/use-url-filter';
 import { api, ApiError, errorMessage } from '../lib/api-client';
 
@@ -76,8 +78,17 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
   const [busy, setBusy] = useState(false);
   /** A change waiting for "Confirm it's you" (recent sign-in required). */
   const [reauth, setReauth] = useState<
-    'suspended' | 'active' | 'delete' | null
+    'suspended' | 'active' | 'delete' | 'hold' | null
   >(null);
+  /**
+   * Placing a records hold: dialog open, its last error, and its draft for
+   * the person it was written for. The draft is kept (and shown again)
+   * through confirm-it's-you, a cancelled confirmation, a failed retry and
+   * Cancel/reopen, until the hold is placed or another person is opened.
+   */
+  const [holding, setHolding] = useState(false);
+  const [holdError, setHoldError] = useState('');
+  const holdDraft = useRef<{ personId: string; input: HoldInput } | null>(null);
   /** Deleting at the member's request: dialog open, and its last error. */
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -180,6 +191,9 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
     setReauth(null);
     setDeleting(false);
     setDeleteError('');
+    setHolding(false);
+    setHoldError('');
+    holdDraft.current = null;
     if (openId) void loadDetail(openId);
     else latestDetail.current++;
   }, [openId, loadDetail]);
@@ -190,6 +204,58 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
   }
 
   const current = detail && detail.id === openId ? detail : null;
+
+  /**
+   * When a deleted account's records go. The 30-day date is when they
+   * become due, not a deletion clock: they are deleted by the next due-only
+   * clean-up, and a records hold keeps them. (This page only shows accounts
+   * that still exist, so never a completed removal.)
+   */
+  function removalNote(purgeAfter: string, held: boolean) {
+    const date = careDate(purgeAfter, false);
+    const due = Date.parse(purgeAfter) <= Date.now();
+    if (held)
+      return `Its remaining records ${due ? 'have been' : 'become'} due for removal ${due ? 'since' : 'on'} ${date}, but a records hold keeps them until it is reviewed and released.`;
+    if (due)
+      return `Its remaining records have been due for removal since ${date} and are deleted at the next records clean-up.`;
+    return `Its remaining records become due for removal on ${date}.`;
+  }
+
+  /** Places a records hold on the person on screen. */
+  async function placeHold(input: HoldInput) {
+    if (!current || busy) return;
+    const { id } = current;
+    holdDraft.current = { personId: id, input };
+    // Always visible while it is tried (also a retry after confirming).
+    setHolding(true);
+    setBusy(true);
+    setHoldError('');
+    try {
+      await api('/staff/holds', {
+        method: 'POST',
+        body: JSON.stringify({ userId: id, ...input }),
+      });
+      if (!alive.current || id !== openRef.current) return;
+      holdDraft.current = null;
+      setHolding(false);
+      push('Records hold placed.', 'success');
+      await loadDetail(id);
+    } catch (failure) {
+      if (!alive.current || id !== openRef.current) return;
+      if (failure instanceof ApiError && failure.code === 'REAUTH_REQUIRED') {
+        // The draft stays; the dialog comes back after confirming.
+        setHolding(false);
+        setReauth('hold');
+        return;
+      }
+      setHoldError(errorMessage(failure));
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+  /** The kept draft, only if it was written for the person on screen. */
+  const draftFor = (id: string) =>
+    holdDraft.current?.personId === id ? holdDraft.current.input : null;
 
   /** Deletes the member on screen, at their request (with a note). */
   async function deleteMember(note: string) {
@@ -215,7 +281,7 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
       if (id !== openRef.current) return;
       setDeleting(false);
       push(
-        `Account deleted. Its remaining records are removed on ${careDate(done.purgeAfter, false)}.`,
+        `Account deleted. Its remaining records become due for removal on ${careDate(done.purgeAfter, false)}.`,
         'success',
       );
       await loadDetail(id);
@@ -439,10 +505,41 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
                 {current.deletion.via === 'staff'
                   ? 'by staff, at the member’s request'
                   : 'by the member'}
-                . Its remaining records are removed on{' '}
-                {careDate(current.deletion.purgeAfter, false)}.
+                .{' '}
+                {removalNote(
+                  current.deletion.purgeAfter,
+                  current.holds.length > 0,
+                )}
               </p>
             )}
+            <section className="people-counts" aria-label="Records holds">
+              {current.holds.length ? (
+                current.holds.map((hold) => (
+                  <p key={hold.id}>
+                    <b>Records hold:</b>{' '}
+                    {retentionHoldReasonLabels[hold.reason]} · {hold.reference}{' '}
+                    · review by {careDate(`${hold.reviewBy}T00:00:00Z`, false)}
+                    {hold.overdue && ' (review overdue)'}.{' '}
+                    <Link href="/admin/retention">Manage holds</Link>
+                  </p>
+                ))
+              ) : (
+                <p>No records hold.</p>
+              )}
+              <p>
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  disabled={busy}
+                  onClick={() => {
+                    setHoldError('');
+                    setHolding(true);
+                  }}
+                >
+                  Place records hold
+                </button>
+              </p>
+            </section>
             {current.manageable ? (
               <div className="care-actions">
                 {current.status === 'active' ? (
@@ -510,6 +607,20 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
             : `${current ? displayName(current) : 'This person'} will be able to sign in again.`}
         </p>
       </KitConfirm>
+      {holding && current && (
+        <HoldDialog
+          key={current.id}
+          name={displayName(current)}
+          busy={busy}
+          error={holdError}
+          initial={draftFor(current.id)}
+          onChange={(input) => {
+            holdDraft.current = { personId: current.id, input };
+          }}
+          onCancel={() => setHolding(false)}
+          onConfirm={(input) => void placeHold(input)}
+        />
+      )}
       {deleting && current && (
         <StaffDeletionDialog
           name={displayName(current)}
@@ -524,14 +635,29 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
           purpose={
             reauth === 'delete'
               ? 'For your security, confirm it’s you before deleting an account.'
-              : 'For your security, confirm it’s you before suspending or reactivating an account.'
+              : reauth === 'hold'
+                ? 'For your security, confirm it’s you before placing a records hold.'
+                : 'For your security, confirm it’s you before suspending or reactivating an account.'
           }
-          onCancel={() => setReauth(null)}
+          onCancel={() => {
+            const next = reauth;
+            setReauth(null);
+            // Not placed: bring the hold back with its draft, and say so.
+            if (next === 'hold' && draftFor(current.id)) {
+              setHoldError(
+                'The hold isn’t placed yet. Confirm it’s you to place it.',
+              );
+              setHolding(true);
+            }
+          }}
           onConfirmed={() => {
             const next = reauth;
             setReauth(null);
             if (next === 'delete') void deleteMember(deleteNote.current);
-            else void changeStatus(next);
+            else if (next === 'hold') {
+              const draft = draftFor(current.id);
+              if (draft) void placeHold(draft);
+            } else void changeStatus(next);
           }}
         />
       )}

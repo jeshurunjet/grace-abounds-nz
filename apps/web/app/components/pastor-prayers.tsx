@@ -266,8 +266,9 @@ export function PastorPrayers() {
             <PrayerHistory history={current.history} />
             {current.deleteAfter && (
               <small className="care-note">
-                Deleted with its notes on {careDate(current.deleteAfter, false)}
-                .
+                Normally due for deletion with its notes from{' '}
+                {careDate(current.deleteAfter, false)}. A records hold keeps
+                what it covers until reviewed and released. .
               </small>
             )}
             {nextPrayerStatuses[current.status].length > 0 && (

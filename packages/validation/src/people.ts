@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { RetentionHoldItem } from './account.ts';
 
 /*
  * People (Phase 4C): the staff directory of canonical accounts, ordinary
@@ -85,6 +86,8 @@ export type PersonDetail = PersonSummary & {
   appointments: AppointmentCounts;
   /** Pastor only: prayer status counts. Absent for Admin. */
   prayers?: PrayerCounts;
+  /** Active records holds on this person (both staff roles). */
+  holds: RetentionHoldItem[];
   /** For a deleted account: when, how, and when the rest is removed. */
   deletion?: {
     via: 'self' | 'staff';

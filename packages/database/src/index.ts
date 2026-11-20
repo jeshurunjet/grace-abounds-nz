@@ -21,12 +21,58 @@ export type AuditInput = {
   entityId: string;
   requestId?: string | null;
   metadata?: Record<string, unknown>;
+  /** The person the entry is about, when the caller already knows it. */
+  subjectId?: string | null;
 };
 
-type AuditClient = Pick<PrismaClient, 'auditEvent'>;
+type AuditClient = Pick<
+  PrismaClient,
+  | 'auditEvent'
+  | 'prayerRequest'
+  | 'appointment'
+  | 'participation'
+  | 'dataExport'
+  | 'userSession'
+>;
+
+/**
+ * The person an entry is canonically about (Phase 5C records holds): the
+ * account itself, or the owner of the care record, booking, export or
+ * session it concerns. Looked up when the entry is recorded, so it stays
+ * known after that record (or the account) is gone. Null for church
+ * content and other entries that are about nobody in particular.
+ */
+export async function auditSubject(
+  client: AuditClient,
+  entityType: string,
+  entityId: string,
+): Promise<string | null> {
+  const where = { where: { id: entityId }, select: { userId: true } };
+  switch (entityType) {
+    case 'User':
+    case 'user':
+      return entityId;
+    case 'prayer':
+      return (await client.prayerRequest.findUnique(where))?.userId ?? null;
+    case 'appointment':
+      return (await client.appointment.findUnique(where))?.userId ?? null;
+    case 'participation':
+      return (await client.participation.findUnique(where))?.userId ?? null;
+    case 'DataExport':
+      return (await client.dataExport.findUnique(where))?.userId ?? null;
+    case 'UserSession':
+      return (await client.userSession.findUnique(where))?.userId ?? null;
+    default:
+      return null;
+  }
+}
 
 /** Records an audit event, inside the caller's transaction when given one. */
-export function recordAudit(client: AuditClient, input: AuditInput) {
+export async function recordAudit(client: AuditClient, input: AuditInput) {
+  const subjectId =
+    input.subjectId !== undefined
+      ? input.subjectId
+      : await auditSubject(client, input.entityType, input.entityId);
   return client.auditEvent.create({
     data: {
       actorId: input.actorId,
@@ -35,6 +81,7 @@ export function recordAudit(client: AuditClient, input: AuditInput) {
       entityId: input.entityId,
       requestId: input.requestId ?? null,
       metadata: (input.metadata ?? undefined) as never,
+      subjectId,
     },
   });
 }

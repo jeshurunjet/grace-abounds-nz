@@ -72,6 +72,9 @@ const server = vi.hoisted(() => ({
   fail: '' as '' | 'conflict' | 'error',
   recent: true,
   deletionOff: false,
+  holds: [] as { url: string; body: Record<string, unknown> }[],
+  /** The next hold request (after confirming it's you) is refused. */
+  holdRefused: false,
   heldDeletion: null as Promise<Response | null> | null,
   deletions: [] as { url: string; body: unknown }[],
   password: 'right-password',
@@ -84,6 +87,7 @@ const detail = (row: Record<string, unknown>, role = session.role) => ({
   phone: '',
   emailVerified: true,
   appointments: counts,
+  holds: (row.holds as unknown[]) ?? [],
   ...(role === 'pastor' && {
     prayers: { submitted: 3, praying: 1, prayedFor: 4 },
   }),
@@ -115,6 +119,8 @@ beforeEach(() => {
   server.fail = '';
   server.recent = true;
   server.deletionOff = false;
+  server.holds = [];
+  server.holdRefused = false;
   server.heldDeletion = null;
   server.deletions = [];
   server.heldReauth = null;
@@ -144,6 +150,54 @@ beforeEach(() => {
         return json({
           data: { email: 'staff@example.org', hasPassword: true },
         });
+      if (init?.method === 'POST' && url === '/api/v1/staff/holds') {
+        const body = JSON.parse(String(init.body));
+        server.holds.push({ url, body });
+        if (!server.recent)
+          return json(
+            {
+              error: {
+                code: 'REAUTH_REQUIRED',
+                message: 'For your security, confirm it’s you first.',
+              },
+            },
+            403,
+          );
+        if (server.holdRefused) {
+          server.holdRefused = false;
+          return json(
+            {
+              error: {
+                code: 'VALIDATION_FAILED',
+                message: 'Choose a review date within a year.',
+              },
+            },
+            422,
+          );
+        }
+        server.rows = server.rows.map((row) =>
+          row.id === body.userId
+            ? {
+                ...row,
+                holds: [
+                  {
+                    id: 'h1',
+                    userId: body.userId,
+                    subject: row.name,
+                    reason: body.reason,
+                    reference: body.reference,
+                    basis: body.basis,
+                    reviewBy: body.reviewBy,
+                    overdue: false,
+                    placedAt: '2026-11-21T00:00:00.000Z',
+                    version: 1,
+                  },
+                ],
+              }
+            : row,
+        );
+        return json({ data: {} }, 201);
+      }
       if (init?.method === 'POST' && url.endsWith('/deletion')) {
         const body = JSON.parse(String(init.body));
         server.deletions.push({ url, body });
@@ -728,6 +782,15 @@ describe('People directory', () => {
         expect.stringContaining('Account deleted.'),
         'success',
       );
+      // Due for removal from the 30-day date, never "removed on" it.
+      const told = String(toast.push.mock.calls.at(-1)![0]);
+      expect(told).toContain('become due for removal on');
+      expect(told).not.toContain('removed on');
+      const note = within(panel()).getByText(
+        /by staff, at the member’s request/,
+      );
+      expect(note).toHaveTextContent('become due for removal on');
+      expect(note).not.toHaveTextContent(/are removed on|removed for good/);
     });
 
     it('when deletion isn’t switched on, it says so and changes nothing', async () => {
@@ -817,6 +880,261 @@ describe('People directory', () => {
             : row,
         );
       }
+    });
+  });
+
+  describe('a deleted account’s removal is described truthfully', () => {
+    const deleted = (purgeAfter: string, holds: unknown[] = []) =>
+      person('m9', 'Deleted user', {
+        email: '',
+        status: 'deletion_pending',
+        manageable: false,
+        deletion: {
+          via: 'self',
+          requestedAt: '2026-09-01T00:00:00.000Z',
+          purgeAfter,
+        },
+        holds,
+      } as Partial<Row>);
+    const noteFor = () => within(panel()).getByText(/by the member/);
+
+    it('before its 30 days: the date it becomes due, not a removal date', async () => {
+      server.rows = [deleted('2099-01-01T00:00:00.000Z')];
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Deleted user');
+      expect(noteFor()).toHaveTextContent('become due for removal on');
+      expect(noteFor()).not.toHaveTextContent(/removed on|removed for good/);
+    });
+
+    it('due but not yet removed: says so, and that the next clean-up deletes them', async () => {
+      server.rows = [deleted('2026-10-01T00:00:00.000Z')];
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Deleted user');
+      expect(noteFor()).toHaveTextContent('have been due for removal since');
+      expect(noteFor()).toHaveTextContent('next records clean-up');
+      expect(noteFor()).not.toHaveTextContent(/were removed|removed on/);
+    });
+
+    it('under an active records hold: kept until the hold is reviewed and released', async () => {
+      server.rows = [
+        deleted('2026-10-01T00:00:00.000Z', [
+          {
+            id: 'h1',
+            userId: 'm9',
+            subject: 'Deleted user',
+            reason: 'claim',
+            reference: 'Claim 2026-14',
+            basis: 'Needed while a claim is resolved',
+            reviewBy: '2027-02-01',
+            overdue: false,
+            placedAt: '2026-11-21T00:00:00.000Z',
+            version: 1,
+          },
+        ]),
+      ];
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Deleted user');
+      expect(noteFor()).toHaveTextContent(
+        'a records hold keeps them until it is reviewed and released',
+      );
+      expect(noteFor()).not.toHaveTextContent('next records clean-up');
+    });
+  });
+
+  describe('records holds', () => {
+    const holdBox = () =>
+      screen.getByRole('dialog', { name: /Place a records hold/ });
+    async function fillHold() {
+      await click(
+        within(panel()).getByRole('button', { name: 'Place records hold' }),
+      );
+      const place = within(holdBox()).getByRole('button', {
+        name: 'Place hold',
+      });
+      expect(place).toBeDisabled();
+      fireEvent.change(within(holdBox()).getByLabelText('Reason'), {
+        target: { value: 'claim' },
+      });
+      fireEvent.change(within(holdBox()).getByLabelText('Reference'), {
+        target: { value: 'Claim 2026-14' },
+      });
+      fireEvent.change(
+        within(holdBox()).getByLabelText('Why the records must be kept'),
+        { target: { value: 'Needed while a claim is resolved' } },
+      );
+      await click(place);
+    }
+
+    it('places a documented hold and shows it on the person', async () => {
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      expect(within(panel()).getByText('No records hold.')).toBeTruthy();
+      await fillHold();
+      expect(server.holds[0]!.body).toMatchObject({
+        userId: 'm1',
+        reason: 'claim',
+        reference: 'Claim 2026-14',
+        basis: 'Needed while a claim is resolved',
+      });
+      expect(server.holds[0]!.body.reviewBy).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(within(panel()).getByText(/Claim 2026-14/)).toBeTruthy();
+      expect(toast.push).toHaveBeenCalledWith(
+        'Records hold placed.',
+        'success',
+      );
+    });
+
+    it('confirms it’s you when needed and retries with the same draft', async () => {
+      server.recent = false;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillHold();
+      const reauth = screen.getByRole('dialog', { name: 'Confirm it’s you' });
+      fireEvent.change(within(reauth).getByLabelText('Current password'), {
+        target: { value: 'right-password' },
+      });
+      await click(within(reauth).getByRole('button', { name: 'Confirm' }));
+      expect(server.holds).toHaveLength(2);
+      expect(server.holds[1]!.body).toMatchObject({
+        reference: 'Claim 2026-14',
+      });
+    });
+
+    const reauthBox = () =>
+      screen.getByRole('dialog', { name: 'Confirm it’s you' });
+    const shownDraft = () => ({
+      reason: (within(holdBox()).getByLabelText('Reason') as HTMLSelectElement)
+        .value,
+      reference: (
+        within(holdBox()).getByLabelText('Reference') as HTMLInputElement
+      ).value,
+      basis: (
+        within(holdBox()).getByLabelText(
+          'Why the records must be kept',
+        ) as HTMLInputElement
+      ).value,
+    });
+    const filled = {
+      reason: 'claim',
+      reference: 'Claim 2026-14',
+      basis: 'Needed while a claim is resolved',
+    };
+
+    it('cancelling confirm-it’s-you brings the hold back with its draft, unsent', async () => {
+      server.recent = false;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillHold();
+      expect(
+        screen.queryByRole('dialog', { name: /Place a records hold/ }),
+      ).toBeNull();
+      await click(within(reauthBox()).getByRole('button', { name: 'Cancel' }));
+      expect(shownDraft()).toEqual(filled);
+      expect(within(holdBox()).getByRole('alert')).toHaveTextContent(
+        'The hold isn’t placed yet',
+      );
+      expect(server.holds).toHaveLength(1);
+      // Placing it again asks again, still with the same draft.
+      await click(
+        within(holdBox()).getByRole('button', { name: 'Place hold' }),
+      );
+      fireEvent.change(within(reauthBox()).getByLabelText('Current password'), {
+        target: { value: 'right-password' },
+      });
+      await click(within(reauthBox()).getByRole('button', { name: 'Confirm' }));
+      expect(server.holds).toHaveLength(3);
+      expect(server.holds[2]!.body).toMatchObject({ userId: 'm1', ...filled });
+      expect(
+        screen.queryByRole('dialog', { name: /Place a records hold/ }),
+      ).toBeNull();
+    });
+
+    it('a retry that fails after confirming shows its error with the draft still there', async () => {
+      server.recent = false;
+      server.holdRefused = true;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillHold();
+      fireEvent.change(within(reauthBox()).getByLabelText('Current password'), {
+        target: { value: 'right-password' },
+      });
+      await click(within(reauthBox()).getByRole('button', { name: 'Confirm' }));
+      expect(server.holds).toHaveLength(2);
+      expect(within(holdBox()).getByRole('alert')).toHaveTextContent(
+        'Choose a review date within a year.',
+      );
+      expect(shownDraft()).toEqual(filled);
+      expect(
+        within(holdBox()).getByRole('button', { name: 'Place hold' }),
+      ).not.toBeDisabled();
+      // Cancel and reopen: the draft is still there for this person.
+      await click(within(holdBox()).getByRole('button', { name: 'Cancel' }));
+      await click(
+        within(panel()).getByRole('button', { name: 'Place records hold' }),
+      );
+      expect(shownDraft()).toEqual(filled);
+    });
+
+    it('a draft belongs to its person: opening someone else starts blank and nothing is sent for them', async () => {
+      server.recent = false;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillHold();
+      expect(reauthBox()).toBeTruthy();
+      await open('Ben Member');
+      expect(
+        screen.queryByRole('dialog', { name: 'Confirm it’s you' }),
+      ).toBeNull();
+      await click(
+        within(panel()).getByRole('button', { name: 'Place records hold' }),
+      );
+      expect(shownDraft()).toMatchObject({ reference: '', basis: '' });
+      await click(within(holdBox()).getByRole('button', { name: 'Cancel' }));
+      // Back to Anna: her unsent draft was dropped with the switch.
+      await open('Anna Member');
+      await click(
+        within(panel()).getByRole('button', { name: 'Place records hold' }),
+      );
+      expect(shownDraft()).toMatchObject({ reference: '', basis: '' });
+      expect(server.holds).toHaveLength(1);
+      expect(server.holds.every((hold) => hold.body.userId === 'm1')).toBe(
+        true,
+      );
+    });
+
+    it('a retry answered after switching person shows nothing on the new person', async () => {
+      server.recent = false;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillHold();
+      server.holdRefused = true;
+      const answer = later();
+      server.heldReauth = answer.promise;
+      fireEvent.change(within(reauthBox()).getByLabelText('Current password'), {
+        target: { value: 'right-password' },
+      });
+      await click(within(reauthBox()).getByRole('button', { name: 'Confirm' }));
+      server.heldReauth = null;
+      await open('Ben Member');
+      answer.release(json({ data: { status: 'ok' } }));
+      await settle();
+      expect(
+        screen.queryByRole('dialog', { name: /Place a records hold/ }),
+      ).toBeNull();
+      expect(server.holds).toHaveLength(1);
+      expect(toast.push).not.toHaveBeenCalledWith(
+        'Records hold placed.',
+        'success',
+      );
     });
   });
 });

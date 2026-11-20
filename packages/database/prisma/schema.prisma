@@ -186,12 +186,18 @@ model AuditEvent {
   /// Never store prayer/message bodies or credentials here.
   metadata   Json?
   createdAt  DateTime @default(now())
+  /// The person the entry is canonically about (Phase 5C): the account
+  /// itself, or the owner of the prayer, appointment, booking, export or
+  /// session it concerns, captured when it is recorded. No foreign key, so
+  /// a records hold still finds it after the record or account is gone.
+  subjectId  String?
 
   actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
   @@index([actorId])
   @@index([createdAt])
+  @@index([subjectId])
 }
 
 // ---------- Website content (Phase 2) ----------
@@ -930,4 +936,81 @@ model ProfilePhoto {
 
   @@index([userId])
   @@index([removedAt])
+}
+
+enum RetentionHoldReason {
+  LEGAL_OBLIGATION
+  INVESTIGATION
+  CLAIM
+}
+
+/// A narrow, documented records hold (Phase 5C, owner policy 21 November
+/// 2026): keeps one person's records out of every retention clean-up (the
+/// deleted-account purge, care retention and the audit trim) while a legal
+/// obligation, investigation or claim needs them. Reference and basis are
+/// short and must never hold care details. Every hold has a review date at
+/// most a year ahead; it keeps protecting until released, and an overdue
+/// review is shown to staff. No foreign key: it must outlive the account.
+model RetentionHold {
+  id           String              @id @default(cuid())
+  userId       String
+  reason       RetentionHoldReason
+  reference    String
+  basis        String
+  reviewBy     DateTime
+  placedById   String
+  placedAt     DateTime            @default(now())
+  /// The last renewal (a new review date).
+  reviewedAt   DateTime?
+  releasedById String?
+  releasedAt   DateTime?
+  version      Int                 @default(1)
+
+  @@index([userId, releasedAt])
+  @@index([releasedAt, reviewBy])
+}
+
+enum RetentionRunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// Where a run has got to; a resumed run carries on from here.
+enum RetentionRunStage {
+  ACCOUNTS
+  AUDIT
+  DELETIONS
+  FINISHED
+}
+
+/// One "Delete eligible records now" run (Phase 5C), a durable job: one
+/// per staff press (requestKey, reused on retries), owned by one attempt at
+/// a time (claimToken, checked under the row lock in every destructive
+/// transaction, so an attempt that was taken over stops), with its stage
+/// and exact counts saved in the same transaction as each deletion. One
+/// runs at a time; a run whose lease ran out can be resumed or is fenced
+/// off. Counts only, never content or people.
+model RetentionRun {
+  id                     String             @id @default(cuid())
+  requestedById          String
+  requestKey             String?
+  status                 RetentionRunStatus @default(RUNNING)
+  stage                  RetentionRunStage  @default(ACCOUNTS)
+  claimToken             String?
+  attempts               Int                @default(1)
+  leaseUntil             DateTime
+  startedAt              DateTime           @default(now())
+  finishedAt             DateTime?
+  removedAccounts        Int                @default(0)
+  removedAuditEvents     Int                @default(0)
+  removedDeletionRecords Int                @default(0)
+  /// Why it stopped (an error code such as "abandoned"), never content.
+  failure                String?
+  /// Held counts and whether more remained, at the end.
+  result                 Json?
+
+  @@unique([requestedById, requestKey])
+  @@index([status, leaseUntil])
+  @@index([startedAt])
 }

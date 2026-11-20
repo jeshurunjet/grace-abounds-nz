@@ -29,6 +29,7 @@ describe('workspace navigation by role', () => {
       'Activities',
       'Sermons',
       'People',
+      'Records & retention',
       'Appointments',
     ]);
     expect(titles('pastor')).toEqual([
@@ -36,6 +37,7 @@ describe('workspace navigation by role', () => {
       'Activities',
       'Sermons',
       'People',
+      'Records & retention',
       'Pastoral care',
     ]);
   });

@@ -1,4 +1,5 @@
 import {
+  Archive,
   CalendarCheck,
   CalendarCog,
   Globe,
@@ -49,6 +50,14 @@ export function staffTools(role: string): StaffTool[] {
       description:
         'Find member accounts and suspend or reactivate access when needed.',
       icon: Users,
+      tone: 'members',
+    },
+    {
+      href: '/admin/retention',
+      title: 'Records & retention',
+      description:
+        'See what is due for deletion, keep records under a legal hold, and delete only what is due.',
+      icon: Archive,
       tone: 'members',
     },
   ];

@@ -31,6 +31,7 @@ import {
 } from '../lib/errors.js';
 import { lockAndRecheck, requireRole, type Actor } from '../lib/identity.js';
 import { isDeleted, personContact, personName } from '../lib/display-name.js';
+import { toHoldItem } from '../lib/retention.js';
 
 /*
  * People (Phase 4C). Both fixed staff accounts look up canonical accounts
@@ -182,8 +183,13 @@ export function registerStaffMemberRoutes(app: FastifyInstance) {
     const deletion = isDeleted(row)
       ? await prisma.accountDeletion.findUnique({ where: { userId: row.id } })
       : null;
+    const holds = await prisma.retentionHold.findMany({
+      where: { userId: row.id, releasedAt: null },
+      orderBy: { placedAt: 'desc' },
+    });
     return {
       ...toSummary(row, actor),
+      holds: holds.map((hold) => toHoldItem(hold, [row])),
       phone: personContact(row).phone,
       emailVerified: !!row.emailVerified,
       ...(deletion && {

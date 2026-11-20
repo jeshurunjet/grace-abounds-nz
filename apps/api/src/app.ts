@@ -12,6 +12,7 @@ import { registerMeRoutes } from './routes/me.js';
 import { registerStaffMemberRoutes } from './routes/staff-members.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerAccountDeletionRoutes } from './routes/account-deletion.js';
+import { registerRetentionRoutes } from './routes/retention.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerActivityRoutes } from './routes/activities.js';
 import { registerParticipationRoutes } from './routes/participation.js';
@@ -59,6 +60,7 @@ export function buildApp() {
   registerStaffMemberRoutes(app);
   registerSettingsRoutes(app);
   registerAccountDeletionRoutes(app);
+  registerRetentionRoutes(app);
   registerUploadRoutes(app);
   registerActivityRoutes(app);
   registerParticipationRoutes(app);

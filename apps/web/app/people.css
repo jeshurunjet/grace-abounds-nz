@@ -118,3 +118,26 @@
 .people-check input {
   margin-top: 0.2rem;
 }
+.retention {
+  display: grid;
+  gap: 1rem;
+}
+.retention-counts {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+}
+.retention-result {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+.retention-result p {
+  margin: 0 0 0.35rem;
+}
+.retention-hold {
+  display: grid;
+  gap: 0.3rem;
+}

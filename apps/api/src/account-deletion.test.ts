@@ -23,6 +23,7 @@ import { MemoryStorage } from './lib/storage-memory.js';
 import { processExports } from './lib/data-export.js';
 import { STORAGE_REMOVE } from './lib/assets.js';
 import type { EmailMessage } from './lib/email.js';
+import { expireAppointments } from './lib/care-retention.js';
 import {
   ACCOUNT_NOTICE,
   allowDeletionExecutionForTests,
@@ -232,9 +233,9 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
       await prisma.user.findUniqueOrThrow({ where: { id: anna.user.id } }),
     ).toMatchObject({ status: 'ACTIVE', email: anna.user.email });
     expect(await prisma.accountDeletion.count()).toBe(0);
-    expect(await purgeDeletedAccounts(new Date(Date.now() + 99 * DAY))).toEqual(
-      { skipped: true, purged: 0 },
-    );
+    expect(
+      await purgeDeletedAccounts(new Date(Date.now() + 99 * DAY)),
+    ).toMatchObject({ skipped: true, purged: 0 });
     expect((await trimAuditLog()).skipped).toBe(true);
     // Only the test runner can switch it on; there is no setting for it.
     const runner = process.env.VITEST;
@@ -559,7 +560,7 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
       ).toBe(purgeAfter.toISOString());
     });
 
-    it('a future appointment keeps the account until its time has passed', async () => {
+    it('a cancelled future appointment no longer delays the purge: exactly 30 days (owner policy)', async () => {
       allowDeletionExecutionForTests(true);
       const [anna, pastor, admin] = [
         await as(),
@@ -578,28 +579,48 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
         },
       });
       const done = await deleteSelf(anna);
-      expect(done.json().data.purgeAfter).toBe(startsAt.toISOString());
-      const record = await prisma.accountDeletion.findUniqueOrThrow({
-        where: { userId: anna.user.id },
-      });
-      expect(record.purgeAfter.toISOString()).toBe(startsAt.toISOString());
-      // Every staff view tells the same date.
+      const { requestedAt, purgeAfter } = done.json().data;
+      expect(Date.parse(purgeAfter) - Date.parse(requestedAt)).toBe(30 * DAY);
+      // Every staff view tells the same (earlier) date.
       expect(
         (await call('GET', `/v1/staff/members/${anna.user.id}`, admin)).json()
           .data.deletion.purgeAfter,
-      ).toBe(startsAt.toISOString());
+      ).toBe(purgeAfter);
       expect(
         (
           await call('GET', `/v1/staff/appointments/${appointment.id}`, pastor)
         ).json().data.deleteAfter,
-      ).toBe(startsAt.toISOString());
-      // Not purged after 30 days, only once the appointment time passed.
+      ).toBe(purgeAfter);
+      // Purged after 30 days, well before the original appointment time.
       expect(
-        (await purgeDeletedAccounts(new Date(Date.now() + 31 * DAY))).purged,
-      ).toBe(0);
-      expect(
-        (await purgeDeletedAccounts(new Date(startsAt.getTime() + 1000)))
+        (await purgeDeletedAccounts(new Date(Date.parse(purgeAfter) + 1000)))
           .purged,
+      ).toBe(1);
+      expect(
+        await prisma.appointment.count({ where: { id: appointment.id } }),
+      ).toBe(0);
+    });
+
+    it('ordinary retention keeps its not-before-the-appointment-time rule', async () => {
+      const ben = await as();
+      const startsAt = new Date(Date.now() + 60 * DAY);
+      const kept = await prisma.appointment.create({
+        data: {
+          userId: ben.user.id,
+          topic: 'Prayer',
+          clientKey: 'ben-future',
+          status: 'CANCELLED',
+          closedAt: new Date(),
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 30 * 60_000),
+        },
+      });
+      expect(await expireAppointments(new Date(Date.now() + 31 * DAY))).toBe(0);
+      expect(await prisma.appointment.count({ where: { id: kept.id } })).toBe(
+        1,
+      );
+      expect(
+        await expireAppointments(new Date(startsAt.getTime() + 1000)),
       ).toBe(1);
     });
 
@@ -732,6 +753,16 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
     );
     const annaNotice = sent.find((message) => message.to === anna.user.email)!;
     expect(annaNotice.text).toContain('You deleted it on');
+    // Access ends at once; removal is due from the 30-day date (deleted by
+    // the next due-only clean-up, held records kept), never promised.
+    expect(annaNotice.text).toContain('signed out everywhere');
+    expect(annaNotice.text).toContain('for 30 days. From ');
+    expect(annaNotice.text).toContain('they are due for removal');
+    expect(annaNotice.text).toContain(
+      'kept, with restricted access, only while that need is reviewed',
+    );
+    expect(annaNotice.text).not.toMatch(/removed for good|until .* and then/);
+    expect(annaNotice.html).not.toContain('removed for good');
     const benNotice = sent.find((message) => message.to === ben.user.email)!;
     expect(benNotice.text).toContain('Church staff deleted it');
     expect(
@@ -777,7 +808,7 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
       });
       expect(
         await purgeDeletedAccounts(new Date(purgeAfter.getTime() - 1000)),
-      ).toEqual({ skipped: false, purged: 0 });
+      ).toMatchObject({ skipped: false, purged: 0 });
 
       // With execution switched off again, nothing is purged.
       allowDeletionExecutionForTests(false);
@@ -789,7 +820,7 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
 
       expect(
         await purgeDeletedAccounts(new Date(purgeAfter.getTime() + 1000)),
-      ).toEqual({ skipped: false, purged: 1 });
+      ).toMatchObject({ skipped: false, purged: 1 });
       expect(await prisma.user.count({ where: { id: r.anna.user.id } })).toBe(
         0,
       );
@@ -818,7 +849,7 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
       // Idempotent.
       expect(
         await purgeDeletedAccounts(new Date(purgeAfter.getTime() + 2000)),
-      ).toEqual({ skipped: false, purged: 0 });
+      ).toMatchObject({ skipped: false, purged: 0 });
     });
 
     it('never purges an account that isn’t a deleted member', async () => {
@@ -837,21 +868,24 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
     });
   });
 
-  it('the activity log is trimmed to a rolling year (test-only execution)', async () => {
-    const now = new Date();
+  it('the activity log follows calendar-year retention (test-only execution)', async () => {
+    // 15 January 2027, NZ: records from 2025 and earlier are eligible.
+    const now = new Date('2027-01-15T00:00:00.000Z');
     await prisma.auditEvent.createMany({
       data: [
         {
-          action: 'old.event',
+          action: 'end.of.2025',
           entityType: 'x',
           entityId: '1',
-          createdAt: new Date(now.getTime() - 400 * DAY),
+          // 31 December 2025, 23:59 NZDT.
+          createdAt: new Date('2025-12-31T10:59:00.000Z'),
         },
         {
-          action: 'recent.event',
+          action: 'start.of.2026',
           entityType: 'x',
           entityId: '2',
-          createdAt: new Date(now.getTime() - 300 * DAY),
+          // 1 January 2026, 00:00 NZDT.
+          createdAt: new Date('2025-12-31T11:00:00.000Z'),
         },
       ],
     });
@@ -861,20 +895,21 @@ describe.skipIf(!dbTestsEnabled)('account deletion (PostgreSQL)', () => {
         via: 'self',
         requestedById: 'long-gone',
         stage: 'PURGED',
-        purgeAfter: new Date(now.getTime() - 430 * DAY),
-        purgedAt: new Date(now.getTime() - 400 * DAY),
+        purgeAfter: new Date('2025-05-01T00:00:00.000Z'),
+        purgedAt: new Date('2025-06-01T00:00:00.000Z'),
       },
     });
     expect((await trimAuditLog(now)).skipped).toBe(true);
     expect(await prisma.auditEvent.count()).toBe(2);
     allowDeletionExecutionForTests(true);
-    expect(await trimAuditLog(now)).toEqual({
+    expect(await trimAuditLog(now)).toMatchObject({
       skipped: false,
       events: 1,
       deletions: 1,
+      held: 0,
     });
     expect(
       (await prisma.auditEvent.findMany()).map((row) => row.action),
-    ).toEqual(['recent.event']);
+    ).toEqual(['start.of.2026']);
   });
 });

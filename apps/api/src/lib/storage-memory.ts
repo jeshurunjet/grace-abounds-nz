@@ -114,6 +114,11 @@ export class MemoryStorage implements Storage {
     this.objects.set(to, { bytes: object.bytes, contentType });
   }
 
+  async put(key: string, body: Uint8Array, contentType: string) {
+    this.check();
+    this.objects.set(key, { bytes: body, contentType });
+  }
+
   async remove(key: string) {
     this.check();
     this.objects.delete(key);

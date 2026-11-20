@@ -6,6 +6,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
   UploadPartCommand,
 } from '@aws-sdk/client-s3';
@@ -20,6 +21,8 @@ import { AppError } from './errors.js';
  */
 
 export type Disposition = 'inline' | 'attachment';
+/** A server-side upload (data export) is abandoned after this long. */
+export const PUT_TIMEOUT_MS = 2 * 60_000;
 export interface Storage {
   createMultipart(key: string): Promise<string>;
   partUrls(
@@ -39,6 +42,8 @@ export interface Storage {
   /** Up to `length` bytes of an object from `start` (fewer at its end). */
   readRange(key: string, start: number, length: number): Promise<Uint8Array>;
   copy(from: string, to: string, contentType: string): Promise<void>;
+  /** Writes a small private object the server made (data exports). */
+  put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   remove(key: string): Promise<void>;
   downloadUrl(
     key: string,
@@ -190,6 +195,20 @@ class S3Storage implements Storage {
         ContentType: contentType,
         MetadataDirective: 'REPLACE',
       }),
+    );
+  }
+
+  async put(key: string, body: Uint8Array, contentType: string) {
+    // Bounded, so an upload can't land long after its attempt was given up.
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        CacheControl: 'private, no-store',
+      }),
+      { abortSignal: AbortSignal.timeout(PUT_TIMEOUT_MS) },
     );
   }
 

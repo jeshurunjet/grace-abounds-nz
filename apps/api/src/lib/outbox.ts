@@ -4,6 +4,7 @@ import { CONTENT_CHANGED } from './content-change.js';
 import { STORAGE_REMOVE, storageRemover } from './assets.js';
 import { CALENDAR_SYNC } from './calendar-queue.js';
 import { calendarSyncRequester } from './calendar-sync.js';
+import { EMAIL_DELIVER, emailDeliverer } from './email-delivery.js';
 
 /*
  * Outbox dispatcher (Phase 2C). Events are written in the same transaction
@@ -127,6 +128,8 @@ export function startOutboxDispatcher(log: Log, everyMs = 3_000) {
     [STORAGE_REMOVE]: storageRemover(),
     // Marks activities for the Google Calendar worker (Phase 3C).
     [CALENDAR_SYNC]: calendarSyncRequester(),
+    // Optional update emails chosen in Settings (Phase 5A).
+    [EMAIL_DELIVER]: emailDeliverer(),
   };
   let running = false;
   const timer = setInterval(() => {

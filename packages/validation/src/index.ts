@@ -7,3 +7,4 @@ export * from './activities.ts';
 export * from './activity-defaults.ts';
 export * from './care.ts';
 export * from './people.ts';
+export * from './account.ts';

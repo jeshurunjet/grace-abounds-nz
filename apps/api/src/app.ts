@@ -10,6 +10,7 @@ import { registerSermonRoutes } from './routes/sermons.js';
 import { registerRevisionRoutes } from './routes/revisions.js';
 import { registerMeRoutes } from './routes/me.js';
 import { registerStaffMemberRoutes } from './routes/staff-members.js';
+import { registerSettingsRoutes } from './routes/settings.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerActivityRoutes } from './routes/activities.js';
 import { registerParticipationRoutes } from './routes/participation.js';
@@ -55,6 +56,7 @@ export function buildApp() {
   registerRevisionRoutes(app);
   registerCollectionRoutes(app);
   registerStaffMemberRoutes(app);
+  registerSettingsRoutes(app);
   registerUploadRoutes(app);
   registerActivityRoutes(app);
   registerParticipationRoutes(app);

@@ -17,6 +17,8 @@ import { Modal } from '../components/modal';
 import { useTheme, type ThemeChoice } from '../components/theme-provider';
 import { useToast } from '../components/toast';
 import { CodeInputs, PasswordInput } from '../components/forms';
+import { NotificationSettings } from '../components/notification-settings';
+import { DataExportPanel } from '../components/data-export';
 import { accountApi, api, ApiError, errorMessage } from '../lib/api-client';
 
 type Security = {
@@ -60,32 +62,10 @@ const dateTime = (value: string) =>
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-type Preferences = {
-  enabled: boolean;
-  messages: boolean;
-  events: boolean;
-  sermons: boolean;
-  care: boolean;
-  app: boolean;
-  email: boolean;
-  push: boolean;
-};
-const initial: Preferences = {
-  enabled: true,
-  messages: true,
-  events: true,
-  sermons: false,
-  care: true,
-  app: true,
-  email: false,
-  push: false,
-};
 export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
   const { data } = useSession();
   const toast = useToast();
   const { choice, setChoice } = useTheme();
-  const [preferences, setPreferences] = useState(initial);
-  const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState('');
   const [modal, setModal] = useState<Modal>(null);
   const [security, setSecurity] = useState<Security | null>(null);
@@ -106,28 +86,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
   const [confirmation, setConfirmation] = useState('');
   const userId = data?.user?.id;
   const pastor = data?.user?.role === 'pastor';
-  useEffect(() => {
-    setReady(false);
-    if (!userId) return;
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem(`grace-preferences-${userId}`) ?? 'null',
-      );
-      setPreferences(
-        saved
-          ? (Object.fromEntries(
-              Object.entries(initial).map(([key, value]) => [
-                key,
-                typeof saved[key] === 'boolean' ? saved[key] : value,
-              ]),
-            ) as Preferences)
-          : initial,
-      );
-    } catch {
-      setPreferences(initial);
-    }
-    setReady(true);
-  }, [userId]);
   const loadSecurity = useCallback(async () => {
     try {
       const [securityResult, sessionResult] = await Promise.all([
@@ -306,44 +264,10 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
     await loadSecurity();
   }
 
-  function toggle(key: keyof Preferences) {
-    const next = { ...preferences, [key]: !preferences[key] };
-    setPreferences(next);
-    try {
-      localStorage.setItem(`grace-preferences-${userId}`, JSON.stringify(next));
-      setNotice(
-        'Preference saved on this device only. Notification delivery is not connected.',
-      );
-    } catch {
-      setNotice(
-        'Preference applies for this visit. This browser could not save it.',
-      );
-    }
-  }
   const unavailable = (name: string) =>
     setNotice(
       `${name} requires connected account services. No account changes have been made.`,
     );
-  const row = (key: keyof Preferences, title: string, copy: string) => (
-    <div className="preference-row" key={key}>
-      <span>
-        <strong>{title}</strong>
-        <small>{copy}</small>
-      </span>
-      <button
-        type="button"
-        className={`preference-switch ${preferences[key] ? 'on' : ''}`}
-        role="switch"
-        aria-label={title}
-        aria-checked={preferences[key]}
-        disabled={!ready || (key !== 'enabled' && !preferences.enabled)}
-        onClick={() => toggle(key)}
-      >
-        <span />
-        {preferences[key] ? 'On' : 'Off'}
-      </button>
-    </div>
-  );
   return (
     <MemberShell>
       <header className="workspace-header">
@@ -510,49 +434,13 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
           <h2>
             <Bell size={22} /> Notifications
           </h2>
-          <p>
-            These preferences are local previews; no email or push delivery is
-            active.
-          </p>
-          {row(
-            'enabled',
-            'Allow notifications',
-            'Master preference for optional updates',
-          )}
-          {row('messages', 'Messages', 'New conversations and replies')}
-          {row(
-            'events',
-            'Events & calendar',
-            'Gatherings and schedule updates',
-          )}
-          {row('sermons', 'Sermons', 'New recordings and resources')}
-          {pastor &&
-            row(
-              'care',
-              'Pastoral care',
-              'Confidential requests; notification text must remain private',
-            )}
-          <h3>Delivery channels</h3>
-          {row('app', 'In-app updates', 'Updates in your workspace')}
-          {row('email', 'Email updates', 'Delivery service is not connected')}
-          {row('push', 'Push updates', 'Device registration is not connected')}
+          <NotificationSettings />
         </section>
         <section className="panel">
           <h2>
             <Shield size={22} /> Privacy &amp; data
           </h2>
-          <div className="preference-row">
-            <span>
-              <strong>Download your data</strong>
-              <small>Export requires secure account verification.</small>
-            </span>
-            <button
-              className="button button-outline"
-              onClick={() => unavailable('Data export')}
-            >
-              Request export
-            </button>
-          </div>
+          <DataExportPanel />
           <div className="preference-row">
             <span>
               <strong>Delete your account</strong>

@@ -98,7 +98,8 @@ export function storageRemover(): OutboxHandler {
     if (!storage) throw new Error('File storage is not configured.');
     for (const event of events) {
       const key = (event.payload as { key?: unknown } | null)?.key;
-      if (typeof key === 'string' && /^(incoming|files)\//.test(key))
+      // Uploads, verified files and expired data exports (Phase 5B).
+      if (typeof key === 'string' && /^(incoming|files|exports)\//.test(key))
         await storage.remove(key);
     }
   };

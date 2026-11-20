@@ -16,7 +16,13 @@ import {
   type Participation as ParticipationRow,
 } from '@grace-abounds/database';
 import { AppError, notFound, parse } from '../lib/errors.js';
-import { requireActor, requireRole, type Actor } from '../lib/identity.js';
+import { personContact, personName } from '../lib/display-name.js';
+import {
+  lockAndRecheck,
+  requireActor,
+  requireRole,
+  type Actor,
+} from '../lib/identity.js';
 import { lockActivity, toActivity } from './activities.js';
 
 /*
@@ -176,6 +182,9 @@ export function registerParticipationRoutes(app: FastifyInstance) {
     const actor = requireActor(request);
     const input = parse(participationInputSchema, request.body ?? {});
     const result = await prisma.$transaction(async (tx) => {
+      // The member's own lock first (same order as account deletion), so
+      // no booking can land after their account was deleted.
+      await lockAndRecheck(tx, actor);
       if (!(await lockActivity(tx, input.activityId)))
         throw notFound('Activity');
       const row = (await tx.activity.findUnique({
@@ -281,14 +290,16 @@ export function registerParticipationRoutes(app: FastifyInstance) {
       if (!activity) throw notFound('Activity');
       const rows = await prisma.participation.findMany({
         where: { activityId: activity.id },
-        include: { user: { select: { name: true, email: true } } },
+        include: {
+          user: { select: { name: true, email: true, status: true } },
+        },
         orderBy: [{ dateKey: 'asc' }, { createdAt: 'asc' }],
       });
       const data: RosterEntry[] = rows.map((row) => ({
         id: row.id,
         date: row.dateKey,
-        name: row.user.name?.trim() || row.user.email,
-        email: row.user.email,
+        name: personName(row.user),
+        email: personContact(row.user).email,
         status: row.status === 'ACTIVE' ? 'active' : 'cancelled',
         createdAt: row.createdAt.toISOString(),
         cancelledAt: row.cancelledAt?.toISOString() ?? '',

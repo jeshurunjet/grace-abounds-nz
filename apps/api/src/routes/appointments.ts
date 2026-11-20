@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  effectiveDeleteAfter,
   appointmentConfirmSchema,
   appointmentDeleteAfter,
   appointmentInputSchema,
@@ -30,7 +31,13 @@ import {
   requireVersion,
   versionConflict,
 } from '../lib/errors.js';
-import { requireActor, requireRole, type Actor } from '../lib/identity.js';
+import { personContact, personName, purgeDates } from '../lib/display-name.js';
+import {
+  lockAndRecheck,
+  requireActor,
+  requireRole,
+  type Actor,
+} from '../lib/identity.js';
 import { notify } from '../lib/notifications.js';
 
 /*
@@ -79,7 +86,8 @@ const toDb = (status: AppointmentStatus) =>
 const iso = (value: Date | null) => value?.toISOString() ?? '';
 const withEvents = { events: { orderBy: { createdAt: 'asc' as const } } };
 
-function logistics(row: Row) {
+/** For a deleted account, purgeAfter caps deleteAfter (see purgeDates). */
+function logistics(row: Row, purgeAfter = '') {
   const closedAt = iso(row.closedAt);
   const history: AppointmentHistoryEntry[] = row.events.map((event) => ({
     status: fromDb(event.status),
@@ -97,9 +105,10 @@ function logistics(row: Row) {
     location: row.location,
     createdAt: row.createdAt.toISOString(),
     closedAt,
-    deleteAfter: closedAt
-      ? appointmentDeleteAfter(closedAt, iso(row.startsAt))
-      : '',
+    deleteAfter: effectiveDeleteAfter(
+      closedAt ? appointmentDeleteAfter(closedAt, iso(row.startsAt)) : '',
+      purgeAfter,
+    ),
     history,
   };
 }
@@ -111,23 +120,26 @@ const toMember = (row: Row): MemberAppointment => ({
 });
 
 type StaffRow = Row & {
-  user: { name: string | null; email: string; phone: string };
+  user: { name: string | null; email: string; phone: string; status: string };
   _count: { notes: number };
 };
 const forStaff = {
   ...withEvents,
-  user: { select: { name: true, email: true, phone: true } },
+  user: { select: { name: true, email: true, phone: true, status: true } },
   _count: { select: { notes: true } },
 };
 /** Admin gets logistics only: the confidential fields are left out. */
-function toStaff(row: StaffRow, pastor: boolean): StaffAppointment {
+function toStaff(
+  row: StaffRow,
+  pastor: boolean,
+  purgeAfter = '',
+): StaffAppointment {
   return {
-    ...logistics(row),
+    ...logistics(row, purgeAfter),
     version: row.version,
     member: {
-      name: row.user.name?.trim() || row.user.email,
-      email: row.user.email,
-      phone: row.user.phone,
+      name: personName(row.user),
+      ...personContact(row.user),
     },
     ...(pastor && {
       topic: row.topic,
@@ -150,7 +162,7 @@ async function staffAccounts(tx: Tx) {
     select: { id: true, role: true },
   });
 }
-async function tellStaff(
+export async function tellStaff(
   tx: Tx,
   row: { id: string },
   version: number,
@@ -232,6 +244,9 @@ type Change = {
 
 async function change(input: Change) {
   return prisma.$transaction(async (tx) => {
+    // A member's own action: their lock first (same order as account
+    // deletion), so nothing changes after their account was deleted.
+    if (input.ownerOnly) await lockAndRecheck(tx, input.actor);
     // One schedule lock while times are checked and taken.
     if (input.reserve || input.checkFree)
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(${SCHEDULE_LOCK})::text`;
@@ -346,7 +361,12 @@ export function registerAppointmentRoutes(app: FastifyInstance) {
       },
     });
     if (!row) throw notFound('Appointment');
-    const detail: StaffAppointmentDetail = toStaff(row, pastor);
+    const purge = await purgeDates(prisma, [row]);
+    const detail: StaffAppointmentDetail = toStaff(
+      row,
+      pastor,
+      purge.get(row.userId),
+    );
     if (pastor) {
       const notes = (
         row as typeof row & {
@@ -444,6 +464,8 @@ export function registerAppointmentRoutes(app: FastifyInstance) {
     if (before) return replay(before);
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // No request can land after the member's account was deleted.
+        await lockAndRecheck(tx, actor);
         const row = await tx.appointment.create({
           data: {
             userId: actor.id,
@@ -558,9 +580,12 @@ export function registerAppointmentRoutes(app: FastifyInstance) {
         include: forStaff,
         orderBy: { createdAt: 'desc' },
       });
+      const purge = await purgeDates(prisma, rows);
       noStore(reply);
       return {
-        data: rows.map((row) => toStaff(row, actor.role === Role.PASTOR)),
+        data: rows.map((row) =>
+          toStaff(row, actor.role === Role.PASTOR, purge.get(row.userId)),
+        ),
       };
     },
   );

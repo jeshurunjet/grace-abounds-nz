@@ -68,3 +68,57 @@ export type DataExportDownload = { url: string; expiresAt: string };
 
 export const EXPORT_CONTENTS_NOTE =
   'Your export includes your profile and account details, sign-in methods (never passwords or keys), signed-in devices, notification settings, your bookings and their history, your prayer requests and appointments with their history, and your notifications. It never includes other people’s details, the pastor’s private notes or anything staff-only.';
+
+// ---------- Account deletion (5C) ----------
+
+/** What remains of a deleted account ("Deleted user") is purged after this. */
+export const DELETION_RETENTION_DAYS = 30;
+/** Activity (audit) log entries are kept this long (rolling). */
+export const AUDIT_RETENTION_DAYS = 365;
+export const DELETED_USER_LABEL = 'Deleted user';
+
+/** The member deleting their own account (with a recent sign-in). */
+export const accountDeletionSchema = z
+  .object({
+    confirm: z.literal('DELETE', { message: 'Type DELETE to confirm.' }),
+  })
+  .strict();
+
+/** Staff deleting a member's account, only at the member's request. */
+export const staffDeletionSchema = z
+  .object({
+    confirm: z.literal('DELETE', { message: 'Type DELETE to confirm.' }),
+    memberRequested: z.literal(true, {
+      message: 'Only delete an account when the member has asked.',
+    }),
+    requestNote: z
+      .string()
+      .trim()
+      .min(3, 'Say how the member asked (for example, “phoned the office”).')
+      .max(200),
+  })
+  .strict();
+
+export type DeletionInfo = {
+  via: 'self' | 'staff';
+  requestedAt: string;
+  /**
+   * When the remaining "Deleted user" records are removed: 30 days after
+   * the request, or later if an appointment can't be removed before then.
+   */
+  purgeAfter: string;
+  purgedAt: string;
+};
+
+export const DELETION_EFFECTS_NOTE =
+  'Deleting your account can’t be undone. You’ll be signed out everywhere straight away and can’t sign in again. Your upcoming bookings are cancelled, open appointments are closed, and any data export is removed. Your prayer requests, appointment history and booking history are kept as “Deleted user” for 30 days (longer if an appointment was booked for a later date), then removed for good. Church content such as sermons and website pages stays. Copies may remain in secure backups until they are replaced.';
+
+/**
+ * When a record kept for a deleted account is actually removed: its own
+ * retention date, or the account purge if that comes first.
+ */
+export function effectiveDeleteAfter(own: string, purgeAfter = '') {
+  if (!purgeAfter) return own;
+  if (!own) return purgeAfter;
+  return Date.parse(own) <= Date.parse(purgeAfter) ? own : purgeAfter;
+}

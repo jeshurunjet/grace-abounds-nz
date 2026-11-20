@@ -30,6 +30,7 @@ import {
   versionConflict,
 } from '../lib/errors.js';
 import { lockAndRecheck, requireRole, type Actor } from '../lib/identity.js';
+import { isDeleted, personContact, personName } from '../lib/display-name.js';
 
 /*
  * People (Phase 4C). Both fixed staff accounts look up canonical accounts
@@ -76,10 +77,12 @@ const statusName = (status: User['status']) =>
   status.toLowerCase() as AccountStatusName;
 
 function toSummary(row: SummaryRow, actor: Actor): PersonSummary {
+  const deleted = isDeleted(row);
   return {
     id: row.id,
-    name: row.name?.trim() ?? '',
-    email: row.email,
+    // A deleted account (kept 30 days before purge) shows as "Deleted user".
+    name: deleted ? personName(row) : (row.name?.trim() ?? ''),
+    email: deleted ? '' : row.email,
     role: roleName(row.role),
     status: statusName(row.status),
     manageable:
@@ -176,10 +179,20 @@ export function registerStaffMemberRoutes(app: FastifyInstance) {
     });
     if (!row) throw notFound('Person');
     const pastor = actor.role === Role.PASTOR;
+    const deletion = isDeleted(row)
+      ? await prisma.accountDeletion.findUnique({ where: { userId: row.id } })
+      : null;
     return {
       ...toSummary(row, actor),
-      phone: row.phone,
+      phone: personContact(row).phone,
       emailVerified: !!row.emailVerified,
+      ...(deletion && {
+        deletion: {
+          via: deletion.via === 'staff' ? 'staff' : 'self',
+          requestedAt: deletion.requestedAt.toISOString(),
+          purgeAfter: deletion.purgeAfter.toISOString(),
+        },
+      }),
       appointments: await appointmentCounts({ userId: row.id }),
       ...(pastor && { prayers: await prayerCounts({ userId: row.id }) }),
     };

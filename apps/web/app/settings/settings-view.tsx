@@ -19,6 +19,7 @@ import { useToast } from '../components/toast';
 import { CodeInputs, PasswordInput } from '../components/forms';
 import { NotificationSettings } from '../components/notification-settings';
 import { DataExportPanel } from '../components/data-export';
+import { AccountDeletionPanel } from '../components/account-deletion';
 import { accountApi, api, ApiError, errorMessage } from '../lib/api-client';
 
 type Security = {
@@ -44,7 +45,7 @@ type SessionItem = {
   lastSeenAt: string;
   current: boolean;
 };
-type Modal = 'passkeys' | 'delete' | 'reauth' | 'password' | 'sessions' | null;
+type Modal = 'passkeys' | 'reauth' | 'password' | 'sessions' | null;
 
 const METHOD_LABELS: Record<string, string> = {
   password: 'password',
@@ -66,7 +67,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
   const { data } = useSession();
   const toast = useToast();
   const { choice, setChoice } = useTheme();
-  const [notice, setNotice] = useState('');
   const [modal, setModal] = useState<Modal>(null);
   const [security, setSecurity] = useState<Security | null>(null);
   const [sessions, setSessions] = useState<SessionItem[] | null>(null);
@@ -83,7 +83,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
   const [reauthError, setReauthError] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [confirmation, setConfirmation] = useState('');
   const userId = data?.user?.id;
   const pastor = data?.user?.role === 'pastor';
   const loadSecurity = useCallback(async () => {
@@ -264,10 +263,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
     await loadSecurity();
   }
 
-  const unavailable = (name: string) =>
-    setNotice(
-      `${name} requires connected account services. No account changes have been made.`,
-    );
   return (
     <MemberShell>
       <header className="workspace-header">
@@ -277,11 +272,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
           Manage your appearance, account security and notification preferences.
         </p>
       </header>
-      {notice && (
-        <p className="notice-box" role="status">
-          {notice}
-        </p>
-      )}
       <div className="account-settings-grid">
         <section className="panel">
           <h2>
@@ -441,21 +431,7 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
             <Shield size={22} /> Privacy &amp; data
           </h2>
           <DataExportPanel />
-          <div className="preference-row">
-            <span>
-              <strong>Delete your account</strong>
-              <small>Review the consequences before making a request.</small>
-            </span>
-            <button
-              className="text-danger"
-              onClick={() => {
-                setConfirmation('');
-                setModal('delete');
-              }}
-            >
-              Review deletion
-            </button>
-          </div>
+          <AccountDeletionPanel />
           <p>
             <Link href="/privacy">Privacy policy</Link> ·{' '}
             <Link href="/terms">Terms</Link>
@@ -679,49 +655,6 @@ export function SettingsView({ googleEnabled }: { googleEnabled: boolean }) {
             {busy === 'password' ? 'Saving…' : 'Save password'}
           </button>
         </form>
-      </Modal>
-      <Modal
-        open={modal === 'delete'}
-        title="Review account deletion"
-        onClose={() => setModal(null)}
-      >
-        <p>
-          Deletion would remove your access to the church app. Retention of
-          church records must follow the approved privacy policy.
-        </p>
-        <p>This preview cannot submit or perform account deletion.</p>
-        {pastor && (
-          <p className="notice-box">
-            Pastor account deletion requires a separate review to protect the
-            final active pastor.
-          </p>
-        )}
-        <label className="form">
-          Type DELETE to review this request
-          <input
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-            autoComplete="off"
-          />
-        </label>
-        <footer className="form-actions">
-          <button
-            className="button button-outline"
-            onClick={() => setModal(null)}
-          >
-            Cancel
-          </button>
-          <button
-            className="button danger"
-            disabled={confirmation !== 'DELETE' || pastor}
-            onClick={() => {
-              setModal(null);
-              unavailable('Account deletion');
-            }}
-          >
-            Request deletion
-          </button>
-        </footer>
       </Modal>
     </MemberShell>
   );

@@ -71,6 +71,9 @@ const server = vi.hoisted(() => ({
   detailReads: [] as string[],
   fail: '' as '' | 'conflict' | 'error',
   recent: true,
+  deletionOff: false,
+  heldDeletion: null as Promise<Response | null> | null,
+  deletions: [] as { url: string; body: unknown }[],
   password: 'right-password',
   heldReauth: null as Promise<Response> | null,
   reauths: [] as Record<string, unknown>[],
@@ -111,6 +114,9 @@ beforeEach(() => {
   server.detailReads = [];
   server.fail = '';
   server.recent = true;
+  server.deletionOff = false;
+  server.heldDeletion = null;
+  server.deletions = [];
   server.heldReauth = null;
   server.reauths = [];
   vi.stubGlobal(
@@ -138,6 +144,53 @@ beforeEach(() => {
         return json({
           data: { email: 'staff@example.org', hasPassword: true },
         });
+      if (init?.method === 'POST' && url.endsWith('/deletion')) {
+        const body = JSON.parse(String(init.body));
+        server.deletions.push({ url, body });
+        if (server.heldDeletion) {
+          const answer = await server.heldDeletion;
+          if (answer) return answer;
+        }
+        if (!server.recent)
+          return json(
+            {
+              error: {
+                code: 'REAUTH_REQUIRED',
+                message: 'For your security, confirm it’s you first.',
+              },
+            },
+            403,
+          );
+        if (server.deletionOff)
+          return json(
+            {
+              error: {
+                code: 'DELETION_UNAVAILABLE',
+                message: 'Account deletion isn’t switched on yet.',
+              },
+            },
+            503,
+          );
+        const id = url.split('/').at(-2)!;
+        const deletion = {
+          via: 'staff',
+          requestedAt: '2026-11-21T00:00:00.000Z',
+          purgeAfter: '2026-12-21T00:00:00.000Z',
+        };
+        server.rows = server.rows.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                name: 'Deleted user',
+                email: '',
+                status: 'deletion_pending',
+                manageable: false,
+                deletion,
+              }
+            : row,
+        );
+        return json({ data: { ...deletion, purgedAt: '' } });
+      }
       if (init?.method === 'PATCH') {
         const body = JSON.parse(String(init.body));
         server.writes.push({
@@ -614,6 +667,156 @@ describe('People directory', () => {
       await settle();
       expect(server.lists.length).toBe(before);
       expect(screen.queryByLabelText('Search people')).toBeNull();
+    });
+  });
+
+  describe('deleting at the member’s request', () => {
+    const deleteBox = () =>
+      screen.getByRole('alertdialog', { name: /Delete .* account\?/ });
+    async function fillAndConfirm() {
+      await click(
+        within(panel()).getByRole('button', {
+          name: 'Delete at member’s request',
+        }),
+      );
+      const confirm = within(deleteBox()).getByRole('button', {
+        name: 'Delete account',
+      });
+      expect(confirm).toBeDisabled();
+      fireEvent.click(
+        within(deleteBox()).getByLabelText(
+          'The member asked for their account to be deleted',
+        ),
+      );
+      fireEvent.change(
+        within(deleteBox()).getByLabelText('How did they ask?'),
+        {
+          target: { value: 'Phoned the office' },
+        },
+      );
+      expect(confirm).toBeDisabled();
+      fireEvent.change(
+        within(deleteBox()).getByLabelText('Type DELETE to confirm'),
+        { target: { value: 'DELETE' } },
+      );
+      await click(confirm);
+    }
+
+    it('needs the member’s request, a note and DELETE; the screen shows what remains and until when', async () => {
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillAndConfirm();
+      expect(server.deletions).toEqual([
+        {
+          url: '/api/v1/staff/members/m1/deletion',
+          body: {
+            confirm: 'DELETE',
+            memberRequested: true,
+            requestNote: 'Phoned the office',
+          },
+        },
+      ]);
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(
+        within(panel()).getByText(/by staff, at the member’s request/),
+      ).toBeTruthy();
+      expect(
+        within(panel()).queryByRole('button', { name: /Suspend|Delete at/ }),
+      ).toBeNull();
+      expect(toast.push).toHaveBeenCalledWith(
+        expect.stringContaining('Account deleted.'),
+        'success',
+      );
+    });
+
+    it('when deletion isn’t switched on, it says so and changes nothing', async () => {
+      server.deletionOff = true;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillAndConfirm();
+      expect(within(deleteBox()).getByRole('alert')).toHaveTextContent(
+        'isn’t switched on yet',
+      );
+      expect(within(panel()).getByText('Active')).toBeInTheDocument();
+    });
+
+    it('confirms it’s you when needed, then retries with the same note', async () => {
+      server.recent = false;
+      render(<PeopleDirectory />);
+      await settle();
+      await open('Anna Member');
+      await fillAndConfirm();
+      const reauth = screen.getByRole('dialog', { name: 'Confirm it’s you' });
+      fireEvent.change(within(reauth).getByLabelText('Current password'), {
+        target: { value: 'right-password' },
+      });
+      await click(within(reauth).getByRole('button', { name: 'Confirm' }));
+      expect(server.deletions).toHaveLength(2);
+      expect(server.deletions[1]!.body).toMatchObject({
+        requestNote: 'Phoned the office',
+      });
+      expect(within(panel()).getByText(/by staff/)).toBeTruthy();
+    });
+
+    it('a held result for an earlier person never spills into the one opened since', async () => {
+      for (const outcome of ['error', 'reauth', 'success'] as const) {
+        const held = later();
+        server.heldDeletion = held.promise as Promise<Response | null>;
+        toast.push.mockClear();
+        route.search = 'person=m1';
+        const page = render(<PeopleDirectory />);
+        await settle();
+        await fillAndConfirm();
+        // A notification for Ben is opened while Anna's request is held.
+        route.search = 'person=m2';
+        page.rerender(<PeopleDirectory />);
+        await settle();
+        expect(within(panel()).getByText('ben@example.org')).toBeTruthy();
+        held.release(
+          outcome === 'error'
+            ? json(
+                {
+                  error: {
+                    code: 'DELETION_UNAVAILABLE',
+                    message: 'Account deletion isn’t switched on yet.',
+                  },
+                },
+                503,
+              )
+            : outcome === 'reauth'
+              ? json(
+                  {
+                    error: {
+                      code: 'REAUTH_REQUIRED',
+                      message: 'For your security, confirm it’s you first.',
+                    },
+                  },
+                  403,
+                )
+              : (null as unknown as Response),
+        );
+        server.heldDeletion = null;
+        await settle();
+        expect(screen.queryByRole('alertdialog')).toBeNull();
+        expect(
+          screen.queryByRole('dialog', { name: 'Confirm it’s you' }),
+        ).toBeNull();
+        expect(within(panel()).queryByRole('alert')).toBeNull();
+        expect(within(panel()).getByText('ben@example.org')).toBeTruthy();
+        expect(within(panel()).queryByText(/by staff/)).toBeNull();
+        expect(toast.push).not.toHaveBeenCalledWith(
+          expect.stringContaining('Account deleted.'),
+          'success',
+        );
+        page.unmount();
+        server.rows = server.rows.map((row) =>
+          row.id === 'm1'
+            ? { ...person('m1', 'Anna Member'), status: 'active' }
+            : row,
+        );
+      }
     });
   });
 });

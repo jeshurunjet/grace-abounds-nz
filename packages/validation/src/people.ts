@@ -22,7 +22,7 @@ export type AccountStatusName = (typeof accountStatuses)[number];
 export const accountStatusLabels: Record<AccountStatusName, string> = {
   active: 'Active',
   suspended: 'Suspended',
-  deletion_pending: 'Deletion pending',
+  deletion_pending: 'Deleted',
 };
 export const accountRoleLabels: Record<AccountRole, string> = {
   member: 'Member',
@@ -85,6 +85,12 @@ export type PersonDetail = PersonSummary & {
   appointments: AppointmentCounts;
   /** Pastor only: prayer status counts. Absent for Admin. */
   prayers?: PrayerCounts;
+  /** For a deleted account: when, how, and when the rest is removed. */
+  deletion?: {
+    via: 'self' | 'staff';
+    requestedAt: string;
+    purgeAfter: string;
+  };
 };
 
 export type PeoplePage = { items: PersonSummary[]; nextCursor: string };

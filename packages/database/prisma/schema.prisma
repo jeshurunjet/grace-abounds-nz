@@ -871,3 +871,39 @@ model DataExportFile {
   @@index([exportId])
   @@index([removedAt])
 }
+
+enum AccountDeletionStage {
+  /// Access removed, identifiers and credentials gone, follow-up done
+  /// (bookings released, appointments closed, exports ended). Remaining
+  /// records are kept as "Deleted user" until purgeAfter.
+  ACCESS_REMOVED
+  /// The account and everything kept for it have been removed.
+  PURGED
+}
+
+/// A member account deletion (Phase 5C). No grace period: confirming removes
+/// access at once; what remains is labelled "Deleted user" and purged after
+/// 30 days. Deliberately no foreign key: this content-free record outlives
+/// the account (kept with the audit log). Staff start one only at the
+/// member's request (recorded) and the member is always sent a notice.
+model AccountDeletion {
+  id            String               @id @default(cuid())
+  /// The deleted account's id (opaque once purged).
+  userId        String               @unique
+  /// self | staff
+  via           String
+  requestedById String
+  /// Staff deletions: how the member asked. Cleared at purge.
+  requestNote   String               @default("")
+  stage         AccountDeletionStage @default(ACCESS_REMOVED)
+  requestedAt   DateTime             @default(now())
+  purgeAfter    DateTime
+  purgedAt      DateTime?
+  /// Where the mandatory notice goes; cleared once sent (or given up).
+  noticeEmail   String?
+  noticeSentAt  DateTime?
+  noticeAttempts Int                 @default(0)
+
+  @@index([stage, purgeAfter])
+  @@index([purgedAt])
+}

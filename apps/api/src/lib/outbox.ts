@@ -5,6 +5,7 @@ import { STORAGE_REMOVE, storageRemover } from './assets.js';
 import { CALENDAR_SYNC } from './calendar-queue.js';
 import { calendarSyncRequester } from './calendar-sync.js';
 import { EMAIL_DELIVER, emailDeliverer } from './email-delivery.js';
+import { ACCOUNT_NOTICE, deletionNoticeSender } from './account-deletion.js';
 
 /*
  * Outbox dispatcher (Phase 2C). Events are written in the same transaction
@@ -130,6 +131,8 @@ export function startOutboxDispatcher(log: Log, everyMs = 3_000) {
     [CALENDAR_SYNC]: calendarSyncRequester(),
     // Optional update emails chosen in Settings (Phase 5A).
     [EMAIL_DELIVER]: emailDeliverer(),
+    // The mandatory notice after an account deletion (Phase 5C).
+    [ACCOUNT_NOTICE]: deletionNoticeSender(),
   };
   let running = false;
   const timer = setInterval(() => {

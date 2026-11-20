@@ -489,6 +489,47 @@ export async function expireExports(now = new Date()) {
   });
 }
 
+/**
+ * Ends every export of an account being deleted (Phase 5C), inside the
+ * deletion's transaction, which already holds the owner's security lock
+ * (so the lock order matches finalizing): queued or building ones fail (a
+ * builder still running is refused at finalizing), ready ones expire with
+ * their file queued for removal. Returns how many were ended.
+ */
+export async function endAccountExports(tx: Tx, userId: string, now: Date) {
+  const rows = await tx.dataExport.findMany({
+    where: { userId, status: { in: ['QUEUED', 'BUILDING', 'READY'] } },
+    select: { id: true },
+  });
+  for (const { id } of rows) {
+    const row = await lockExport(tx, id);
+    if (!row) continue;
+    if (row.status === 'READY') {
+      await tx.dataExport.update({
+        where: { id },
+        data: { status: 'EXPIRED', storageKey: null, finishedAt: now },
+      });
+      if (row.storageKey) await discardFile(tx, row.storageKey, now);
+    } else if (row.status === 'QUEUED' || row.status === 'BUILDING')
+      await tx.dataExport.update({
+        where: { id },
+        data: {
+          status: 'FAILED',
+          finishedAt: now,
+          claimToken: null,
+          leaseUntil: null,
+        },
+      });
+  }
+  if (rows.length)
+    await forgetNotifications(
+      tx,
+      'data_export',
+      rows.map((row) => row.id),
+    );
+  return rows.length;
+}
+
 /** Files are only swept once any upload for them must have finished. */
 export const FILE_SWEEP_GRACE_MS = LEASE_MS + PUT_TIMEOUT_MS + 60_000;
 /** Removed files are re-checked this long, in case a late upload landed. */

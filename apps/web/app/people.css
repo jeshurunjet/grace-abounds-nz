@@ -110,3 +110,11 @@
   display: grid;
   gap: 0.75rem;
 }
+.people-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.people-check input {
+  margin-top: 0.2rem;
+}

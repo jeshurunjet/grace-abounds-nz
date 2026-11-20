@@ -15,6 +15,7 @@ import { KitConfirm } from './editor-kit/confirm';
 import { useToast } from './toast';
 import { careDate } from './prayer-ui';
 import { ReauthDialog } from './reauth-dialog';
+import { StaffDeletionDialog } from './staff-deletion-dialog';
 import { hrefWithout, useUrlFilter } from '../lib/use-url-filter';
 import { api, ApiError, errorMessage } from '../lib/api-client';
 
@@ -74,7 +75,13 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
   );
   const [busy, setBusy] = useState(false);
   /** A change waiting for "Confirm it's you" (recent sign-in required). */
-  const [reauth, setReauth] = useState<'suspended' | 'active' | null>(null);
+  const [reauth, setReauth] = useState<
+    'suspended' | 'active' | 'delete' | null
+  >(null);
+  /** Deleting at the member's request: dialog open, and its last error. */
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteNote = useRef('');
   const openRef = useRef(openId);
   openRef.current = openId;
   const latestList = useRef(0);
@@ -171,6 +178,8 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
     setDetail(null);
     setConfirming(null);
     setReauth(null);
+    setDeleting(false);
+    setDeleteError('');
     if (openId) void loadDetail(openId);
     else latestDetail.current++;
   }, [openId, loadDetail]);
@@ -181,6 +190,47 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
   }
 
   const current = detail && detail.id === openId ? detail : null;
+
+  /** Deletes the member on screen, at their request (with a note). */
+  async function deleteMember(note: string) {
+    if (!current || busy) return;
+    const { id } = current;
+    deleteNote.current = note;
+    setBusy(true);
+    setDeleteError('');
+    try {
+      const done = (
+        await api<{ purgeAfter: string }>(`/staff/members/${id}/deletion`, {
+          method: 'POST',
+          body: JSON.stringify({
+            confirm: 'DELETE',
+            memberRequested: true,
+            requestNote: note,
+          }),
+        })
+      ).data;
+      if (!alive.current) return;
+      void search();
+      // Another person was opened meanwhile: nothing here is about them.
+      if (id !== openRef.current) return;
+      setDeleting(false);
+      push(
+        `Account deleted. Its remaining records are removed on ${careDate(done.purgeAfter, false)}.`,
+        'success',
+      );
+      await loadDetail(id);
+    } catch (failure) {
+      if (!alive.current || id !== openRef.current) return;
+      if (failure instanceof ApiError && failure.code === 'REAUTH_REQUIRED') {
+        setDeleting(false);
+        setReauth('delete');
+        return;
+      }
+      setDeleteError(errorMessage(failure));
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
 
   /** Suspend or reactivate the person on screen, with the version shown. */
   async function changeStatus(next: 'suspended' | 'active') {
@@ -383,6 +433,16 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
               )}
             </section>
 
+            {current.deletion && (
+              <p className="care-note">
+                Deleted on {careDate(current.deletion.requestedAt, false)}{' '}
+                {current.deletion.via === 'staff'
+                  ? 'by staff, at the member’s request'
+                  : 'by the member'}
+                . Its remaining records are removed on{' '}
+                {careDate(current.deletion.purgeAfter, false)}.
+              </p>
+            )}
             {current.manageable ? (
               <div className="care-actions">
                 {current.status === 'active' ? (
@@ -404,16 +464,25 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
                     Reactivate account
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="text-danger"
+                  disabled={busy}
+                  onClick={() => {
+                    setDeleteError('');
+                    setDeleting(true);
+                  }}
+                >
+                  Delete at member’s request
+                </button>
               </div>
             ) : (
-              <p className="care-note">
-                {current.role === 'member'
-                  ? 'This account is being deleted and can’t be changed here.'
-                  : STAFF_NOTE}
-              </p>
+              current.role !== 'member' && (
+                <p className="care-note">{STAFF_NOTE}</p>
+              )
             )}
             <p className="care-note">
-              Account deletion and data export aren’t available yet.
+              Members download a copy of their own data from their Settings.
             </p>
           </div>
         )}
@@ -441,14 +510,28 @@ function PeopleFor({ pastor }: { pastor: boolean }) {
             : `${current ? displayName(current) : 'This person'} will be able to sign in again.`}
         </p>
       </KitConfirm>
+      {deleting && current && (
+        <StaffDeletionDialog
+          name={displayName(current)}
+          busy={busy}
+          error={deleteError}
+          onCancel={() => setDeleting(false)}
+          onConfirm={(note) => void deleteMember(note)}
+        />
+      )}
       {reauth && current && (
         <ReauthDialog
-          purpose="For your security, confirm it’s you before suspending or reactivating an account."
+          purpose={
+            reauth === 'delete'
+              ? 'For your security, confirm it’s you before deleting an account.'
+              : 'For your security, confirm it’s you before suspending or reactivating an account.'
+          }
           onCancel={() => setReauth(null)}
           onConfirmed={() => {
             const next = reauth;
             setReauth(null);
-            void changeStatus(next);
+            if (next === 'delete') void deleteMember(deleteNote.current);
+            else void changeStatus(next);
           }}
         />
       )}

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  effectiveDeleteAfter,
   nextPrayerStatuses,
   prayerDeleteAfter,
   prayerInputSchema,
@@ -25,7 +26,8 @@ import {
   requireVersion,
   versionConflict,
 } from '../lib/errors.js';
-import { requireActor, requireRole } from '../lib/identity.js';
+import { personContact, personName, purgeDates } from '../lib/display-name.js';
+import { lockAndRecheck, requireActor, requireRole } from '../lib/identity.js';
 import { notify, pastorIds } from '../lib/notifications.js';
 
 /*
@@ -77,21 +79,28 @@ function toMemberPrayer(row: WithEvents): MemberPrayer {
 }
 
 type PastorRow = WithEvents & {
-  user: { name: string | null; email: string };
+  user: { name: string | null; email: string; status: string };
   _count: { notes: number };
 };
 const forPastor = {
   ...withEvents,
-  user: { select: { name: true, email: true } },
+  user: { select: { name: true, email: true, status: true } },
   _count: { select: { notes: true } },
 };
-function toPastorPrayer(row: PastorRow): PastorPrayer {
+/**
+ * The Pastor's view. For a deleted account, deleteAfter is when the record
+ * is really removed: its own retention date or the account purge, if
+ * earlier (see purgeDates).
+ */
+function toPastorPrayer(row: PastorRow, purgeAfter = ''): PastorPrayer {
+  const own = toMemberPrayer(row);
   return {
-    ...toMemberPrayer(row),
+    ...own,
+    deleteAfter: effectiveDeleteAfter(own.deleteAfter, purgeAfter),
     version: row.version,
     member: {
-      name: row.user.name?.trim() || row.user.email,
-      email: row.user.email,
+      name: personName(row.user),
+      email: personContact(row.user).email,
     },
     noteCount: row._count.notes,
   };
@@ -166,6 +175,8 @@ export function registerCareRoutes(app: FastifyInstance) {
     if (before) return replay(before);
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // No request can land after the member's account was deleted.
+        await lockAndRecheck(tx, actor);
         const row = await tx.prayerRequest.create({
           data: {
             userId: actor.id,
@@ -224,8 +235,11 @@ export function registerCareRoutes(app: FastifyInstance) {
         include: forPastor,
         orderBy: { createdAt: 'desc' },
       });
+      const purge = await purgeDates(prisma, rows);
       noStore(reply);
-      return { data: rows.map(toPastorPrayer) };
+      return {
+        data: rows.map((row) => toPastorPrayer(row, purge.get(row.userId))),
+      };
     },
   );
 
@@ -252,8 +266,9 @@ export function registerCareRoutes(app: FastifyInstance) {
       const user = authors.find((item) => item.id === id);
       return user ? user.name?.trim() || user.email : 'Pastor';
     };
+    const purge = await purgeDates(tx, [row]);
     const detail: PastorPrayerDetail = {
-      ...toPastorPrayer(row),
+      ...toPastorPrayer(row, purge.get(row.userId)),
       notes: row.notes.map((note) => ({
         id: note.id,
         text: note.text,

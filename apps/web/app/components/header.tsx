@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
-import { accountProfile } from '../lib/profiles';
+import { accountProfile, isPrivatePhoto } from '../lib/profiles';
 import { getRoleNavigation } from '../lib/role-navigation';
 import { Logo } from './logo';
 const links = [
@@ -133,7 +133,13 @@ export function Header() {
               aria-label="Open account menu"
               aria-expanded={accountOpen}
             >
-              <Image src={profile.photo} alt="" width={36} height={36} />
+              <Image
+                src={profile.photo}
+                unoptimized={isPrivatePhoto(profile.photo)}
+                alt=""
+                width={36}
+                height={36}
+              />
             </button>
             {accountOpen && (
               <div className="public-account-menu">

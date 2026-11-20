@@ -20,6 +20,7 @@ const FORWARDED_HEADERS = [
 /** Matches the API's own body limit. */
 const MAX_BODY_BYTES = 1_048_576;
 const RETURNED_HEADERS = [
+  'x-content-type-options',
   'content-type',
   'content-disposition',
   'etag',

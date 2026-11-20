@@ -79,6 +79,13 @@ export const DEFAULT_AVATAR = '/images/avatar-default.svg';
 const IMAGE_HOSTS = ['lh3.googleusercontent.com', 'images.unsplash.com'];
 
 /** Only same-site paths or configured image hosts are rendered. */
+/**
+ * A private photo served through the API (the saved profile photo): it
+ * loads in the browser with the person's own sign-in, so it must never go
+ * through the site's image optimizer.
+ */
+export const isPrivatePhoto = (src: string) => src.startsWith('/api/');
+
 export function safeAvatar(image?: string | null) {
   if (!image) return DEFAULT_AVATAR;
   if (image.startsWith('/') && !image.startsWith('//')) return image;

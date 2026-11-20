@@ -1,8 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, recordAudit } from '@grace-abounds/database';
-import { parse, requireVersion, versionConflict } from '../lib/errors.js';
+import { profilePhotoInputSchema } from '@grace-abounds/validation';
+import {
+  AppError,
+  notFound,
+  parse,
+  requireVersion,
+  versionConflict,
+} from '../lib/errors.js';
 import { requireActor } from '../lib/identity.js';
+import { checkProfileImage } from '../lib/profile-image.js';
+import {
+  ownPhoto,
+  removeProfilePhoto,
+  saveProfilePhoto,
+} from '../lib/profile-photo.js';
+import { requireStorage, stored } from '../lib/storage.js';
 
 const profileSelect = {
   id: true,
@@ -26,15 +40,12 @@ const profilePatch = z
       .trim()
       .max(40)
       .regex(/^[+()0-9 .-]*$/, 'Use digits, spaces and + ( ) - only.'),
-    image: z
-      .string()
-      .trim()
-      .max(500)
-      .regex(/^(https:\/\/|\/)/, 'Use an HTTPS URL or a site path.')
-      .nullable(),
   })
   .partial()
   .strict();
+// The photo is not part of this patch: it changes only through the photo
+// routes below, so no one can point their profile at another person's file
+// or an arbitrary address.
 
 export function registerMeRoutes(app: FastifyInstance) {
   app.get('/v1/me', async (request, reply) => {
@@ -74,4 +85,64 @@ export function registerMeRoutes(app: FastifyInstance) {
     reply.header('etag', `"${version}"`);
     return { data, version };
   });
+
+  /*
+   * Own profile photo (Phase 5). The cropped image arrives as a data URL;
+   * the server checks the bytes (type, size, dimensions), drops metadata
+   * and stores a private copy. Only its owner can read it.
+   *
+   *   PUT    /v1/me/photo      save (replaces the current one)
+   *   DELETE /v1/me/photo      remove
+   *   GET    /v1/me/photo/:id  the image, to its owner only
+   */
+  app.put('/v1/me/photo', { bodyLimit: 1_048_576 }, async (request, reply) => {
+    const actor = requireActor(request);
+    const { image } = parse(profilePhotoInputSchema, request.body ?? {});
+    const storage = requireStorage();
+    const bytes = new Uint8Array(
+      Buffer.from(image.slice(image.indexOf(',') + 1), 'base64'),
+    );
+    const checked = checkProfileImage(bytes);
+    if (typeof checked === 'string')
+      throw new AppError(422, 'VALIDATION_FAILED', checked, {
+        image: checked,
+      });
+    const path = await saveProfilePhoto(
+      actor,
+      checked,
+      {
+        // Only the upload is a storage call (a 502 if storage is down).
+        put: (key, body, type) =>
+          stored(request.log, () => storage.put(key, body, type)),
+      },
+      { requestId: request.id },
+    );
+    reply.header('cache-control', 'private, no-store');
+    return { data: { image: path } };
+  });
+
+  app.delete('/v1/me/photo', async (request, reply) => {
+    const actor = requireActor(request);
+    await removeProfilePhoto(actor, request.id);
+    return reply.status(204).send();
+  });
+
+  app.get<{ Params: { id: string } }>(
+    '/v1/me/photo/:id',
+    async (request, reply) => {
+      const actor = requireActor(request);
+      const photo = await ownPhoto(actor.id, request.params.id);
+      if (!photo) throw notFound('Photo');
+      const storage = requireStorage();
+      const bytes = await stored(request.log, () =>
+        storage.readRange(photo.storageKey, 0, photo.size),
+      );
+      return reply
+        .header('content-type', photo.contentType)
+        .header('content-disposition', 'inline')
+        .header('cache-control', 'private, no-store')
+        .header('x-content-type-options', 'nosniff')
+        .send(Buffer.from(bytes));
+    },
+  );
 }

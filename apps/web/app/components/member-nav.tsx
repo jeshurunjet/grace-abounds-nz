@@ -6,7 +6,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Home, Images, LayoutDashboard, Menu } from 'lucide-react';
-import { accountProfile } from '../lib/profiles';
+import { accountProfile, isPrivatePhoto } from '../lib/profiles';
 import { isRouteActive } from '../lib/role-navigation';
 import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
@@ -107,7 +107,13 @@ export function MemberNav() {
               aria-label="Open account menu"
               aria-expanded={open}
             >
-              <Image src={profile.photo} alt="" width={38} height={38} />
+              <Image
+                src={profile.photo}
+                unoptimized={isPrivatePhoto(profile.photo)}
+                alt=""
+                width={38}
+                height={38}
+              />
             </button>
             {open && (
               <div className="member-menu-popover">

@@ -12,4 +12,9 @@ describe('canOptimize', () => {
     );
     expect(canOptimize('//example.com/x.jpg')).toBe(false);
   });
+
+  it('never sends private files (a saved profile photo) to the image server', () => {
+    // It needs the visitor's own sign-in, which the image server lacks.
+    expect(canOptimize('/api/v1/me/photo/abc')).toBe(false);
+  });
 });

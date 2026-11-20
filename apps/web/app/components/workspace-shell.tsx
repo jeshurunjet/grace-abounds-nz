@@ -22,7 +22,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Logo } from './logo';
 import { NotificationMenu } from './notification-menu';
 import Image from 'next/image';
-import { accountProfile } from '../lib/profiles';
+import { accountProfile, isPrivatePhoto } from '../lib/profiles';
 import { getRoleNavigation, isRouteActive } from '../lib/role-navigation';
 
 /** Stored desktop sidebar choice: 'true' = collapsed, 'false' = expanded. */
@@ -164,7 +164,13 @@ export function WorkspaceShell({
               aria-label="Open account menu"
               aria-expanded={accountOpen}
             >
-              <Image src={profile.photo} alt="" width={40} height={40} />
+              <Image
+                src={profile.photo}
+                unoptimized={isPrivatePhoto(profile.photo)}
+                alt=""
+                width={40}
+                height={40}
+              />
             </button>
             {accountOpen && (
               <div className="member-menu-popover">

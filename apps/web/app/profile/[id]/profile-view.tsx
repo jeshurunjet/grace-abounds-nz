@@ -1,9 +1,9 @@
 'use client';
 import Image from 'next/image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { MemberShell } from '../../components/member-shell';
-import { ProfilePhotoPicker } from '../../components/profile-photo-picker';
+import { ProfilePhotoControl } from '../../components/profile-photo-control';
 import { Breadcrumbs } from '../../components/breadcrumbs';
 import { useToast } from '../../components/toast';
 import { api, ApiError, errorMessage } from '../../lib/api-client';
@@ -21,13 +21,42 @@ type Me = {
 };
 type Draft = { name: string; phone: string; bio: string };
 
+/**
+ * The signed-in person's profile. Everything on it (the loaded profile,
+ * unsaved edits, saves in flight) belongs to one account and role: a
+ * different sign-in, a role change or signing out starts a fresh screen,
+ * and answers for anyone else are ignored.
+ */
 export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
+  const { data: session } = useSession();
+  const user = session?.user?.id ?? '';
+  const role = session?.user?.role ?? '';
+  if (!user) return null;
+  return (
+    <ProfileFor key={`${user}:${role}`} userId={user} workspace={workspace} />
+  );
+}
+
+function ProfileFor({
+  userId,
+  workspace,
+}: {
+  userId: string;
+  workspace: RoleNavigation;
+}) {
   const { update } = useSession();
   const toast = useToast();
+  const alive = useRef(true);
+  const latestLoad = useRef(0);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const [me, setMe] = useState<Me | null>(null);
   const [version, setVersion] = useState<number>();
   const [draft, setDraft] = useState<Draft>({ name: '', phone: '', bio: '' });
-  const [photo, setPhoto] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -35,8 +64,16 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
+    const ticket = ++latestLoad.current;
     try {
       const result = await api<Me>('/me');
+      // Only the newest answer, and only about this account.
+      if (
+        !alive.current ||
+        ticket !== latestLoad.current ||
+        result.data.id !== userId
+      )
+        return;
       setMe(result.data);
       setVersion(result.version);
       setDraft({
@@ -46,9 +83,10 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
       });
       setLoadError('');
     } catch (failure) {
-      setLoadError(errorMessage(failure));
+      if (alive.current && ticket === latestLoad.current)
+        setLoadError(errorMessage(failure));
     }
-  }, []);
+  }, [userId]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -64,12 +102,14 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
         version,
         body: JSON.stringify(draft),
       });
+      if (!alive.current || result.data.id !== userId) return;
       setMe(result.data);
       setVersion(result.version);
       setEditing(false);
       toast.push('Profile saved.', 'success');
       void update();
     } catch (failure) {
+      if (!alive.current) return;
       if (failure instanceof ApiError && failure.code === 'VERSION_CONFLICT')
         setError(
           'Your profile was changed somewhere else. Reload to see the latest version, then make your change again.',
@@ -78,7 +118,7 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
       if (failure instanceof ApiError && failure.fieldErrors)
         setFieldErrors(failure.fieldErrors);
     } finally {
-      setSaving(false);
+      if (alive.current) setSaving(false);
     }
   }
 
@@ -90,7 +130,6 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
       ? (me.role.toLowerCase() as RoleNavigation['role'])
       : workspace.role,
   });
-  const avatar = photo ?? safeAvatar(me?.image);
 
   return (
     <MemberShell>
@@ -121,23 +160,22 @@ export function ProfileView({ workspace }: { workspace: RoleNavigation }) {
         <aside className="profile-summary">
           <div className="profile-cover" />
           <div className="profile-summary-copy">
-            <Image
-              unoptimized
-              src={avatar}
-              alt={display.name}
-              width={112}
-              height={112}
-            />
-            {me && (
-              <ProfilePhotoPicker
-                photo={avatar}
-                onApply={(next) => {
-                  setPhoto(next);
-                  toast.push(
-                    'Photo shown as a preview only. Photo uploads are not available yet, so it has not been saved.',
-                    'info',
-                  );
-                }}
+            {me ? (
+              <ProfilePhotoControl
+                image={me.image}
+                name={display.name}
+                // Only the photo changes; unsaved profile edits stay.
+                onSaved={(image) =>
+                  setMe((current) => current && { ...current, image })
+                }
+              />
+            ) : (
+              <Image
+                unoptimized
+                src={safeAvatar(null)}
+                alt={display.name}
+                width={112}
+                height={112}
               />
             )}
             <h2>{display.name}</h2>

@@ -16,6 +16,7 @@ import {
 import { AppError, forbidden, notFound } from './errors.js';
 import { lockAndRecheck, type Actor } from './identity.js';
 import { endAccountExports } from './data-export.js';
+import { discardProfilePhotos } from './profile-photo.js';
 import { forgetNotifications } from './notifications.js';
 import { emailSender, type SendEmail } from './email.js';
 import type { OutboxHandler } from './outbox.js';
@@ -236,6 +237,8 @@ export async function deleteAccount(input: Request) {
       }
 
       const exportsEnded = await endAccountExports(tx, user.id, now);
+      // The profile photo is a direct identifier: removed now.
+      await discardProfilePhotos(tx, user.id, now);
 
       // The person's own updates and choices serve no one any more.
       await tx.emailDelivery.deleteMany({ where: { userId: user.id } });

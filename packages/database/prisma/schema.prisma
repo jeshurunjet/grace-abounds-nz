@@ -907,3 +907,27 @@ model AccountDeletion {
   @@index([stage, purgeAfter])
   @@index([purgedAt])
 }
+
+/// A member's own profile photo (Phase 5). Private: served only to its
+/// owner. Recorded before upload (confirmedAt null) and confirmed when it
+/// becomes the account's photo; replaced, removed, abandoned and deleted
+/// accounts' photos are removed through the outbox. No foreign key, so the
+/// record (and its cleanup) outlives the account.
+model ProfilePhoto {
+  id          String    @id @default(cuid())
+  userId      String
+  /// avatars/<userId>/<id>.<png|jpg>
+  storageKey  String    @unique
+  contentType String
+  size        Int
+  width       Int
+  height      Int
+  createdAt   DateTime  @default(now())
+  /// When it became the account's photo.
+  confirmedAt DateTime?
+  /// When it was replaced, removed, abandoned or its account deleted.
+  removedAt   DateTime?
+
+  @@index([userId])
+  @@index([removedAt])
+}

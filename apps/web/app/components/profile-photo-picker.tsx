@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import Image from 'next/image';
+import { PROFILE_PHOTO_SIDE } from '@grace-abounds/validation';
 import { Modal } from './modal';
 export function ProfilePhotoPicker({
   photo,
@@ -67,9 +68,12 @@ export function ProfilePhotoPicker({
       const image = await loadImage(source);
       const side = Math.min(image.width, image.height) / zoom;
       const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 512;
+      canvas.width = canvas.height = PROFILE_PHOTO_SIDE;
       const context = canvas.getContext('2d');
       if (!context) throw new Error('canvas');
+      // A white background, so transparent images read well as avatars.
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, PROFILE_PHOTO_SIDE, PROFILE_PHOTO_SIDE);
       context.drawImage(
         image,
         (image.width - side) / 2,
@@ -78,9 +82,11 @@ export function ProfilePhotoPicker({
         side,
         0,
         0,
-        512,
-        512,
+        PROFILE_PHOTO_SIDE,
+        PROFILE_PHOTO_SIDE,
       );
+      // A PNG drawn afresh (no metadata from the original file), small
+      // enough to send; the server decodes it and writes its own copy.
       if (token === generation.current) {
         onApply(canvas.toDataURL('image/png'));
         close();

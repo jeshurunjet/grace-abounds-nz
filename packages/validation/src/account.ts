@@ -122,3 +122,31 @@ export function effectiveDeleteAfter(own: string, purgeAfter = '') {
   if (!own) return purgeAfter;
   return Date.parse(own) <= Date.parse(purgeAfter) ? own : purgeAfter;
 }
+
+// ---------- Profile photo ----------
+
+/**
+ * Largest upload (bytes). The cropped PNG must fit through the 1 MB
+ * request limit as base64, so the crop is PROFILE_PHOTO_SIDE wide.
+ */
+export const PROFILE_PHOTO_MAX_BYTES = 700 * 1024;
+export const PROFILE_PHOTO_MIN_SIDE = 64;
+export const PROFILE_PHOTO_MAX_SIDE = 1024;
+/** The picker's output: a square PNG this many pixels wide. */
+export const PROFILE_PHOTO_SIDE = 384;
+
+/**
+ * A profile photo upload: the cropped image as a PNG data URL. The server
+ * decodes and checks the bytes themselves, not this label.
+ */
+export const profilePhotoInputSchema = z
+  .object({
+    image: z
+      .string()
+      .max(Math.ceil((PROFILE_PHOTO_MAX_BYTES * 4) / 3) + 32)
+      .regex(
+        /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/,
+        'Choose a photo again: it must be sent as a PNG.',
+      ),
+  })
+  .strict();
